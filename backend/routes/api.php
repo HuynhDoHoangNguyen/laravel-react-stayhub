@@ -15,3 +15,7 @@ Route::get('/me', function (Request $request) {
         'user' => $request->user(),
     ]);
 })->middleware('auth:sanctum');
+
+// TEMP-M2-WIRING
+require __DIR__ . '/api/booking.php';
+
