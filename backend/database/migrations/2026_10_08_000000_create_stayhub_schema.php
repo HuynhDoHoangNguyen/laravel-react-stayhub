@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // 1. users: add missing ERD columns wrapped in Schema::hasColumn
+        // 1. users: thêm các cột ERD còn thiếu vào bảng users
         Schema::table('users', function (Blueprint $table) {
             if (!Schema::hasColumn('users', 'phone')) {
                 $table->string('phone', 20)->nullable()->after('password');
@@ -33,8 +33,8 @@ return new class extends Migration
         // 2. properties
         Schema::create('properties', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('host_id')->constrained('users')->onDelete('cascade');
-            $table->string('name');
+            $table->foreignId('host_id')->constrained('users')->cascadeOnDelete();
+            $table->string('name', 255);
             $table->enum('type', ['HOTEL', 'HOMESTAY']);
             $table->string('address', 500);
             $table->text('description')->nullable();
@@ -48,7 +48,7 @@ return new class extends Migration
         // 3. property_images
         Schema::create('property_images', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('property_id')->constrained('properties')->onDelete('cascade');
+            $table->foreignId('property_id')->constrained('properties')->cascadeOnDelete();
             $table->string('image_path', 500);
             $table->boolean('is_primary')->default(false);
             $table->timestamps();
@@ -57,8 +57,8 @@ return new class extends Migration
         // 4. room_types
         Schema::create('room_types', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('property_id')->constrained('properties')->onDelete('cascade');
-            $table->string('name');
+            $table->foreignId('property_id')->constrained('properties')->cascadeOnDelete();
+            $table->string('name', 255);
             $table->text('description')->nullable();
             $table->timestamps();
         });
@@ -66,10 +66,10 @@ return new class extends Migration
         // 5. rooms
         Schema::create('rooms', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('property_id')->constrained('properties')->onDelete('cascade');
-            $table->foreignId('room_type_id')->constrained('room_types')->onDelete('cascade');
+            $table->foreignId('property_id')->constrained('properties')->cascadeOnDelete();
+            $table->foreignId('room_type_id')->constrained('room_types')->cascadeOnDelete();
             $table->string('room_number', 50);
-            $table->string('name');
+            $table->string('name', 255);
             $table->text('description')->nullable();
             $table->integer('capacity');
             $table->decimal('price_per_night', 12, 2);
@@ -80,7 +80,7 @@ return new class extends Migration
         // 6. room_images
         Schema::create('room_images', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('room_id')->constrained('rooms')->onDelete('cascade');
+            $table->foreignId('room_id')->constrained('rooms')->cascadeOnDelete();
             $table->string('image_path', 500);
             $table->boolean('is_primary')->default(false);
             $table->timestamps();
@@ -89,8 +89,8 @@ return new class extends Migration
         // 7. amenities
         Schema::create('amenities', function (Blueprint $table) {
             $table->id();
-            $table->string('name');
-            $table->string('icon')->nullable();
+            $table->string('name', 255);
+            $table->string('icon', 255)->nullable();
             $table->text('description')->nullable();
             $table->boolean('status')->default(true);
             $table->timestamps();
@@ -98,15 +98,15 @@ return new class extends Migration
 
         // 8. room_amenities
         Schema::create('room_amenities', function (Blueprint $table) {
-            $table->foreignId('room_id')->constrained('rooms')->onDelete('cascade');
-            $table->foreignId('amenity_id')->constrained('amenities')->onDelete('cascade');
+            $table->foreignId('room_id')->constrained('rooms')->cascadeOnDelete();
+            $table->foreignId('amenity_id')->constrained('amenities')->cascadeOnDelete();
             $table->primary(['room_id', 'amenity_id']);
         });
 
         // 9. maintenances
         Schema::create('maintenances', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('room_id')->constrained('rooms')->onDelete('cascade');
+            $table->foreignId('room_id')->constrained('rooms')->cascadeOnDelete();
             $table->date('start_date');
             $table->date('end_date');
             $table->text('reason')->nullable();
@@ -117,7 +117,7 @@ return new class extends Migration
         // 10. services
         Schema::create('services', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('property_id')->constrained('properties')->restrictOnDelete();
+            $table->foreignId('property_id')->constrained('properties')->cascadeOnDelete();
             $table->string('name', 255);
             $table->text('description')->nullable();
             $table->string('unit', 50);
@@ -125,6 +125,7 @@ return new class extends Migration
             $table->boolean('status')->default(true);
             $table->timestamps();
 
+            // Index phụ phục vụ truy vấn danh sách dịch vụ của cơ sở
             $table->index(['property_id', 'status']);
         });
 
@@ -136,14 +137,15 @@ return new class extends Migration
             $table->foreignId('room_id')->constrained('rooms')->restrictOnDelete();
             $table->date('check_in_date');
             $table->date('check_out_date');
-            $table->unsignedInteger('guest_count');
-            $table->unsignedInteger('number_of_nights');
+            $table->integer('guest_count');
+            $table->integer('number_of_nights');
             $table->decimal('price_per_night', 12, 2);
             $table->decimal('room_total', 12, 2);
-            $table->string('status', 20)->default('PENDING')->index();
+            $table->enum('status', ['PENDING', 'CONFIRMED', 'CHECKED_IN', 'COMPLETED', 'CANCELLED', 'REJECTED'])->default('PENDING');
             $table->text('note')->nullable();
             $table->timestamps();
 
+            // Index phụ phục vụ tính availability và lọc lịch sử
             $table->index(['room_id', 'status', 'check_in_date', 'check_out_date']);
             $table->index(['customer_id', 'status']);
         });
@@ -160,6 +162,7 @@ return new class extends Migration
             $table->decimal('amount', 12, 2);
             $table->timestamps();
 
+            // Index phụ phục vụ truy vấn dịch vụ theo booking
             $table->index('booking_id');
         });
 
@@ -170,7 +173,7 @@ return new class extends Migration
             $table->foreignId('booking_id')->unique()->constrained('bookings')->restrictOnDelete();
             $table->string('customer_name', 255);
             $table->string('customer_email', 255);
-            $table->string('customer_phone', 20)->nullable();
+            $table->string('customer_phone', 20);
             $table->string('property_name', 255);
             $table->string('room_name', 255);
             $table->decimal('subtotal', 12, 2);
@@ -198,11 +201,11 @@ return new class extends Migration
         // 15. reviews
         Schema::create('reviews', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('booking_id')->unique()->constrained('bookings')->restrictOnDelete();
-            $table->foreignId('customer_id')->constrained('users')->restrictOnDelete();
-            $table->foreignId('property_id')->constrained('properties')->restrictOnDelete();
+            $table->foreignId('booking_id')->unique()->constrained('bookings')->cascadeOnDelete();
+            $table->foreignId('customer_id')->constrained('users')->cascadeOnDelete();
+            $table->foreignId('property_id')->constrained('properties')->cascadeOnDelete();
             $table->unsignedTinyInteger('rating');
-            $table->text('comment')->nullable();
+            $table->text('comment');
             $table->timestamps();
         });
 
@@ -218,7 +221,7 @@ return new class extends Migration
         // 17. chat_sessions
         Schema::create('chat_sessions', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('user_id')->nullable()->constrained('users')->cascadeOnDelete();
             $table->string('title', 255)->nullable();
             $table->timestamps();
         });
