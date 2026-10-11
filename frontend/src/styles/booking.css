@@ -1,0 +1,535 @@
+/* ==========================================================================
+   StayHub - Booking Module Stylesheet (Pure CSS with bk- prefix)
+   ========================================================================== */
+
+/* Typography & Layout Helpers */
+.bk-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 24px 16px;
+}
+
+.bk-page-header {
+    margin-bottom: 24px;
+}
+
+.bk-page-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0 0 8px 0;
+}
+
+.bk-page-subtitle {
+    font-size: 14px;
+    color: #64748b;
+    margin: 0;
+}
+
+/* Grid & Cards */
+.bk-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 20px;
+}
+
+.bk-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.bk-card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.bk-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+}
+
+.bk-card-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #0f172a;
+    margin: 0 0 4px 0;
+}
+
+.bk-card-body {
+    margin-bottom: 16px;
+    font-size: 14px;
+    color: #475569;
+}
+
+.bk-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid #f1f5f9;
+    padding-top: 14px;
+}
+
+/* Badges */
+.bk-status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 9999px;
+    text-transform: capitalize;
+}
+
+.bk-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 12px;
+    background: #f1f5f9;
+    color: #475569;
+    border-radius: 4px;
+    margin-right: 6px;
+    margin-bottom: 6px;
+}
+
+/* Buttons */
+.bk-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.bk-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.bk-btn-primary {
+    background-color: #2563eb;
+    color: #ffffff;
+}
+
+.bk-btn-primary:hover:not(:disabled) {
+    background-color: #1d4ed8;
+}
+
+.bk-btn-danger {
+    background-color: #dc2626;
+    color: #ffffff;
+}
+
+.bk-btn-danger:hover:not(:disabled) {
+    background-color: #b91c1c;
+}
+
+.bk-btn-outline {
+    background-color: #ffffff;
+    border-color: #cbd5e1;
+    color: #334155;
+}
+
+.bk-btn-outline:hover:not(:disabled) {
+    background-color: #f8fafc;
+    border-color: #94a3b8;
+}
+
+.bk-btn-sm {
+    padding: 4px 10px;
+    font-size: 12px;
+}
+
+.bk-btn-block {
+    display: flex;
+    width: 100%;
+}
+
+/* Form Controls */
+.bk-form-group {
+    margin-bottom: 16px;
+}
+
+.bk-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #334155;
+    margin-bottom: 6px;
+}
+
+.bk-input,
+.bk-select,
+.bk-textarea {
+    width: 100%;
+    padding: 9px 12px;
+    font-family: inherit;
+    font-size: 14px;
+    color: #1e293b;
+    background-color: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.bk-input:focus,
+.bk-select:focus,
+.bk-textarea:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.bk-error-text {
+    font-size: 12px;
+    color: #dc2626;
+    margin-top: 4px;
+}
+
+/* Alerts */
+.bk-alert {
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    margin-bottom: 16px;
+}
+
+.bk-alert-danger {
+    background-color: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #991b1b;
+}
+
+.bk-alert-warning {
+    background-color: #fffbeb;
+    border: 1px solid #fde68a;
+    color: #92400e;
+}
+
+.bk-alert-success {
+    background-color: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    color: #166534;
+}
+
+.bk-alert-info {
+    background-color: #eff6ff;
+    border: 1px solid #bfdbfe;
+    color: #1e40af;
+}
+
+/* Search Bar & Filter Sidebar */
+.bk-search-bar {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)) auto;
+    gap: 12px;
+    background: #ffffff;
+    padding: 16px;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+    margin-bottom: 24px;
+    align-items: flex-end;
+}
+
+.bk-search-layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 24px;
+}
+
+@media (max-width: 868px) {
+    .bk-search-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+.bk-filter-panel {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 20px;
+    align-self: start;
+}
+
+.bk-filter-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #0f172a;
+    margin: 0 0 16px 0;
+    border-bottom: 1px solid #f1f5f9;
+    padding-bottom: 8px;
+}
+
+/* Tabs */
+.bk-tabs {
+    display: flex;
+    gap: 8px;
+    border-bottom: 2px solid #e2e8f0;
+    margin-bottom: 20px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+}
+
+.bk-tab {
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #64748b;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -4px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.bk-tab:hover {
+    color: #1e293b;
+}
+
+.bk-tab-active {
+    color: #2563eb;
+    border-bottom-color: #2563eb;
+    font-weight: 600;
+}
+
+/* Pagination */
+.bk-pagination {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid #e2e8f0;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.bk-pagination-info {
+    font-size: 13px;
+    color: #64748b;
+}
+
+.bk-pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.bk-pagination-ellipsis {
+    padding: 0 4px;
+    color: #94a3b8;
+}
+
+/* States (Loading, Empty, Error) */
+.bk-state {
+    text-align: center;
+    padding: 48px 16px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    margin: 16px 0;
+}
+
+.bk-state-icon {
+    font-size: 40px;
+    margin-bottom: 12px;
+}
+
+.bk-state-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #1e293b;
+    margin: 0 0 6px 0;
+}
+
+.bk-state-description,
+.bk-state-message {
+    font-size: 14px;
+    color: #64748b;
+    margin: 0 0 16px 0;
+}
+
+.bk-spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid #e2e8f0;
+    border-top-color: #2563eb;
+    border-radius: 50%;
+    animation: bk-spin 0.8s linear infinite;
+    margin: 0 auto 12px auto;
+}
+
+@keyframes bk-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Modal Dialog */
+.bk-modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(15, 23, 42, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 16px;
+}
+
+.bk-modal-dialog {
+    background: #ffffff;
+    border-radius: 12px;
+    max-width: 480px;
+    width: 100%;
+    padding: 24px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+.bk-modal-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0 0 8px 0;
+}
+
+.bk-modal-message {
+    font-size: 14px;
+    color: #475569;
+    margin: 0 0 20px 0;
+    line-height: 1.5;
+}
+
+.bk-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+/* Booking Detail Progress Bar */
+.bk-timeline {
+    display: flex;
+    justify-content: space-between;
+    margin: 24px 0 32px 0;
+    position: relative;
+}
+
+.bk-timeline::before {
+    content: '';
+    position: absolute;
+    top: 14px;
+    left: 20px;
+    right: 20px;
+    height: 3px;
+    background-color: #e2e8f0;
+    z-index: 0;
+}
+
+.bk-timeline-step {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    flex: 1;
+}
+
+.bk-timeline-node {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background-color: #ffffff;
+    border: 3px solid #cbd5e1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: #64748b;
+    margin-bottom: 8px;
+}
+
+.bk-timeline-node-active {
+    border-color: #2563eb;
+    background-color: #2563eb;
+    color: #ffffff;
+}
+
+.bk-timeline-node-done {
+    border-color: #16a34a;
+    background-color: #16a34a;
+    color: #ffffff;
+}
+
+.bk-timeline-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+}
+
+.bk-timeline-label-active {
+    color: #1e293b;
+    font-weight: 700;
+}
+
+/* Detail Table */
+.bk-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+    font-size: 14px;
+}
+
+.bk-table th,
+.bk-table td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.bk-table th {
+    background-color: #f8fafc;
+    font-weight: 600;
+    color: #475569;
+}
+
+.bk-price-highlight {
+    font-size: 20px;
+    font-weight: 700;
+    color: #0284c7;
+}
+
+/* Nav links in layout header */
+.bk-nav-link {
+    display: inline-block;
+    padding: 6px 12px;
+    color: #334155;
+    text-decoration: none;
+    font-weight: 500;
+    border-radius: 6px;
+    margin-right: 8px;
+}
+
+.bk-nav-link:hover {
+    background-color: #f1f5f9;
+}

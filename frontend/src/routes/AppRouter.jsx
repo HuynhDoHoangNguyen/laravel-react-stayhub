@@ -12,6 +12,14 @@ import AdminDashboardPage from '../pages/admin/AdminDashboardPage';
 
 import ApiTestPage from '../pages/public/ApiTestPage';
 import LoginTestPage from '../pages/public/LoginTestPage';
+
+// TEMP-M2-WIRING
+import {
+    publicBookingRoutes,
+    customerBookingRoutes,
+    hostBookingRoutes,
+} from './bookingRoutes';
+
 function AppRouter() {
     return (
         <Routes>
@@ -20,16 +28,24 @@ function AppRouter() {
                 <Route path="/" element={<HomePage />} />
                 <Route path="/api-test" element={<ApiTestPage />} />
                 <Route path="/login-test" element={<LoginTestPage />} />
+                {/* TEMP-M2-WIRING */}
+                {publicBookingRoutes}
             </Route>
 
             {/* Customer */}
             <Route path="/customer" element={<CustomerLayout />}>
                 <Route index element={<CustomerDashboardPage />} />
             </Route>
+            {/* TEMP-M2-WIRING */}
+            <Route element={<CustomerLayout />}>
+                {customerBookingRoutes}
+            </Route>
 
             {/* Host */}
             <Route path="/host" element={<HostLayout />}>
                 <Route index element={<HostDashboardPage />} />
+                {/* TEMP-M2-WIRING */}
+                {hostBookingRoutes}
             </Route>
 
             {/* Admin */}

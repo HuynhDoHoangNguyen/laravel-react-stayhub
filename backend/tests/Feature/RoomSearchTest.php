@@ -37,10 +37,13 @@ class RoomSearchTest extends TestCase
             'capacity' => 2,
         ]);
 
+        $checkIn = \Carbon\Carbon::now()->addDays(2)->format('Y-m-d');
+        $checkOut = \Carbon\Carbon::now()->addDays(4)->format('Y-m-d');
+
         // Search keyword "Sài Gòn"
         $resKw = $this->getJson('/api/public/rooms/search?' . http_build_query([
-            'check_in_date' => '2026-10-10',
-            'check_out_date' => '2026-10-12',
+            'check_in_date' => $checkIn,
+            'check_out_date' => $checkOut,
             'guest_count' => 2,
             'keyword' => 'Sài Gòn',
         ]));
@@ -51,8 +54,8 @@ class RoomSearchTest extends TestCase
 
         // Search max_price 600000
         $resPrice = $this->getJson('/api/public/rooms/search?' . http_build_query([
-            'check_in_date' => '2026-10-10',
-            'check_out_date' => '2026-10-12',
+            'check_in_date' => $checkIn,
+            'check_out_date' => $checkOut,
             'guest_count' => 2,
             'max_price' => 600000,
         ]));
@@ -74,10 +77,13 @@ class RoomSearchTest extends TestCase
         $roomPartial = Room::factory()->create(['capacity' => 2]);
         $roomPartial->amenities()->attach([$wifi->id]);
 
+        $checkIn = \Carbon\Carbon::now()->addDays(2)->format('Y-m-d');
+        $checkOut = \Carbon\Carbon::now()->addDays(4)->format('Y-m-d');
+
         // Search requiring BOTH wifi and ac
         $res = $this->getJson('/api/public/rooms/search?' . http_build_query([
-            'check_in_date' => '2026-10-10',
-            'check_out_date' => '2026-10-12',
+            'check_in_date' => $checkIn,
+            'check_out_date' => $checkOut,
             'guest_count' => 2,
             'amenity_ids' => [$wifi->id, $ac->id],
         ]));
@@ -92,9 +98,12 @@ class RoomSearchTest extends TestCase
         $roomCheap = Room::factory()->create(['price_per_night' => 300000, 'capacity' => 2]);
         $roomExpensive = Room::factory()->create(['price_per_night' => 1500000, 'capacity' => 2]);
 
+        $checkIn = \Carbon\Carbon::now()->addDays(2)->format('Y-m-d');
+        $checkOut = \Carbon\Carbon::now()->addDays(4)->format('Y-m-d');
+
         $resAsc = $this->getJson('/api/public/rooms/search?' . http_build_query([
-            'check_in_date' => '2026-10-10',
-            'check_out_date' => '2026-10-12',
+            'check_in_date' => $checkIn,
+            'check_out_date' => $checkOut,
             'guest_count' => 2,
             'sort' => 'price_asc',
             'per_page' => 10,
@@ -110,8 +119,8 @@ class RoomSearchTest extends TestCase
             ->assertJsonPath('data.0.id', $roomCheap->id);
 
         $resDesc = $this->getJson('/api/public/rooms/search?' . http_build_query([
-            'check_in_date' => '2026-10-10',
-            'check_out_date' => '2026-10-12',
+            'check_in_date' => $checkIn,
+            'check_out_date' => $checkOut,
             'guest_count' => 2,
             'sort' => 'price_desc',
         ]));

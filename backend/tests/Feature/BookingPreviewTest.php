@@ -17,10 +17,13 @@ class BookingPreviewTest extends TestCase
             'capacity' => 4,
         ]);
 
+        $checkIn = \Carbon\Carbon::now()->addDays(2)->format('Y-m-d');
+        $checkOut = \Carbon\Carbon::now()->addDays(5)->format('Y-m-d'); // 3 nights
+
         $payload = [
             'room_id' => $room->id,
-            'check_in_date' => '2026-10-10',
-            'check_out_date' => '2026-10-13', // 3 nights
+            'check_in_date' => $checkIn,
+            'check_out_date' => $checkOut,
             'guest_count' => 2,
 
             // Fake price/total values sent by client to test if backend ignores them
@@ -36,8 +39,8 @@ class BookingPreviewTest extends TestCase
                 'success' => true,
                 'data' => [
                     'room_id' => $room->id,
-                    'check_in_date' => '2026-10-10',
-                    'check_out_date' => '2026-10-13',
+                    'check_in_date' => $checkIn,
+                    'check_out_date' => $checkOut,
                     'guest_count' => 2,
                     'number_of_nights' => 3,
                     'price_per_night' => '1000000.00',
