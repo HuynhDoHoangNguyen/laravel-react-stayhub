@@ -14,7 +14,10 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // TEMP-M2-WIRING
-        $this->call(DemoM2Seeder::class);
+        $this->call([
+            Member1DataSeeder::class,
+            Member2DataSeeder::class,
+            Member3DataSeeder::class,
+        ]);
     }
 }

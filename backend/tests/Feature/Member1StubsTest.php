@@ -10,7 +10,7 @@ use App\Models\Property;
 use App\Models\Room;
 use App\Models\RoomType;
 use App\Models\User;
-use Database\Seeders\DemoM2Seeder;
+use Database\Seeders\Member1DataSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -20,7 +20,7 @@ class Member1StubsTest extends TestCase
 
     public function test_seeder_creates_expected_data(): void
     {
-        $this->seed(DemoM2Seeder::class);
+        $this->seed(Member1DataSeeder::class);
 
         $this->assertDatabaseHas('users', ['email' => 'admin@stayhub.com', 'role' => 'ADMIN']);
         $this->assertDatabaseHas('users', ['email' => 'host1@stayhub.com', 'role' => 'HOST']);
@@ -29,10 +29,10 @@ class Member1StubsTest extends TestCase
         $this->assertDatabaseHas('users', ['email' => 'customer2@stayhub.com', 'role' => 'CUSTOMER']);
         $this->assertDatabaseHas('users', ['email' => 'customer3@stayhub.com', 'role' => 'CUSTOMER']);
 
-        $this->assertCount(3, Property::all());
-        $this->assertCount(6, RoomType::all());
-        $this->assertCount(9, Room::all());
-        $this->assertCount(5, Amenity::all());
+        $this->assertCount(4, Property::all());
+        $this->assertCount(8, RoomType::all());
+        $this->assertCount(13, Room::all());
+        $this->assertCount(12, Amenity::all());
     }
 
     public function test_model_relationships(): void

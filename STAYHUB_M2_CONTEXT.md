@@ -33,7 +33,7 @@ Tài liệu (chỉ đọc mục liên quan khi cần): docs/stayhub-team-work-as
     - `POST   /api/host/bookings/{booking}/services`: Thêm dịch vụ vào booking (chỉ khi CHECKED_IN).
     - `PUT    /api/host/bookings/{booking}/services/{bookingService}`: Sửa số lượng dịch vụ (route lồng -> 404).
     - `DELETE /api/host/bookings/{booking}/services/{bookingService}`: Xóa dịch vụ khỏi booking (route lồng -> 404).
-- **Seeder demo & Tài khoản demo** (`Database\Seeders\DemoM2Seeder`):
+- **Seeder demo & Tài khoản demo** (`DatabaseSeeder` gọi ba seeder theo chủ sở hữu):
   - Mật khẩu chung: `12345678`
   - Admin: `admin@stayhub.com`
   - Host 1: `host1@stayhub.com` (quản lý StayHub Central & Homestay Dalat Cloud)
@@ -41,6 +41,9 @@ Tài liệu (chỉ đọc mục liên quan khi cần): docs/stayhub-team-work-as
   - Customer 1: `customer1@stayhub.com`
   - Customer 2: `customer2@stayhub.com`
   - Customer 3: `customer3@stayhub.com`
+  - Customer 4 (BLOCKED): `customer4@stayhub.com`
+  - Customer 5 (INACTIVE): `customer5@stayhub.com`
+  - Chi tiết trạng thái, số bản ghi và kịch bản: `docs/seed-data.md`.
 
 ---
 
@@ -100,8 +103,9 @@ Khi Thành viên 1 bàn giao code chính thức (Identity, Property, Room, Ameni
    - `RoomTypeFactory.php`
    - `UserFactory.php`
 6. **Seeder demo & Wiring**:
-   - `database/seeders/DemoM2Seeder.php` (`TEMP-M1-STUB`): Gộp hoặc thay thế bằng seeder chung của toàn đội ngũ.
-   - `database/seeders/DatabaseSeeder.php` (`TEMP-M2-WIRING`): Thay thế lệnh gọi `DemoM2Seeder` bằng danh sách seeder hoàn chỉnh của nhóm.
+   - `database/seeders/Member1DataSeeder.php` (`TEMP-M1-STUB`): Thay dữ liệu Member 1 khi nhận code chính thức.
+   - `database/seeders/Member3DataSeeder.php` (`TEMP-M3-STUB`): Thay dữ liệu Member 3 khi nhận code chính thức.
+   - `database/seeders/DatabaseSeeder.php`: Đang gọi `Member1DataSeeder`, `Member2DataSeeder`, `Member3DataSeeder` theo thứ tự.
 7. **Routes Wiring**:
    - `routes/api.php` (`TEMP-M2-WIRING`): Giữ nguyên `require __DIR__ . '/api/booking.php';` hoặc tổ chức lại theo routing convention chung của nhóm.
 
@@ -109,3 +113,10 @@ Khi Thành viên 1 bàn giao code chính thức (Identity, Property, Room, Ameni
 
 ## Cách làm việc
 (1) Liệt kê ngắn file sẽ tạo/sửa và giả định, kiểm tra code thật trước khi đoán; (2) viết code kèm test; (3) chạy lệnh kiểm tra và báo kết quả thật, nếu chưa chạy được thì nói rõ; (4) cuối phản hồi liệt kê file đã tạo/sửa và việc còn lại. Giữ phản hồi ngắn gọn, không giải thích lại những gì đã có trong file này. Không chạy lệnh git.
+
+## Trạng thái hiện tại - dữ liệu demo toàn ERD
+- Seeder đã tách theo sở hữu: `Member1DataSeeder` (9 bảng), `Member2DataSeeder` (3 bảng), `Member3DataSeeder` (6 bảng); `DemoM2Seeder` đã được thay thế.
+- Migration riêng `2026_10_13_064530_add_updated_at_to_chat_messages_table.php` bổ sung `updated_at`; migration khởi tạo không bị sửa.
+- `docs/seed-data.md` mô tả tài khoản, số dòng, kịch bản demo và quy ước hóa đơn.
+- Xác minh ngày 13/10/2026 trên MySQL 8.4.3: `php artisan migrate:fresh --seed` thành công; `php artisan db:show --counts` cho thấy dữ liệu đủ 18 bảng; `php artisan test` pass 83 tests (435 assertions).
+- Số dòng 18 bảng: users 8, properties 4, property_images 8, room_types 8, rooms 13, room_images 26, amenities 12, room_amenities 52, maintenances 4, services 13, bookings 16, booking_services 10, invoices 4, invoice_items 11, reviews 3, faqs 8, chat_sessions 2, chat_messages 8. Chi tiết và kịch bản đăng nhập trong `docs/seed-data.md`.
