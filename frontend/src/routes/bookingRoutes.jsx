@@ -1,5 +1,4 @@
 import { Route } from 'react-router-dom';
-import '../styles/booking.css';
 
 import SearchResultPage from '../pages/public/SearchResultPage';
 import BookingCheckoutPage from '../pages/customer/BookingCheckoutPage';
@@ -10,7 +9,6 @@ import HostBookingListPage from '../pages/host/HostBookingListPage';
 import HostBookingDetailPage from '../pages/host/HostBookingDetailPage';
 import HostBookingServicesPage from '../pages/host/HostBookingServicesPage';
 import HostServiceListPage from '../pages/host/HostServiceListPage';
-import HostServiceFormPage from '../pages/host/HostServiceFormPage';
 
 /**
  * Public Booking routes (exported as JSX Fragment, not a component)
@@ -26,9 +24,9 @@ export const publicBookingRoutes = (
  */
 export const customerBookingRoutes = (
     <>
-        <Route path="/bookings/create" element={<BookingCheckoutPage />} />
-        <Route path="/my-bookings" element={<MyBookingsPage />} />
-        <Route path="/my-bookings/:id" element={<BookingDetailPage />} />
+        <Route path="/booking/checkout" element={<BookingCheckoutPage />} />
+        <Route path="/customer/bookings" element={<MyBookingsPage />} />
+        <Route path="/customer/bookings/:bookingId" element={<BookingDetailPage />} />
     </>
 );
 
@@ -39,10 +37,10 @@ export const customerBookingRoutes = (
 export const hostBookingRoutes = (
     <>
         <Route path="bookings" element={<HostBookingListPage />} />
-        <Route path="bookings/:id" element={<HostBookingDetailPage />} />
-        <Route path="bookings/:id/services" element={<HostBookingServicesPage />} />
+        <Route path="bookings/:bookingId" element={<HostBookingDetailPage />} />
+        <Route path="bookings/:bookingId/services" element={<HostBookingServicesPage />} />
+        {/* TEMP-M2-WIRING: redirect legacy entry to the host's first property. */}
         <Route path="services" element={<HostServiceListPage />} />
-        <Route path="services/create" element={<HostServiceFormPage />} />
-        <Route path="services/:id/edit" element={<HostServiceFormPage />} />
+        <Route path="properties/:propertyId/services" element={<HostServiceListPage />} />
     </>
 );

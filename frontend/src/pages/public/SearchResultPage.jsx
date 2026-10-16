@@ -1,318 +1,156 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
-import { searchRooms } from '../../services/searchService';
-import { formatCurrency } from '../../utils/formatCurrency';
-import { getApiErrorMessage } from '../../utils/getApiErrorMessage';
-import LoadingState from '../../components/booking/shared/LoadingState';
-import ErrorState from '../../components/booking/shared/ErrorState';
-import EmptyState from '../../components/booking/shared/EmptyState';
-import Pagination from '../../components/booking/shared/Pagination';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { SlidersHorizontal } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { searchRooms } from '@/services/searchService';
+import { getApiErrorMessage } from '@/utils/getApiErrorMessage';
+import ErrorState from '@/components/booking/shared/ErrorState';
+import SearchEmptyState from '@/components/search/EmptyState';
+import FilterSidebar from '@/components/search/FilterSidebar';
+import ResultsGrid from '@/components/search/ResultsGrid';
+import ResultsHeader from '@/components/search/ResultsHeader';
+import SearchSummaryBar from '@/components/search/SearchSummaryBar';
+import Pagination from '@/components/booking/shared/Pagination';
 
-function getTodayString(offsetDays = 0) {
-    const d = new Date();
-    d.setDate(d.getDate() + offsetDays);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
+function dateString(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function dateOffset(days) {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + days);
+  return dateString(date);
+}
+
+function setParam(params, key, value) {
+  params.delete(key);
+  if (value !== '' && value !== undefined && value !== null) params.set(key, String(value));
 }
 
 export default function SearchResultPage() {
-    const [searchParams, setSearchParams] = useSearchParams();
-    const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
-    // Query params with safe defaults
-    const checkIn = searchParams.get('check_in_date') || getTodayString(1);
-    const checkOut = searchParams.get('check_out_date') || getTodayString(3);
-    const guests = searchParams.get('guest_count') || '2';
-    const keyword = searchParams.get('keyword') || '';
-    const minPrice = searchParams.get('min_price') || '';
-    const maxPrice = searchParams.get('max_price') || '';
-    const sort = searchParams.get('sort') || 'price_asc';
-    const page = parseInt(searchParams.get('page') || '1', 10);
+  const search = useMemo(() => ({
+    check_in_date: searchParams.get('check_in_date') || '',
+    check_out_date: searchParams.get('check_out_date') || '',
+    guest_count: searchParams.get('guest_count') || '2',
+    keyword: searchParams.get('keyword') || '',
+    min_price: searchParams.get('min_price') || '',
+    max_price: searchParams.get('max_price') || '',
+    room_type_id: searchParams.get('room_type_id') || '',
+    amenity_ids: searchParams.getAll('amenity_ids'),
+    sort: searchParams.get('sort') || 'price_asc',
+    page: Number(searchParams.get('page') || 1),
+  }), [searchParams]);
 
-    // Form inputs state
-    const [formInputs, setFormInputs] = useState({
-        check_in_date: checkIn,
-        check_out_date: checkOut,
-        guest_count: guests,
-        keyword,
-        min_price: minPrice,
-        max_price: maxPrice,
-        sort,
-    });
+  useEffect(() => {
+    if (search.check_in_date && search.check_out_date) return;
+    const next = new URLSearchParams(searchParams);
+    if (!search.check_in_date) next.set('check_in_date', dateOffset(1));
+    if (!search.check_out_date) next.set('check_out_date', dateOffset(3));
+    setSearchParams(next, { replace: true });
+  }, [search.check_in_date, search.check_out_date, searchParams, setSearchParams]);
 
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
-    const [result, setResult] = useState(null);
+  const performSearch = useCallback(async () => {
+    if (!search.check_in_date || !search.check_out_date || Number(search.guest_count) < 1) return;
+    setLoading(true);
+    setError('');
+    try {
+      const params = {
+        check_in_date: search.check_in_date,
+        check_out_date: search.check_out_date,
+        guest_count: Number(search.guest_count),
+        page: search.page,
+        per_page: 15,
+        keyword: search.keyword || undefined,
+        min_price: search.min_price || undefined,
+        max_price: search.max_price || undefined,
+        room_type_id: search.room_type_id || undefined,
+        amenity_ids: search.amenity_ids.length ? search.amenity_ids : undefined,
+        sort: search.sort,
+      };
+      setResult(await searchRooms(params));
+    } catch (requestError) {
+      setError(getApiErrorMessage(requestError).message);
+    } finally {
+      setLoading(false);
+    }
+  }, [search]);
 
-    const performSearch = useCallback(async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const params = {
-                check_in_date: checkIn,
-                check_out_date: checkOut,
-                guest_count: Number(guests),
-                page,
-            };
-            if (keyword) params.keyword = keyword;
-            if (minPrice) params.min_price = Number(minPrice);
-            if (maxPrice) params.max_price = Number(maxPrice);
-            if (sort) params.sort = sort;
+  useEffect(() => {
+    let active = true;
+    Promise.resolve().then(() => active && performSearch());
+    return () => { active = false; };
+  }, [performSearch]);
 
-            const res = await searchRooms(params);
-            setResult(res);
-        } catch (err) {
-            setError(getApiErrorMessage(err).message);
-        } finally {
-            setLoading(false);
-        }
-    }, [checkIn, checkOut, guests, keyword, minPrice, maxPrice, sort, page]);
+  const updateParams = (updates, resetPage = true) => {
+    const next = new URLSearchParams(searchParams);
+    Object.entries(updates).forEach(([key, value]) => setParam(next, key, value));
+    if (resetPage) next.set('page', '1');
+    setSearchParams(next);
+  };
 
-    useEffect(() => {
-        let isMounted = true;
-        Promise.resolve().then(() => {
-            if (isMounted) {
-                performSearch();
-            }
-        });
-        return () => {
-            isMounted = false;
-        };
-    }, [performSearch]);
+  const applyFilters = (filters) => {
+    const next = new URLSearchParams(searchParams);
+    ['min_price', 'max_price', 'room_type_id', 'sort'].forEach((key) => setParam(next, key, filters[key]));
+    next.delete('amenity_ids');
+    filters.amenity_ids.forEach((id) => next.append('amenity_ids', id));
+    next.set('page', '1');
+    setSearchParams(next);
+    setMobileFiltersOpen(false);
+  };
 
-    const handleFormSubmit = (e) => {
-        e.preventDefault();
-        const nextParams = new URLSearchParams();
-        nextParams.set('check_in_date', formInputs.check_in_date);
-        nextParams.set('check_out_date', formInputs.check_out_date);
-        nextParams.set('guest_count', String(formInputs.guest_count));
-        if (formInputs.keyword) nextParams.set('keyword', formInputs.keyword);
-        if (formInputs.min_price) nextParams.set('min_price', String(formInputs.min_price));
-        if (formInputs.max_price) nextParams.set('max_price', String(formInputs.max_price));
-        if (formInputs.sort) nextParams.set('sort', formInputs.sort);
-        nextParams.set('page', '1');
-        setSearchParams(nextParams);
-    };
+  const resetFilters = () => {
+    const next = new URLSearchParams(searchParams);
+    ['min_price', 'max_price', 'room_type_id', 'amenity_ids'].forEach((key) => next.delete(key));
+    next.set('sort', 'price_asc');
+    next.set('page', '1');
+    setSearchParams(next);
+  };
 
-    const handlePageChange = (newPage) => {
-        const nextParams = new URLSearchParams(searchParams);
-        nextParams.set('page', String(newPage));
-        setSearchParams(nextParams);
-    };
+  const rooms = result?.data || [];
+  const roomTypes = [...new Map(rooms.filter((room) => room.room_type?.id).map((room) => [room.room_type.id, room.room_type])).values()];
+  const amenities = [...new Map(rooms.flatMap((room) => room.amenities || []).map((amenity) => [amenity.id, amenity])).values()];
+  const maxAvailablePrice = rooms.reduce((max, room) => Math.max(max, Number(room.price_per_night) || 0), 0);
+  const filterValue = {
+    min_price: search.min_price,
+    max_price: search.max_price,
+    room_type_id: search.room_type_id,
+    amenity_ids: search.amenity_ids,
+    sort: search.sort,
+  };
 
-    return (
-        <div className="bk-container">
-            <div className="bk-page-header">
-                <h1 className="bk-page-title">Tìm kiếm phòng trống</h1>
-                <p className="bk-page-subtitle">
-                    Khám phá và đặt phòng nghỉ lý tưởng với mức giá tốt nhất trên StayHub
-                </p>
-            </div>
-
-            {/* Search and Filters Form */}
-            <form onSubmit={handleFormSubmit} className="bk-search-bar">
-                <div className="bk-form-group" style={{ margin: 0 }}>
-                    <label className="bk-label">Ngày nhận phòng</label>
-                    <input
-                        type="date"
-                        className="bk-input"
-                        required
-                        value={formInputs.check_in_date}
-                        onChange={(e) =>
-                            setFormInputs({ ...formInputs, check_in_date: e.target.value })
-                        }
-                    />
-                </div>
-
-                <div className="bk-form-group" style={{ margin: 0 }}>
-                    <label className="bk-label">Ngày trả phòng</label>
-                    <input
-                        type="date"
-                        className="bk-input"
-                        required
-                        value={formInputs.check_out_date}
-                        onChange={(e) =>
-                            setFormInputs({ ...formInputs, check_out_date: e.target.value })
-                        }
-                    />
-                </div>
-
-                <div className="bk-form-group" style={{ margin: 0 }}>
-                    <label className="bk-label">Số khách</label>
-                    <input
-                        type="number"
-                        min="1"
-                        className="bk-input"
-                        required
-                        value={formInputs.guest_count}
-                        onChange={(e) =>
-                            setFormInputs({ ...formInputs, guest_count: e.target.value })
-                        }
-                    />
-                </div>
-
-                <div className="bk-form-group" style={{ margin: 0 }}>
-                    <label className="bk-label">Địa điểm / Khách sạn</label>
-                    <input
-                        type="text"
-                        placeholder="Tên hoặc địa chỉ..."
-                        className="bk-input"
-                        value={formInputs.keyword}
-                        onChange={(e) =>
-                            setFormInputs({ ...formInputs, keyword: e.target.value })
-                        }
-                    />
-                </div>
-
-                <button type="submit" className="bk-btn bk-btn-primary" disabled={loading}>
-                    {loading ? 'Đang tìm...' : '🔍 Tìm phòng'}
-                </button>
-            </form>
-
-            {/* Main Content Layout with Sidebar Filters */}
-            <div className="bk-search-layout">
-                {/* Filters Sidebar */}
-                <aside className="bk-filter-panel">
-                    <h3 className="bk-filter-title">Bộ lọc nâng cao</h3>
-
-                    <div className="bk-form-group">
-                        <label className="bk-label">Sắp xếp theo</label>
-                        <select
-                            className="bk-select"
-                            value={formInputs.sort}
-                            onChange={(e) =>
-                                setFormInputs({ ...formInputs, sort: e.target.value })
-                            }
-                        >
-                            <option value="price_asc">Giá tăng dần</option>
-                            <option value="price_desc">Giá giảm dần</option>
-                            <option value="newest">Mới nhất</option>
-                        </select>
-                    </div>
-
-                    <div className="bk-form-group">
-                        <label className="bk-label">Khoảng giá (VND/đêm)</label>
-                        <input
-                            type="number"
-                            placeholder="Giá tối thiểu..."
-                            className="bk-input"
-                            style={{ marginBottom: 8 }}
-                            value={formInputs.min_price}
-                            onChange={(e) =>
-                                setFormInputs({ ...formInputs, min_price: e.target.value })
-                            }
-                        />
-                        <input
-                            type="number"
-                            placeholder="Giá tối đa..."
-                            className="bk-input"
-                            value={formInputs.max_price}
-                            onChange={(e) =>
-                                setFormInputs({ ...formInputs, max_price: e.target.value })
-                            }
-                        />
-                    </div>
-
-                    <button
-                        type="button"
-                        className="bk-btn bk-btn-outline bk-btn-block"
-                        onClick={handleFormSubmit}
-                        disabled={loading}
-                    >
-                        Áp dụng bộ lọc
-                    </button>
-                </aside>
-
-                {/* Rooms Result List */}
-                <main>
-                    {loading && <LoadingState message="Đang tìm kiếm phòng phù hợp..." />}
-
-                    {error && (
-                        <ErrorState
-                            title="Lỗi tìm kiếm"
-                            message={error}
-                            onRetry={performSearch}
-                        />
-                    )}
-
-                    {!loading && !error && result && result.data && result.data.length === 0 && (
-                        <EmptyState
-                            title="Không tìm thấy phòng phù hợp"
-                            description="Vui lòng thử chọn khoảng ngày khác hoặc điều chỉnh bộ lọc tìm kiếm."
-                        />
-                    )}
-
-                    {!loading && !error && result && result.data && result.data.length > 0 && (
-                        <>
-                            <div className="bk-grid">
-                                {result.data.map((room) => (
-                                    <div key={room.id} className="bk-card bk-card-hover">
-                                        <div className="bk-card-header">
-                                            <div>
-                                                <h3 className="bk-card-title">{room.name}</h3>
-                                                <p className="bk-page-subtitle">
-                                                    {room.property?.name} • Phòng {room.room_number}
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        <div className="bk-card-body">
-                                            <p style={{ margin: '0 0 8px 0', fontSize: 13, color: '#64748b' }}>
-                                                📍 {room.property?.address}
-                                            </p>
-                                            <p style={{ margin: '0 0 10px 0' }}>
-                                                👥 Sức chứa tối đa: <strong>{room.capacity} khách</strong>
-                                            </p>
-                                            {room.amenities && room.amenities.length > 0 && (
-                                                <div style={{ marginTop: 8 }}>
-                                                    {room.amenities.map((a) => (
-                                                        <span key={a.id} className="bk-tag">
-                                                            ✓ {a.name}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        <div className="bk-card-footer">
-                                            <div>
-                                                <span style={{ fontSize: 12, color: '#64748b' }}>Giá mỗi đêm:</span>
-                                                <div className="bk-price-highlight">
-                                                    {formatCurrency(room.price_per_night)}
-                                                </div>
-                                            </div>
-
-                                            <button
-                                                type="button"
-                                                className="bk-btn bk-btn-primary"
-                                                onClick={() => {
-                                                    navigate(
-                                                        `/bookings/create?room_id=${room.id}&check_in_date=${checkIn}&check_out_date=${checkOut}&guest_count=${guests}`
-                                                    );
-                                                }}
-                                            >
-                                                Đặt phòng
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-
-                            {result.meta && (
-                                <Pagination
-                                    currentPage={result.meta.current_page}
-                                    lastPage={result.meta.last_page}
-                                    total={result.meta.total}
-                                    perPage={result.meta.per_page}
-                                    onPageChange={handlePageChange}
-                                />
-                            )}
-                        </>
-                    )}
-                </main>
-            </div>
-        </div>
-    );
+  return <main className="mx-auto min-h-[70vh] max-w-7xl space-y-8 px-4 py-8 text-left sm:px-6 lg:px-8">
+    <header className="space-y-2">
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">StayHub · Tìm kiếm</p>
+      <h1 className="text-3xl font-medium text-foreground sm:text-4xl">Tìm phòng phù hợp</h1>
+      <p className="max-w-2xl text-sm text-muted-foreground">Chọn ngày lưu trú và khám phá phòng còn trống tại các cơ sở lưu trú.</p>
+    </header>
+    <SearchSummaryBar key={`${search.check_in_date}|${search.check_out_date}|${search.guest_count}|${search.keyword}`} value={{ check_in_date: search.check_in_date, check_out_date: search.check_out_date, guest_count: search.guest_count, keyword: search.keyword }} onSearch={(value) => updateParams(value)} loading={loading} />
+    <div className="grid gap-6 lg:grid-cols-[270px_minmax(0,1fr)]">
+      <div>
+        <Button variant="outline" className="mb-3 w-full gap-2 lg:hidden" aria-expanded={mobileFiltersOpen} aria-controls="search-filters" onClick={() => setMobileFiltersOpen((open) => !open)}>
+          <SlidersHorizontal className="size-4" aria-hidden="true" />{mobileFiltersOpen ? 'Ẩn bộ lọc' : 'Hiện bộ lọc'}
+        </Button>
+        <aside id="search-filters" className={mobileFiltersOpen ? 'block' : 'hidden lg:block'}>
+          <FilterSidebar key={`${searchParams.toString()}|${maxAvailablePrice}`} value={filterValue} roomTypes={roomTypes} amenities={amenities} maxAvailablePrice={maxAvailablePrice} onApply={applyFilters} onReset={resetFilters} />
+        </aside>
+      </div>
+      <section aria-live="polite" aria-busy={loading} className="min-w-0">
+        <ResultsHeader total={result?.meta?.total || 0} page={result?.meta?.current_page || search.page} />
+        {loading ? <ResultsGrid rooms={[]} loading bookingSearch={search} /> : null}
+        {!loading && error ? <ErrorState title="Không thể tìm phòng" message={error} onRetry={performSearch} /> : null}
+        {!loading && !error && rooms.length === 0 && result ? <SearchEmptyState /> : null}
+        {!loading && !error && rooms.length > 0 ? <>
+          <ResultsGrid rooms={rooms} loading={false} bookingSearch={search} />
+          {result?.meta && <div className="mt-7"><Pagination currentPage={result.meta.current_page} lastPage={result.meta.last_page} total={result.meta.total} perPage={result.meta.per_page} onPageChange={(page) => updateParams({ page }, false)} /></div>}
+        </> : null}
+      </section>
+    </div>
+  </main>;
 }

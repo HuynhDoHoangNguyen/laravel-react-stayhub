@@ -10,7 +10,7 @@ function LoginTestPage() {
             await api.get('/sanctum/csrf-cookie');
 
             await api.post('/login', {
-                email: 'customer@stayhub.test',
+                email: 'host1@stayhub.com',
                 password: '12345678',
             });
 

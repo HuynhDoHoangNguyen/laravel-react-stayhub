@@ -652,3 +652,28 @@ Mọi bước chuyển trạng thái nằm ngoài ma trận trên đều trả v
   - Kiểm tra IDOR route lồng: `bookingService.booking_id === booking.id` (nếu sai -> trả về **404 Not Found**).
   - Booking phải đang ở trạng thái `CHECKED_IN`.
 - **Response thành công (204 No Content)**: Body rỗng.
+
+---
+
+## 3. Frontend Member 2
+
+Frontend dùng các route giao diện dưới đây; các API tương ứng vẫn giữ theo endpoint ở mục 2.
+
+| Route giao diện | Trang | Service/API chính |
+|---|---|---|
+| `/search` | `pages/public/SearchResultPage.jsx` | `searchService.js` |
+| `/booking/checkout` | `pages/customer/BookingCheckoutPage.jsx` | `bookingService.js` (`previewBooking`, `createBooking`) |
+| `/customer/bookings` | `pages/customer/MyBookingsPage.jsx` | `bookingService.js` (`getCustomerBookings`) |
+| `/customer/bookings/:bookingId` | `pages/customer/BookingDetailPage.jsx` | `bookingService.js` (`getCustomerBookingDetail`, `cancelBooking`) |
+| `/host/bookings` | `pages/host/HostBookingListPage.jsx` | `hostBookingService.js`, `propertyServiceCatalogService.js` |
+| `/host/bookings/:bookingId` | `pages/host/HostBookingDetailPage.jsx` | `hostBookingService.js` |
+| `/host/bookings/:bookingId/services` | `pages/host/HostBookingServicesPage.jsx` | `bookingServiceUsageService.js`, `hostBookingService.js`, `propertyServiceCatalogService.js` |
+| `/host/properties/:propertyId/services` | `pages/host/HostServiceListPage.jsx` | `propertyServiceCatalogService.js` |
+
+`/host/services` là lối vào tương thích tạm thời: gọi `GET /api/host/properties`, rồi chuyển đến trang dịch vụ của cơ sở đầu tiên. Route này có comment `TEMP-M2-WIRING`; route chuẩn là route có `:propertyId` ở bảng trên.
+
+`AvailabilityChecker.jsx` là component kiểm tra khả dụng dùng `availabilityService.js` khi được gắn vào trang phòng.
+
+Hiện router chưa có trang chi tiết phòng nên `AvailabilityChecker` chưa được mount vào luồng giao diện. Luồng này cần nối khi có route/trang phòng được bàn giao.
+
+Frontend hiển thị giá bằng VND, coi dữ liệu giá/tổng tiền từ backend là nguồn quyết định, và khóa nút mutation trong lúc gửi. Backend trả lỗi 401/403/404/409/422 theo các contract tại mục 1 và 2; trang booking dịch các mã lý do 409 sang tiếng Việt.

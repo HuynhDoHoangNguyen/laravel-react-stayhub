@@ -1,116 +1,31 @@
-import { useState, useEffect } from 'react';
-import { checkRoomAvailability } from '../../services/availabilityService';
-import { REASON_TRANSLATIONS, getApiErrorMessage } from '../../utils/getApiErrorMessage';
-import { formatDate } from '../../utils/formatDate';
+import { useEffect, useState } from 'react';
+import { checkRoomAvailability } from '@/services/availabilityService';
+import { REASON_TRANSLATIONS, getApiErrorMessage } from '@/utils/getApiErrorMessage';
+import { formatDate } from '@/utils/formatDate';
+import { Skeleton } from '@/components/ui/skeleton';
 
-export default function AvailabilityChecker({
-    roomId,
-    checkInDate,
-    checkOutDate,
-    guestCount,
-}) {
-    const [loading, setLoading] = useState(false);
-    const [result, setResult] = useState(null);
-    const [errorMsg, setErrorMsg] = useState(null);
-
-    useEffect(() => {
-        if (!roomId || !checkInDate || !checkOutDate || !guestCount) {
-            return;
-        }
-
-        let isMounted = true;
-        Promise.resolve().then(() => {
-            if (isMounted) {
-                setLoading(true);
-                setErrorMsg(null);
-            }
-        });
-
-        checkRoomAvailability(roomId, {
-            check_in_date: checkInDate,
-            check_out_date: checkOutDate,
-            guest_count: Number(guestCount),
-        })
-            .then((res) => {
-                if (isMounted) {
-                    setResult(res.data);
-                }
-            })
-            .catch((err) => {
-                if (isMounted) {
-                    const parsed = getApiErrorMessage(err);
-                    setErrorMsg(parsed.message);
-                }
-            })
-            .finally(() => {
-                if (isMounted) {
-                    setLoading(false);
-                }
-            });
-
-        return () => {
-            isMounted = false;
-        };
-    }, [roomId, checkInDate, checkOutDate, guestCount]);
-
-    if (!roomId || !checkInDate || !checkOutDate) {
-        return null;
-    }
-
-    if (loading) {
-        return (
-            <div className="bk-alert bk-alert-info">
-                <span>Đang kiểm tra tình trạng phòng...</span>
-            </div>
-        );
-    }
-
-    if (errorMsg) {
-        return (
-            <div className="bk-alert bk-alert-danger">
-                <strong>Không thể kiểm tra phòng:</strong> {errorMsg}
-            </div>
-        );
-    }
-
-    if (!result) {
-        return null;
-    }
-
-    const { available, reasons = [], blocked_ranges = [] } = result;
-
-    return (
-        <div className="bk-availability-result" style={{ marginBottom: 16 }}>
-            {available ? (
-                <div className="bk-alert bk-alert-success">
-                    <strong>✓ Phòng khả dụng:</strong> Phòng hoàn toàn trống và sẵn sàng cho lịch trình của bạn.
-                </div>
-            ) : (
-                <div className="bk-alert bk-alert-danger">
-                    <strong>✗ Phòng không khả dụng:</strong>
-                    <ul style={{ margin: '6px 0 0 16px', padding: 0 }}>
-                        {reasons.map((r, idx) => (
-                            <li key={idx}>
-                                {REASON_TRANSLATIONS[r] || r}
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-            )}
-
-            {blocked_ranges && blocked_ranges.length > 0 && (
-                <div className="bk-alert bk-alert-warning" style={{ fontSize: 13 }}>
-                    <strong>Lịch bận của phòng:</strong>
-                    <ul style={{ margin: '4px 0 0 16px', padding: 0 }}>
-                        {blocked_ranges.map((range, idx) => (
-                            <li key={idx}>
-                                Từ {formatDate(range.start_date)} đến {formatDate(range.end_date)}{' '}
-                                ({range.type === 'BOOKING' ? 'Khách đã đặt' : 'Bảo trì'})
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-            )}
-        </div>
-    );
+export default function AvailabilityChecker({ roomId, checkInDate, checkOutDate, guestCount }) {
+  const [loading,setLoading]=useState(false); const [result,setResult]=useState(null); const [error,setError]=useState('');
+  useEffect(()=>{
+    if(!roomId||!checkInDate||!checkOutDate||!guestCount)return undefined;
+    let active=true;
+    Promise.resolve().then(()=>{if(active){setLoading(true);setError('');setResult(null);}});
+    checkRoomAvailability(roomId,{check_in_date:checkInDate,check_out_date:checkOutDate,guest_count:Number(guestCount)})
+      .then(response=>{if(active)setResult(response.data);})
+      .catch(requestError=>{if(active)setError(getApiErrorMessage(requestError).message);})
+      .finally(()=>{if(active)setLoading(false);});
+    return ()=>{active=false;};
+  },[roomId,checkInDate,checkOutDate,guestCount]);
+  if(!roomId||!checkInDate||!checkOutDate)return null;
+  if(loading)return <div className="my-4 space-y-2" role="status" aria-live="polite"><span className="sr-only">Đang kiểm tra tình trạng phòng</span><Skeleton className="h-12 w-full rounded-xl"/></div>;
+  if(error)return <div className="my-4 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive" role="alert"><strong>Không thể kiểm tra phòng:</strong> {error}</div>;
+  if(!result)return null;
+  const {available,reasons=[],blocked_ranges=[]}=result;
+  return <div className="my-4 space-y-3" aria-live="polite">
+    <div className={`rounded-xl border p-4 text-sm ${available?'border-primary/20 bg-primary/5 text-primary':'border-destructive/30 bg-destructive/5 text-destructive'}`} role="status">
+      <strong>{available?'Phòng khả dụng':'Phòng không khả dụng'}:</strong> {available?'Phòng hiện có thể đặt theo khoảng ngày đã chọn.':'Phòng không khả dụng trong khoảng ngày này.'}
+      {!available&&reasons.length>0&&<ul className="mt-2 list-inside list-disc">{reasons.map((reason,index)=><li key={`${reason}-${index}`}>{REASON_TRANSLATIONS[reason]||reason}</li>)}</ul>}
+    </div>
+    {blocked_ranges.length>0&&<div className="rounded-xl border border-accent/40 bg-accent-pale/40 p-4 text-sm text-foreground"><strong>Lịch bận của phòng:</strong><ul className="mt-2 list-inside list-disc">{blocked_ranges.map((range,index)=><li key={`${range.start_date}-${range.end_date}-${index}`}>Từ {formatDate(range.start_date)} đến {formatDate(range.end_date)} ({range.type==='BOOKING'?'Khách đã đặt':'Bảo trì'})</li>)}</ul></div>}
+  </div>;
 }

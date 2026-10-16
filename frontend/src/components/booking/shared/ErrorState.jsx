@@ -1,22 +1,11 @@
-export default function ErrorState({
-    title = 'Đã xảy ra lỗi',
-    message = 'Không thể tải được dữ liệu. Vui lòng thử lại.',
-    onRetry,
-}) {
-    return (
-        <div className="bk-state bk-state-error">
-            <div className="bk-state-icon">⚠️</div>
-            <h4 className="bk-state-title">{title}</h4>
-            <p className="bk-state-description">{message}</p>
-            {onRetry && (
-                <button
-                    type="button"
-                    className="bk-btn bk-btn-outline bk-btn-sm"
-                    onClick={onRetry}
-                >
-                    Thử lại
-                </button>
-            )}
-        </div>
-    );
+import { AlertCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+
+export default function ErrorState({ title = 'Đã xảy ra lỗi', message = 'Không thể tải được dữ liệu. Vui lòng thử lại.', onRetry }) {
+  return <section className="mx-auto flex max-w-xl flex-col items-center gap-3 rounded-xl border border-destructive/30 bg-card p-6 text-center" role="alert">
+    <AlertCircle className="size-8 text-destructive" aria-hidden="true" />
+    <h4 className="text-lg font-semibold text-foreground">{title}</h4>
+    <p className="text-sm text-muted-foreground">{message}</p>
+    {onRetry && <Button type="button" variant="outline" onClick={onRetry}>Thử lại</Button>}
+  </section>;
 }

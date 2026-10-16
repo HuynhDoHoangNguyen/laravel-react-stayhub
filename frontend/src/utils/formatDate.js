@@ -1,16 +1,19 @@
-/**
- * Format date string or Date object to dd/MM/yyyy.
- * e.g., "2026-10-25" -> "25/10/2026"
- */
+import { format } from 'date-fns';
+
+/** Format YYYY-MM-DD as dd/MM/yyyy using its calendar date in local time. */
 export function formatDate(dateInput) {
-    if (!dateInput) return '';
+  if (!dateInput) return '';
 
-    const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
-    if (isNaN(date.getTime())) return String(dateInput);
+  if (typeof dateInput === 'string') {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateInput);
+    if (match) {
+      const [, year, month, day] = match;
+      return `${day}/${month}/${year}`;
+    }
+  }
 
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
-
-    return `${day}/${month}/${year}`;
+  const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  if (Number.isNaN(date.getTime())) return String(dateInput);
+  return format(date, 'dd/MM/yyyy');
 }
+

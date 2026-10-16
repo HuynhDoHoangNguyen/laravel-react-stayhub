@@ -2,18 +2,18 @@ import { Outlet, Link } from 'react-router-dom';
 
 function CustomerLayout() {
     return (
-        <div>
-            <header style={{ padding: '12px 16px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h2 style={{ margin: 0 }}>StayHub - Khách hàng</h2>
+        <div className="min-h-screen">
+            <header className="flex flex-wrap items-center justify-between gap-3 border-b bg-background px-4 py-3">
+                <h2 className="shrink-0 font-display text-xl text-primary">StayHub · Khách hàng</h2>
                 {/* TEMP-M2-WIRING */}
-                <nav>
-                    <Link to="/search" className="bk-nav-link">🔍 Tìm phòng</Link>
-                    <Link to="/my-bookings" className="bk-nav-link">📦 Đặt phòng của tôi</Link>
-                    <Link to="/customer" className="bk-nav-link">Bảng điều khiển</Link>
+                <nav aria-label="Điều hướng khách hàng" className="flex max-w-full flex-wrap gap-1 overflow-x-auto sm:gap-2">
+                    <Link to="/search" className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Tìm phòng</Link>
+                    <Link to="/customer/bookings" className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Đặt phòng của tôi</Link>
+                    <Link to="/customer" className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Bảng điều khiển</Link>
                 </nav>
             </header>
 
-            <main>
+            <main className="min-w-0">
                 <Outlet />
             </main>
         </div>

@@ -1,14 +1,5 @@
-/**
- * Format currency to Vietnamese Dong (VND).
- * e.g., 500000 -> "500.000 ₫"
- */
+/** Format a number as Vietnamese Dong. */
 export function formatCurrency(amount) {
-    if (amount === null || amount === undefined || isNaN(Number(amount))) {
-        return '0 ₫';
-    }
-
-    return new Intl.NumberFormat('vi-VN', {
-        style: 'currency',
-        currency: 'VND',
-    }).format(Number(amount));
+  const value = amount === null || amount === undefined || Number.isNaN(Number(amount)) ? 0 : Number(amount);
+  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
 }

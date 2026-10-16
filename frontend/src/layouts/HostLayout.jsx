@@ -2,19 +2,19 @@ import { Outlet, Link } from 'react-router-dom';
 
 function HostLayout() {
     return (
-        <div>
-            <header style={{ padding: '12px 16px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h2 style={{ margin: 0 }}>StayHub - Dành cho Chủ nhà (Host)</h2>
+        <div className="min-h-screen">
+            <header className="flex flex-wrap items-center justify-between gap-3 border-b bg-background px-4 py-3">
+                <h2 className="shrink-0 font-display text-xl text-primary">StayHub · Chủ nhà</h2>
                 {/* TEMP-M2-WIRING */}
-                <nav>
-                    <Link to="/host" className="bk-nav-link">Tổng quan</Link>
-                    <Link to="/host/bookings" className="bk-nav-link">📋 Quản lý đặt phòng</Link>
-                    <Link to="/host/services" className="bk-nav-link">🛎️ Dịch vụ cơ sở</Link>
-                    <Link to="/search" className="bk-nav-link">🔍 Tìm phòng (Khách)</Link>
+                <nav aria-label="Điều hướng chủ nhà" className="flex max-w-full flex-wrap gap-1 overflow-x-auto sm:gap-2">
+                    <Link to="/host" className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Tổng quan</Link>
+                    <Link to="/host/bookings" className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Quản lý đặt phòng</Link>
+                    <Link to="/host/services" className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Dịch vụ cơ sở</Link>
+                    <Link to="/search" className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Tìm phòng</Link>
                 </nav>
             </header>
 
-            <main>
+            <main className="min-w-0">
                 <Outlet />
             </main>
         </div>

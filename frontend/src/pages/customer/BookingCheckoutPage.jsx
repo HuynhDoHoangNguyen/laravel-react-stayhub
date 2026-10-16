@@ -1,262 +1,141 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useSearchParams, useNavigate, Link } from 'react-router-dom';
-import { previewBooking, createBooking } from '../../services/bookingService';
-import { formatCurrency } from '../../utils/formatCurrency';
-import { formatDate } from '../../utils/formatDate';
-import { getApiErrorMessage } from '../../utils/getApiErrorMessage';
-import AvailabilityChecker from '../../components/booking/AvailabilityChecker';
-import LoadingState from '../../components/booking/shared/LoadingState';
-import ErrorState from '../../components/booking/shared/ErrorState';
+import { useCallback, useEffect, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { AlertTriangle, ArrowLeft, CalendarDays, Users } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import LoadingState from '@/components/booking/shared/LoadingState';
+import { previewBooking, createBooking } from '@/services/bookingService';
+import { formatCurrency } from '@/utils/formatCurrency';
+import { formatDate } from '@/utils/formatDate';
+import { getApiErrorMessage, REASON_TRANSLATIONS } from '@/utils/getApiErrorMessage';
 
 export default function BookingCheckoutPage() {
-    const [searchParams] = useSearchParams();
-    const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const roomId = searchParams.get('room_id');
+  const checkInDate = searchParams.get('check_in_date');
+  const checkOutDate = searchParams.get('check_out_date');
+  const guestCount = Number(searchParams.get('guest_count') || 1);
+  const [note, setNote] = useState('');
+  const [quote, setQuote] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [previewError, setPreviewError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
 
-    const roomId = searchParams.get('room_id');
-    const checkInDate = searchParams.get('check_in_date');
-    const checkOutDate = searchParams.get('check_out_date');
-    const guestCount = searchParams.get('guest_count') || '1';
-
-    const [note, setNote] = useState('');
-    const [previewLoading, setPreviewLoading] = useState(true);
-    const [previewError, setPreviewError] = useState(null);
-    const [quoteData, setQuoteData] = useState(null);
-
-    const [submitting, setSubmitting] = useState(false);
-    const [submitError, setSubmitError] = useState(null);
-    const [fieldErrors, setFieldErrors] = useState({});
-    const [is401Error, setIs401Error] = useState(false);
-    const [is409Conflict, setIs409Conflict] = useState(false);
-
-    const loadQuote = useCallback(async () => {
-        if (!roomId || !checkInDate || !checkOutDate) {
-            setPreviewError('Thiếu thông tin đặt phòng cần thiết (phòng, ngày nhận/trả).');
-            setPreviewLoading(false);
-            return;
-        }
-
-        setPreviewLoading(true);
-        setPreviewError(null);
-        try {
-            const res = await previewBooking({
-                room_id: Number(roomId),
-                check_in_date: checkInDate,
-                check_out_date: checkOutDate,
-                guest_count: Number(guestCount),
-            });
-            setQuoteData(res.data);
-        } catch (err) {
-            const parsed = getApiErrorMessage(err);
-            setPreviewError(parsed.message);
-        } finally {
-            setPreviewLoading(false);
-        }
-    }, [roomId, checkInDate, checkOutDate, guestCount]);
-
-    useEffect(() => {
-        let isMounted = true;
-        Promise.resolve().then(() => {
-            if (isMounted) {
-                loadQuote();
-            }
-        });
-        return () => {
-            isMounted = false;
-        };
-    }, [loadQuote]);
-
-    const handleSubmitBooking = async (e) => {
-        e.preventDefault();
-        setSubmitting(true);
-        setSubmitError(null);
-        setFieldErrors({});
-        setIs401Error(false);
-        setIs409Conflict(false);
-
-        try {
-            const payload = {
-                room_id: Number(roomId),
-                check_in_date: checkInDate,
-                check_out_date: checkOutDate,
-                guest_count: Number(guestCount),
-                note: note.trim() || undefined,
-            };
-
-            const res = await createBooking(payload);
-            const created = res.data;
-            navigate(`/my-bookings/${created.id}`);
-        } catch (err) {
-            if (err.response?.status === 401) {
-                setIs401Error(true);
-                setSubmitError('Bạn cần đăng nhập tài khoản Khách hàng để tiến hành đặt phòng.');
-            } else if (err.response?.status === 409) {
-                setIs409Conflict(true);
-                const parsed = getApiErrorMessage(err);
-                setSubmitError(parsed.message || 'Phòng vừa được khách khác đặt hoặc không còn khả dụng.');
-            } else {
-                const parsed = getApiErrorMessage(err);
-                setSubmitError(parsed.message);
-                if (parsed.fieldErrors) {
-                    setFieldErrors(parsed.fieldErrors);
-                }
-            }
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
-    if (previewLoading) {
-        return (
-            <div className="bk-container">
-                <LoadingState message="Đang tải thông tin báo giá đặt phòng..." />
-            </div>
-        );
+  const loadQuote = useCallback(async () => {
+    if (!roomId || !checkInDate || !checkOutDate) {
+      setPreviewError('Thiếu thông tin phòng hoặc ngày lưu trú. Vui lòng tìm phòng lại.');
+      setLoading(false);
+      return;
     }
-
-    if (previewError) {
-        return (
-            <div className="bk-container">
-                <ErrorState
-                    title="Không thể khởi tạo đặt phòng"
-                    message={previewError}
-                    onRetry={loadQuote}
-                />
-                <div style={{ textAlign: 'center', marginTop: 16 }}>
-                    <Link to="/search" className="bk-btn bk-btn-outline">
-                        ← Quay lại tìm kiếm phòng
-                    </Link>
-                </div>
-            </div>
-        );
+    setLoading(true);
+    setPreviewError('');
+    try {
+      const response = await previewBooking({ room_id: Number(roomId), check_in_date: checkInDate, check_out_date: checkOutDate, guest_count: guestCount });
+      setQuote(response.data);
+    } catch (error) {
+      setPreviewError(getApiErrorMessage(error).message);
+    } finally {
+      setLoading(false);
     }
+  }, [roomId, checkInDate, checkOutDate, guestCount]);
 
-    return (
-        <div className="bk-container" style={{ maxWidth: 800 }}>
-            <div className="bk-page-header">
-                <h1 className="bk-page-title">Xác nhận đặt phòng</h1>
-                <p className="bk-page-subtitle">
-                    Kiểm tra chi tiết và hoàn tất đơn đặt phòng lưu trú của bạn
-                </p>
-            </div>
+  useEffect(() => {
+    let active = true;
+    Promise.resolve().then(() => active && loadQuote());
+    return () => { active = false; };
+  }, [loadQuote]);
 
-            {/* Availability Checker Live Block */}
-            <AvailabilityChecker
-                roomId={roomId}
-                checkInDate={checkInDate}
-                checkOutDate={checkOutDate}
-                guestCount={guestCount}
-            />
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setSubmitting(true);
+    setSubmitError(null);
+    setFieldErrors({});
+    try {
+      const response = await createBooking({ room_id: Number(roomId), check_in_date: checkInDate, check_out_date: checkOutDate, guest_count: guestCount, note: note.trim() || undefined });
+      navigate(`/customer/bookings/${response.data.id}`);
+    } catch (error) {
+      const parsed = getApiErrorMessage(error);
+      setSubmitError({ status: error.response?.status, message: parsed.message });
+      setFieldErrors(parsed.fieldErrors || {});
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
-            {/* Error notifications */}
-            {is401Error && (
-                <div className="bk-alert bk-alert-danger">
-                    <p style={{ margin: '0 0 8px 0', fontWeight: 600 }}>
-                        {submitError}
-                    </p>
-                    <Link to="/login-test" className="bk-btn bk-btn-primary bk-btn-sm">
-                        Đi tới trang Đăng nhập (Login Test) →
-                    </Link>
-                </div>
-            )}
+  const availability = quote?.availability?.available;
+  const noteError = fieldErrors.note?.[0];
+  const availabilityReasons = (quote?.availability?.reasons || []).map((reason) => REASON_TRANSLATIONS[reason] || reason);
 
-            {is409Conflict && (
-                <div className="bk-alert bk-alert-danger">
-                    <p style={{ margin: '0 0 8px 0', fontWeight: 600 }}>
-                        ⚠️ {submitError}
-                    </p>
-                    <Link to="/search" className="bk-btn bk-btn-outline bk-btn-sm">
-                        ← Quay lại tìm kiếm phòng khác
-                    </Link>
-                </div>
-            )}
+  if (loading) return <main className="mx-auto max-w-6xl px-4 py-12 text-left sm:px-6"><LoadingState message="Đang lấy báo giá từ hệ thống..." /></main>;
+  if (previewError) return <main className="mx-auto max-w-3xl space-y-5 px-4 py-12 text-left sm:px-6">
+    <div role="alert" aria-live="polite" className="flex gap-3 rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-destructive"><AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" /><div><p className="font-semibold">Không thể lập báo giá</p><p className="mt-1 text-sm">{previewError}</p></div></div>
+    <Button asChild variant="outline"><Link to="/search"><ArrowLeft className="size-4" aria-hidden="true" />Quay lại tìm phòng</Link></Button>
+  </main>;
 
-            {!is401Error && !is409Conflict && submitError && (
-                <div className="bk-alert bk-alert-danger">
-                    {submitError}
-                </div>
-            )}
+  return <main className="mx-auto max-w-6xl px-4 py-8 text-left sm:px-6 lg:px-8">
+    <header className="mb-8 space-y-2">
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Đặt phòng · Bước cuối</p>
+      <h1 className="text-3xl font-medium sm:text-4xl">Xác nhận đặt phòng</h1>
+      <p className="text-sm text-muted-foreground">Kiểm tra thông tin lưu trú và giá do StayHub báo.</p>
+    </header>
 
-            {/* Checkout Form & Summary */}
-            <form onSubmit={handleSubmitBooking}>
-                <div className="bk-card" style={{ marginBottom: 24 }}>
-                    <h3 className="bk-card-title" style={{ marginBottom: 16 }}>
-                        Thông tin lưu trú
-                    </h3>
+    {submitError && <div role="alert" aria-live="assertive" className={`mb-6 flex gap-3 rounded-2xl border p-4 ${submitError.status === 409 ? 'border-destructive/30 bg-destructive/5 text-destructive' : 'border-accent/40 bg-accent-pale/50 text-foreground'}`}>
+      <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+      <div className="space-y-2 text-sm">
+        <p className="font-semibold">{submitError.status === 409 ? 'Phòng không còn khả dụng' : submitError.status === 401 ? 'Cần đăng nhập' : 'Không thể xác nhận đặt phòng'}</p>
+        <p>{submitError.status === 401 ? 'Bạn cần đăng nhập bằng tài khoản Khách hàng để tiếp tục.' : submitError.message}</p>
+        {submitError.status === 401 ? <Link className="font-medium underline underline-offset-4" to="/login-test">Đăng nhập</Link> : null}
+        {submitError.status === 409 ? <Link className="font-medium underline underline-offset-4" to="/search">Chọn ngày hoặc phòng khác</Link> : null}
+        {submitError.status === 422 && Object.entries(fieldErrors).map(([field, messages]) => <p key={field} className="text-sm">{field}: {Array.isArray(messages) ? messages.join(' ') : messages}</p>)}
+      </div>
+    </div>}
 
-                    <table className="bk-table">
-                        <tbody>
-                            <tr>
-                                <td style={{ width: '40%', color: '#64748b' }}>Mã phòng:</td>
-                                <td><strong>#{quoteData?.room_id}</strong></td>
-                            </tr>
-                            <tr>
-                                <td style={{ color: '#64748b' }}>Ngày nhận phòng:</td>
-                                <td><strong>{formatDate(quoteData?.check_in_date)}</strong></td>
-                            </tr>
-                            <tr>
-                                <td style={{ color: '#64748b' }}>Ngày trả phòng:</td>
-                                <td><strong>{formatDate(quoteData?.check_out_date)}</strong></td>
-                            </tr>
-                            <tr>
-                                <td style={{ color: '#64748b' }}>Số lượng khách:</td>
-                                <td><strong>{quoteData?.guest_count} khách</strong></td>
-                            </tr>
-                            <tr>
-                                <td style={{ color: '#64748b' }}>Số đêm lưu trú:</td>
-                                <td><strong>{quoteData?.number_of_nights} đêm</strong></td>
-                            </tr>
-                            <tr>
-                                <td style={{ color: '#64748b' }}>Đơn giá một đêm:</td>
-                                <td>{formatCurrency(quoteData?.price_per_night)}</td>
-                            </tr>
-                            <tr style={{ background: '#f8fafc' }}>
-                                <td style={{ fontWeight: 700, fontSize: 16 }}>Tổng tiền phòng:</td>
-                                <td>
-                                    <span className="bk-price-highlight">
-                                        {formatCurrency(quoteData?.room_total)}
-                                    </span>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <div className="bk-card" style={{ marginBottom: 24 }}>
-                    <h3 className="bk-card-title" style={{ marginBottom: 12 }}>
-                        Yêu cầu đặc biệt / Ghi chú
-                    </h3>
-
-                    <div className="bk-form-group" style={{ margin: 0 }}>
-                        <label className="bk-label">Ghi chú cho cơ sở lưu trú (tùy chọn)</label>
-                        <textarea
-                            rows={3}
-                            placeholder="Ví dụ: Xin chuẩn bị phòng tầng cao, giờ đến dự kiến..."
-                            className="bk-textarea"
-                            value={note}
-                            onChange={(e) => setNote(e.target.value)}
-                            disabled={submitting}
-                        />
-                        {fieldErrors.note && (
-                            <p className="bk-error-text">{fieldErrors.note[0]}</p>
-                        )}
-                    </div>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Link to="/search" className="bk-btn bk-btn-outline">
-                        ← Hủy & Quay lại
-                    </Link>
-
-                    <button
-                        type="submit"
-                        className="bk-btn bk-btn-primary"
-                        style={{ padding: '10px 24px', fontSize: 16 }}
-                        disabled={submitting || (quoteData?.availability && !quoteData.availability.available)}
-                    >
-                        {submitting ? 'Đang xử lý...' : '✓ Xác nhận đặt phòng'}
-                    </button>
-                </div>
-            </form>
+    <form onSubmit={handleSubmit} aria-busy={submitting}>
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(300px,.8fr)]">
+        <div className="space-y-5">
+          <Card className="rounded-3xl border-border/60">
+            <CardHeader><div className="flex items-center justify-between gap-3"><CardTitle className="text-xl">Thông tin lưu trú</CardTitle><Button asChild size="sm" variant="outline"><Link to="/search">Đổi ngày</Link></Button></div></CardHeader>
+            <CardContent className="space-y-4">
+              <dl className="grid gap-4 sm:grid-cols-2">
+                <div><dt className="text-xs text-muted-foreground">Phòng</dt><dd className="mt-1 font-medium">#{quote?.room_id || roomId}</dd></div>
+                <div><dt className="text-xs text-muted-foreground">Số khách</dt><dd className="mt-1 flex items-center gap-2 font-medium"><Users className="size-4 text-primary" aria-hidden="true" />{quote?.guest_count ?? guestCount} khách</dd></div>
+                <div><dt className="text-xs text-muted-foreground">Ngày nhận phòng</dt><dd className="mt-1 flex items-center gap-2 font-medium"><CalendarDays className="size-4 text-primary" aria-hidden="true" />{formatDate(quote?.check_in_date || checkInDate)}</dd></div>
+                <div><dt className="text-xs text-muted-foreground">Ngày trả phòng</dt><dd className="mt-1 flex items-center gap-2 font-medium"><CalendarDays className="size-4 text-primary" aria-hidden="true" />{formatDate(quote?.check_out_date || checkOutDate)}</dd></div>
+              </dl>
+              <p className={`rounded-xl px-4 py-3 text-sm font-medium ${availability ? 'bg-primary/10 text-primary' : 'bg-destructive/10 text-destructive'}`} role="status">
+                {availability ? 'Phòng còn trống theo kiểm tra hiện tại.' : 'Phòng không còn trống trong khoảng ngày này.'}
+                {availabilityReasons.length > 0 ? ` ${availabilityReasons.join(', ')}` : ''}
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="rounded-3xl border-border/60">
+            <CardHeader><CardTitle className="text-xl">Ghi chú cho cơ sở lưu trú</CardTitle></CardHeader>
+            <CardContent className="space-y-2">
+              <Label htmlFor="booking-note">Yêu cầu đặc biệt (không bắt buộc)</Label>
+              <Textarea id="booking-note" rows={4} value={note} onChange={(event) => setNote(event.target.value)} disabled={submitting} aria-invalid={Boolean(noteError)} aria-describedby={noteError ? 'booking-note-error' : undefined} placeholder="Ghi chú thêm cho cơ sở lưu trú" />
+              {noteError && <p id="booking-note-error" className="text-sm text-destructive">{noteError}</p>}
+            </CardContent>
+          </Card>
         </div>
-    );
+
+        <Card className="rounded-3xl border-border/60 shadow-[0_15px_50px_-35px_rgba(17,26,19,0.5)] lg:sticky lg:top-6">
+          <CardHeader><CardTitle className="text-xl">Tóm tắt giá</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex justify-between gap-4 text-sm"><span className="text-muted-foreground">Số đêm</span><span>{quote?.number_of_nights} đêm</span></div>
+            <div className="flex justify-between gap-4 text-sm"><span className="text-muted-foreground">Giá mỗi đêm</span><span>{formatCurrency(quote?.price_per_night)}</span></div>
+            <div className="border-t border-border pt-4"><div className="flex justify-between gap-4 font-semibold"><span>Tiền phòng</span><span className="text-lg text-primary">{formatCurrency(quote?.room_total)}</span></div><p className="mt-2 text-xs text-muted-foreground">Giá cuối cùng được backend xác nhận khi tạo đặt phòng.</p></div>
+            <Button type="submit" className="h-12 w-full rounded-full" disabled={submitting || availability === false}>
+              {submitting ? 'Đang gửi yêu cầu…' : 'Xác nhận đặt phòng'}
+            </Button>
+            <p className="text-center text-xs text-muted-foreground">Yêu cầu sẽ được gửi đến cơ sở lưu trú để xác nhận.</p>
+          </CardContent>
+        </Card>
+      </div>
+    </form>
+  </main>;
 }

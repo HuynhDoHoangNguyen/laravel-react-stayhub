@@ -1,441 +1,56 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import {
-    getHostBookings,
-    confirmBooking,
-    rejectBooking,
-} from '../../services/hostBookingService';
-import { getHostProperties } from '../../services/propertyServiceCatalogService';
-import { formatCurrency } from '../../utils/formatCurrency';
-import { formatDate } from '../../utils/formatDate';
-import { getApiErrorMessage } from '../../utils/getApiErrorMessage';
-import StatusBadge from '../../components/booking/shared/StatusBadge';
-import ConfirmDialog from '../../components/booking/shared/ConfirmDialog';
-import LoadingState from '../../components/booking/shared/LoadingState';
-import ErrorState from '../../components/booking/shared/ErrorState';
-import EmptyState from '../../components/booking/shared/EmptyState';
-import Pagination from '../../components/booking/shared/Pagination';
+import { getHostBookings, confirmBooking, rejectBooking } from '@/services/hostBookingService';
+import { getHostProperties } from '@/services/propertyServiceCatalogService';
+import { formatCurrency } from '@/utils/formatCurrency';
+import { formatDate } from '@/utils/formatDate';
+import { getApiErrorMessage } from '@/utils/getApiErrorMessage';
+import StatusBadge from '@/components/booking/shared/StatusBadge';
+import ConfirmDialog from '@/components/booking/shared/ConfirmDialog';
+import LoadingState from '@/components/booking/shared/LoadingState';
+import ErrorState from '@/components/booking/shared/ErrorState';
+import EmptyState from '@/components/booking/shared/EmptyState';
+import Pagination from '@/components/booking/shared/Pagination';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
-const STATUS_OPTIONS = [
-    { value: '', label: 'Tất cả trạng thái' },
-    { value: 'PENDING', label: 'Chờ xác nhận' },
-    { value: 'CONFIRMED', label: 'Đã xác nhận' },
-    { value: 'CHECKED_IN', label: 'Đang lưu trú' },
-    { value: 'COMPLETED', label: 'Đã hoàn thành' },
-    { value: 'CANCELLED', label: 'Đã hủy' },
-    { value: 'REJECTED', label: 'Từ chối' },
-];
+const statuses = [['ALL','Tất cả trạng thái'],['PENDING','Chờ xác nhận'],['CONFIRMED','Đã xác nhận'],['CHECKED_IN','Đang lưu trú'],['COMPLETED','Đã hoàn thành'],['CANCELLED','Đã hủy'],['REJECTED','Đã từ chối']];
+const field = 'h-10 rounded-xl';
 
 export default function HostBookingListPage() {
-    const [searchParams, setSearchParams] = useSearchParams();
-
-    const statusParam = searchParams.get('status') || '';
-    const propertyIdParam = searchParams.get('property_id') || '';
-    const startDateParam = searchParams.get('start_date') || '';
-    const endDateParam = searchParams.get('end_date') || '';
-    const keywordParam = searchParams.get('keyword') || '';
-    const pageParam = parseInt(searchParams.get('page') || '1', 10);
-
-    const [filterInputs, setFilterInputs] = useState({
-        status: statusParam,
-        property_id: propertyIdParam,
-        start_date: startDateParam,
-        end_date: endDateParam,
-        keyword: keywordParam,
-    });
-
-    const [properties, setProperties] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [result, setResult] = useState(null);
-
-    // Dialog state for quick confirm / reject
-    const [dialogState, setDialogState] = useState({
-        isOpen: false,
-        type: null, // 'confirm' | 'reject'
-        booking: null,
-        reason: '',
-        loading: false,
-        error: null,
-    });
-
-    // Load host properties for filter dropdown
-    useEffect(() => {
-        let isMounted = true;
-        getHostProperties()
-            .then((res) => {
-                if (isMounted) {
-                    setProperties(res.data || []);
-                }
-            })
-            .catch(() => {});
-        return () => {
-            isMounted = false;
-        };
-    }, []);
-
-    const loadBookings = useCallback(async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const params = { page: pageParam };
-            if (statusParam) params.status = statusParam;
-            if (propertyIdParam) params.property_id = propertyIdParam;
-            if (startDateParam) params.start_date = startDateParam;
-            if (endDateParam) params.end_date = endDateParam;
-            if (keywordParam) params.keyword = keywordParam;
-
-            const res = await getHostBookings(params);
-            setResult(res);
-        } catch (err) {
-            setError(getApiErrorMessage(err).message);
-        } finally {
-            setLoading(false);
-        }
-    }, [statusParam, propertyIdParam, startDateParam, endDateParam, keywordParam, pageParam]);
-
-    useEffect(() => {
-        let isMounted = true;
-        Promise.resolve().then(() => {
-            if (isMounted) {
-                loadBookings();
-            }
-        });
-        return () => {
-            isMounted = false;
-        };
-    }, [loadBookings]);
-
-    const handleFilterSubmit = (e) => {
-        e.preventDefault();
-        const next = new URLSearchParams();
-        if (filterInputs.status) next.set('status', filterInputs.status);
-        if (filterInputs.property_id) next.set('property_id', filterInputs.property_id);
-        if (filterInputs.start_date) next.set('start_date', filterInputs.start_date);
-        if (filterInputs.end_date) next.set('end_date', filterInputs.end_date);
-        if (filterInputs.keyword) next.set('keyword', filterInputs.keyword);
-        next.set('page', '1');
-        setSearchParams(next);
-    };
-
-    const handlePageChange = (newPage) => {
-        const next = new URLSearchParams(searchParams);
-        next.set('page', String(newPage));
-        setSearchParams(next);
-    };
-
-    const openConfirmDialog = (booking) => {
-        setDialogState({
-            isOpen: true,
-            type: 'confirm',
-            booking,
-            reason: '',
-            loading: false,
-            error: null,
-        });
-    };
-
-    const openRejectDialog = (booking) => {
-        setDialogState({
-            isOpen: true,
-            type: 'reject',
-            booking,
-            reason: '',
-            loading: false,
-            error: null,
-        });
-    };
-
-    const handleDialogAction = async () => {
-        const { type, booking, reason } = dialogState;
-        if (!booking) return;
-
-        setDialogState((prev) => ({ ...prev, loading: true, error: null }));
-        try {
-            if (type === 'confirm') {
-                await confirmBooking(booking.id);
-            } else if (type === 'reject') {
-                await rejectBooking(booking.id, reason);
-            }
-            setDialogState({ isOpen: false, type: null, booking: null, reason: '', loading: false, error: null });
-            loadBookings();
-        } catch (err) {
-            const parsed = getApiErrorMessage(err);
-            setDialogState((prev) => ({
-                ...prev,
-                loading: false,
-                error: parsed.message,
-            }));
-        }
-    };
-
-    return (
-        <div className="bk-container">
-            <div className="bk-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                    <h1 className="bk-page-title">Quản lý đặt phòng</h1>
-                    <p className="bk-page-subtitle">
-                        Xem và xử lý các đơn đặt phòng của các cơ sở lưu trú trực thuộc
-                    </p>
-                </div>
-
-                <div>
-                    <Link to="/host/services" className="bk-btn bk-btn-outline bk-btn-sm">
-                        Quản lý dịch vụ cơ sở →
-                    </Link>
-                </div>
-            </div>
-
-            {/* Filter Bar */}
-            <form onSubmit={handleFilterSubmit} className="bk-search-bar" style={{ marginBottom: 20 }}>
-                <div className="bk-form-group" style={{ margin: 0 }}>
-                    <label className="bk-label">Cơ sở lưu trú</label>
-                    <select
-                        className="bk-select"
-                        value={filterInputs.property_id}
-                        onChange={(e) =>
-                            setFilterInputs({ ...filterInputs, property_id: e.target.value })
-                        }
-                    >
-                        <option value="">Tất cả cơ sở</option>
-                        {properties.map((p) => (
-                            <option key={p.id} value={p.id}>
-                                {p.name}
-                            </option>
-                        ))}
-                    </select>
-                </div>
-
-                <div className="bk-form-group" style={{ margin: 0 }}>
-                    <label className="bk-label">Trạng thái</label>
-                    <select
-                        className="bk-select"
-                        value={filterInputs.status}
-                        onChange={(e) =>
-                            setFilterInputs({ ...filterInputs, status: e.target.value })
-                        }
-                    >
-                        {STATUS_OPTIONS.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                                {opt.label}
-                            </option>
-                        ))}
-                    </select>
-                </div>
-
-                <div className="bk-form-group" style={{ margin: 0 }}>
-                    <label className="bk-label">Từ ngày</label>
-                    <input
-                        type="date"
-                        className="bk-input"
-                        value={filterInputs.start_date}
-                        onChange={(e) =>
-                            setFilterInputs({ ...filterInputs, start_date: e.target.value })
-                        }
-                    />
-                </div>
-
-                <div className="bk-form-group" style={{ margin: 0 }}>
-                    <label className="bk-label">Đến ngày</label>
-                    <input
-                        type="date"
-                        className="bk-input"
-                        value={filterInputs.end_date}
-                        onChange={(e) =>
-                            setFilterInputs({ ...filterInputs, end_date: e.target.value })
-                        }
-                    />
-                </div>
-
-                <div className="bk-form-group" style={{ margin: 0 }}>
-                    <label className="bk-label">Tìm kiếm</label>
-                    <input
-                        type="text"
-                        placeholder="Mã đơn, tên, email..."
-                        className="bk-input"
-                        value={filterInputs.keyword}
-                        onChange={(e) =>
-                            setFilterInputs({ ...filterInputs, keyword: e.target.value })
-                        }
-                    />
-                </div>
-
-                <button type="submit" className="bk-btn bk-btn-primary" disabled={loading}>
-                    Lọc danh sách
-                </button>
-            </form>
-
-            {/* Content Table */}
-            {loading && <LoadingState message="Đang tải danh sách đặt phòng..." />}
-
-            {error && (
-                <ErrorState
-                    title="Lỗi tải danh sách"
-                    message={error}
-                    onRetry={loadBookings}
-                />
-            )}
-
-            {!loading && !error && result && result.data && result.data.length === 0 && (
-                <EmptyState
-                    title="Không có đơn đặt phòng nào"
-                    description="Không tìm thấy đơn đặt phòng nào theo điều kiện lọc hiện tại."
-                />
-            )}
-
-            {!loading && !error && result && result.data && result.data.length > 0 && (
-                <div className="bk-card" style={{ padding: 0, overflowX: 'auto' }}>
-                    <table className="bk-table">
-                        <thead>
-                            <tr>
-                                <th>Mã đơn</th>
-                                <th>Khách hàng</th>
-                                <th>Cơ sở / Phòng</th>
-                                <th>Nhận phòng</th>
-                                <th>Trả phòng</th>
-                                <th>Tổng tiền</th>
-                                <th>Trạng thái</th>
-                                <th style={{ textAlign: 'right' }}>Thao tác</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {result.data.map((b) => (
-                                <tr key={b.id}>
-                                    <td>
-                                        <strong style={{ color: '#2563eb' }}>
-                                            #{b.booking_code}
-                                        </strong>
-                                    </td>
-                                    <td>
-                                        <div><strong>{b.customer?.name || 'Khách'}</strong></div>
-                                        <div style={{ fontSize: 12, color: '#64748b' }}>
-                                            {b.customer?.email}
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div>{b.room?.property?.name}</div>
-                                        <div style={{ fontSize: 12, color: '#64748b' }}>
-                                            {b.room?.name} (P.{b.room?.room_number})
-                                        </div>
-                                    </td>
-                                    <td>{formatDate(b.check_in_date)}</td>
-                                    <td>{formatDate(b.check_out_date)}</td>
-                                    <td>
-                                        <strong>{formatCurrency(b.room_total)}</strong>
-                                    </td>
-                                    <td>
-                                        <StatusBadge status={b.status} />
-                                    </td>
-                                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                                        {b.status === 'PENDING' && (
-                                            <>
-                                                <button
-                                                    type="button"
-                                                    className="bk-btn bk-btn-primary bk-btn-sm"
-                                                    style={{ marginRight: 6 }}
-                                                    onClick={() => openConfirmDialog(b)}
-                                                >
-                                                    Duyệt
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    className="bk-btn bk-btn-danger bk-btn-sm"
-                                                    style={{ marginRight: 6 }}
-                                                    onClick={() => openRejectDialog(b)}
-                                                >
-                                                    Từ chối
-                                                </button>
-                                            </>
-                                        )}
-                                        <Link
-                                            to={`/host/bookings/${b.id}`}
-                                            className="bk-btn bk-btn-outline bk-btn-sm"
-                                        >
-                                            Chi tiết
-                                        </Link>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-
-                    {result.meta && (
-                        <div style={{ padding: '0 16px 16px 16px' }}>
-                            <Pagination
-                                currentPage={result.meta.current_page}
-                                lastPage={result.meta.last_page}
-                                total={result.meta.total}
-                                perPage={result.meta.per_page}
-                                onPageChange={handlePageChange}
-                            />
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* Confirm / Reject Quick Action Dialog */}
-            <ConfirmDialog
-                isOpen={dialogState.isOpen && dialogState.type === 'confirm'}
-                title="Xác nhận duyệt đặt phòng"
-                message={`Bạn có chắc chắn muốn xác nhận đơn đặt phòng #${dialogState.booking?.booking_code}? Sau khi xác nhận, phòng sẽ chính thức được giữ chỗ.`}
-                confirmText="Xác nhận duyệt"
-                cancelText="Đóng"
-                loading={dialogState.loading}
-                onConfirm={handleDialogAction}
-                onCancel={() => setDialogState({ isOpen: false, type: null, booking: null, reason: '', loading: false, error: null })}
-            />
-
-            {/* Custom Reject Dialog with Reason */}
-            {dialogState.isOpen && dialogState.type === 'reject' && (
-                <div className="bk-modal-backdrop">
-                    <div className="bk-modal-dialog">
-                        <h3 className="bk-modal-title">Từ chối đơn đặt phòng</h3>
-                        <p className="bk-modal-message">
-                            Đơn đặt phòng #{dialogState.booking?.booking_code} sẽ chuyển sang trạng thái TỪ CHỐI và phòng sẽ được giải phóng.
-                        </p>
-
-                        {dialogState.error && (
-                            <div className="bk-alert bk-alert-danger" style={{ marginBottom: 12 }}>
-                                {dialogState.error}
-                            </div>
-                        )}
-
-                        <div className="bk-form-group">
-                            <label className="bk-label">Lý do từ chối (tùy chọn)</label>
-                            <input
-                                type="text"
-                                placeholder="Nhập lý do từ chối..."
-                                className="bk-input"
-                                value={dialogState.reason}
-                                onChange={(e) =>
-                                    setDialogState({ ...dialogState, reason: e.target.value })
-                                }
-                            />
-                        </div>
-
-                        <div className="bk-modal-actions">
-                            <button
-                                type="button"
-                                className="bk-btn bk-btn-outline"
-                                disabled={dialogState.loading}
-                                onClick={() =>
-                                    setDialogState({ isOpen: false, type: null, booking: null, reason: '', loading: false, error: null })
-                                }
-                            >
-                                Hủy bỏ
-                            </button>
-                            <button
-                                type="button"
-                                className="bk-btn bk-btn-danger"
-                                disabled={dialogState.loading}
-                                onClick={handleDialogAction}
-                            >
-                                {dialogState.loading ? 'Đang xử lý...' : 'Xác nhận từ chối'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
+  const [params, setParams] = useSearchParams();
+  const [properties, setProperties] = useState([]);
+  const [filters, setFilters] = useState({ status: params.get('status') || 'ALL', property_id: params.get('property_id') || 'ALL', start_date: params.get('start_date') || '', end_date: params.get('end_date') || '', keyword: params.get('keyword') || '' });
+  const [result, setResult] = useState(null); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
+  const [dialog, setDialog] = useState({ open: false, type: '', booking: null, loading: false, error: '' });
+  useEffect(() => { getHostProperties().then(r => setProperties(r.data || [])).catch(() => {}); }, []);
+  const load = useCallback(async () => {
+    setLoading(true); setError('');
+    try { const q = Object.fromEntries(params); if (q.status === 'ALL') delete q.status; if (q.property_id === 'ALL') delete q.property_id; delete q.page; const r = await getHostBookings({ ...q, page: params.get('page') || 1 }); setResult(r); }
+    catch (e) { setError(e.response?.status === 403 ? 'Bạn không có quyền' : getApiErrorMessage(e).message); } finally { setLoading(false); }
+  }, [params]);
+  useEffect(() => { load(); }, [load]);
+  const apply = (e) => { e.preventDefault(); const next = new URLSearchParams(); Object.entries(filters).forEach(([k,v]) => { if (v && v !== 'ALL') next.set(k,v); }); next.set('page','1'); setParams(next); };
+  const pageChange = (page) => { const next = new URLSearchParams(params); next.set('page', String(page)); setParams(next); };
+  const act = async () => { setDialog(d => ({ ...d, loading: true, error: '' })); try { if (dialog.type === 'confirm') await confirmBooking(dialog.booking.id); else await rejectBooking(dialog.booking.id); setDialog({ open:false, type:'', booking:null, loading:false, error:'' }); await load(); } catch (e) { setDialog(d => ({ ...d, loading:false, error:e.response?.status === 403 ? 'Bạn không có quyền' : getApiErrorMessage(e).message })); } };
+  return <main className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6">
+    <header className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs font-medium uppercase tracking-[.2em] text-primary">Host · Đặt phòng</p><h1 className="mt-1 font-display text-3xl text-primary">Quản lý đặt phòng</h1><p className="mt-1 text-sm text-muted-foreground">Theo dõi và xử lý booking tại các cơ sở của bạn.</p></div><Button asChild variant="outline" className="rounded-xl"><Link to="/host/services">Quản lý dịch vụ</Link></Button></header>
+    <form onSubmit={apply} className="grid gap-4 rounded-2xl border bg-card p-4 sm:grid-cols-2 lg:grid-cols-6">
+      <div className="space-y-2"><Label htmlFor="booking-status">Trạng thái</Label><Select value={filters.status} onValueChange={v=>setFilters({...filters,status:v})}><SelectTrigger id="booking-status" className={field}><SelectValue/></SelectTrigger><SelectContent>{statuses.map(([v,l])=><SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent></Select></div>
+      <div className="space-y-2"><Label htmlFor="booking-property">Cơ sở</Label><Select value={filters.property_id} onValueChange={v=>setFilters({...filters,property_id:v})}><SelectTrigger id="booking-property" className={field}><SelectValue/></SelectTrigger><SelectContent><SelectItem value="ALL">Tất cả cơ sở</SelectItem>{properties.map(p=><SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}</SelectContent></Select></div>
+      <div className="space-y-2"><Label htmlFor="booking-start">Từ ngày</Label><Input id="booking-start" type="date" value={filters.start_date} onChange={e=>setFilters({...filters,start_date:e.target.value})} className={field}/></div>
+      <div className="space-y-2"><Label htmlFor="booking-end">Đến ngày</Label><Input id="booking-end" type="date" value={filters.end_date} onChange={e=>setFilters({...filters,end_date:e.target.value})} className={field}/></div>
+      <div className="space-y-2 lg:col-span-2"><Label htmlFor="booking-keyword">Từ khóa</Label><Input id="booking-keyword" value={filters.keyword} onChange={e=>setFilters({...filters,keyword:e.target.value})} placeholder="Mã booking, tên hoặc email khách" className={field}/></div>
+      <Button type="submit" className="rounded-xl lg:col-span-6 lg:justify-self-end">Lọc danh sách</Button>
+    </form>
+    {loading && <LoadingState message="Đang tải danh sách booking…"/>}{!loading && error && <ErrorState title="Không tải được booking" message={error} onRetry={load}/>}
+    {!loading && !error && result?.data?.length === 0 && <EmptyState title="Chưa có booking phù hợp" description="Thử đổi trạng thái, cơ sở, khoảng ngày hoặc từ khóa."/>}
+    {!loading && !error && !!result?.data?.length && <section className="overflow-hidden rounded-2xl border bg-card"><div className="overflow-x-auto"><Table className="min-w-[1050px]"><TableHeader className="bg-muted/60"><TableRow>{['Mã','Khách','Phòng','Check-in','Check-out','Tổng tiền','Trạng thái','Thao tác'].map(x=><TableHead key={x} className="whitespace-nowrap px-4">{x}</TableHead>)}</TableRow></TableHeader><TableBody>{result.data.map(b=><TableRow key={b.id}>
+      <TableCell className="px-4 font-medium"><Link className="text-primary underline-offset-4 hover:underline" to={`/host/bookings/${b.id}`}>{b.booking_code}</Link></TableCell><TableCell className="px-4">{b.customer?.name || 'Khách'}<div className="text-xs text-muted-foreground">{b.customer?.email}</div></TableCell><TableCell className="px-4">{b.room?.name || `Phòng ${b.room?.room_number || ''}`}<div className="text-xs text-muted-foreground">{b.room?.property?.name}</div></TableCell><TableCell className="px-4">{formatDate(b.check_in_date)}</TableCell><TableCell className="px-4">{formatDate(b.check_out_date)}</TableCell><TableCell className="px-4 font-medium">{formatCurrency(b.room_total)}</TableCell><TableCell className="px-4"><StatusBadge status={b.status}/></TableCell><TableCell className="whitespace-nowrap px-4"><div className="flex gap-2">{b.status==='PENDING'&&<><Button size="sm" className="rounded-lg" onClick={()=>setDialog({open:true,type:'confirm',booking:b,loading:false,error:''})}>Xác nhận</Button><Button size="sm" variant="destructive" className="rounded-lg" onClick={()=>setDialog({open:true,type:'reject',booking:b,loading:false,error:''})}>Từ chối</Button></>}<Button asChild size="sm" variant="outline" className="rounded-lg"><Link to={`/host/bookings/${b.id}`}>Chi tiết</Link></Button></div></TableCell>
+    </TableRow>)}</TableBody></Table></div><div className="p-4">{result.meta&&<Pagination {...{currentPage:result.meta.current_page,lastPage:result.meta.last_page,total:result.meta.total,perPage:result.meta.per_page,onPageChange:pageChange}}/>}</div></section>}
+    <ConfirmDialog isOpen={dialog.open} title={dialog.type==='reject'?'Từ chối booking':'Xác nhận booking'} message={dialog.error || (dialog.type==='reject'?`Từ chối booking ${dialog.booking?.booking_code}?`:`Xác nhận booking ${dialog.booking?.booking_code}?`)} confirmText={dialog.type==='reject'?'Từ chối':'Xác nhận'} isDanger={dialog.type==='reject'} loading={dialog.loading} onConfirm={act} onCancel={()=>setDialog({open:false,type:'',booking:null,loading:false,error:''})}/>
+  </main>;
 }

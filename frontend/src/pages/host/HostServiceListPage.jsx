@@ -1,255 +1,39 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
-import {
-    getHostServices,
-    setHostServiceStatus,
-    getHostProperties,
-} from '../../services/propertyServiceCatalogService';
-import { formatCurrency } from '../../utils/formatCurrency';
-import { getApiErrorMessage } from '../../utils/getApiErrorMessage';
-import LoadingState from '../../components/booking/shared/LoadingState';
-import ErrorState from '../../components/booking/shared/ErrorState';
-import EmptyState from '../../components/booking/shared/EmptyState';
-import Pagination from '../../components/booking/shared/Pagination';
+import { useCallback, useEffect, useState } from 'react';
+import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { getHostProperties, getHostServices, createHostService, updateHostService, setHostServiceStatus } from '@/services/propertyServiceCatalogService';
+import { formatCurrency } from '@/utils/formatCurrency';
+import { getApiErrorMessage } from '@/utils/getApiErrorMessage';
+import LoadingState from '@/components/booking/shared/LoadingState';
+import ErrorState from '@/components/booking/shared/ErrorState';
+import EmptyState from '@/components/booking/shared/EmptyState';
+import Pagination from '@/components/booking/shared/Pagination';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
-export default function HostServiceListPage() {
-    const [searchParams, setSearchParams] = useSearchParams();
-
-    const propIdParam = searchParams.get('property_id') || '';
-    const pageParam = parseInt(searchParams.get('page') || '1', 10);
-
-    const [properties, setProperties] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [result, setResult] = useState(null);
-    const [actionMsg, setActionMsg] = useState(null);
-    const [togglingId, setTogglingId] = useState(null);
-
-    // Fetch properties for filter dropdown
-    useEffect(() => {
-        let isMounted = true;
-        getHostProperties()
-            .then((res) => {
-                if (isMounted) {
-                    setProperties(res.data || []);
-                }
-            })
-            .catch(() => {});
-        return () => {
-            isMounted = false;
-        };
-    }, []);
-
-    const loadServices = useCallback(async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const params = { page: pageParam };
-            if (propIdParam) {
-                params.property_id = propIdParam;
-            }
-            const res = await getHostServices(params);
-            setResult(res);
-        } catch (err) {
-            setError(getApiErrorMessage(err).message);
-        } finally {
-            setLoading(false);
-        }
-    }, [propIdParam, pageParam]);
-
-    useEffect(() => {
-        let isMounted = true;
-        Promise.resolve().then(() => {
-            if (isMounted) {
-                loadServices();
-            }
-        });
-        return () => {
-            isMounted = false;
-        };
-    }, [loadServices]);
-
-    const handlePropertyFilter = (e) => {
-        const next = new URLSearchParams();
-        if (e.target.value) next.set('property_id', e.target.value);
-        next.set('page', '1');
-        setSearchParams(next);
-    };
-
-    const handlePageChange = (newPage) => {
-        const next = new URLSearchParams(searchParams);
-        next.set('page', String(newPage));
-        setSearchParams(next);
-    };
-
-    const handleToggleStatus = async (service) => {
-        setTogglingId(service.id);
-        setActionMsg(null);
-        try {
-            const newStatus = !service.status;
-            await setHostServiceStatus(service.id, newStatus);
-            setActionMsg({
-                type: 'success',
-                text: `Đã ${newStatus ? 'bật' : 'tắt'} dịch vụ "${service.name}".`,
-            });
-            loadServices();
-        } catch (err) {
-            const parsed = getApiErrorMessage(err);
-            setActionMsg({ type: 'danger', text: parsed.message });
-        } finally {
-            setTogglingId(null);
-        }
-    };
-
-    return (
-        <div className="bk-container">
-            <div className="bk-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
-                <div>
-                    <h1 className="bk-page-title">Danh mục dịch vụ cơ sở</h1>
-                    <p className="bk-page-subtitle">
-                        Quản lý các dịch vụ đi kèm phục vụ khách lưu trú tại các cơ sở
-                    </p>
-                </div>
-
-                <div style={{ display: 'flex', gap: 10 }}>
-                    <Link to="/host/bookings" className="bk-btn bk-btn-outline bk-btn-sm">
-                        Quản lý đặt phòng →
-                    </Link>
-                    <Link to="/host/services/create" className="bk-btn bk-btn-primary bk-btn-sm">
-                        + Tạo dịch vụ mới
-                    </Link>
-                </div>
-            </div>
-
-            {actionMsg && (
-                <div className={`bk-alert bk-alert-${actionMsg.type}`}>
-                    {actionMsg.text}
-                </div>
-            )}
-
-            {/* Filter by Property */}
-            <div className="bk-card" style={{ marginBottom: 20, padding: 14, display: 'flex', alignItems: 'center', gap: 14 }}>
-                <span style={{ fontSize: 14, fontWeight: 600, color: '#334155' }}>
-                    Lọc theo cơ sở:
-                </span>
-                <select
-                    className="bk-select"
-                    style={{ maxWidth: 300 }}
-                    value={propIdParam}
-                    onChange={handlePropertyFilter}
-                >
-                    <option value="">Tất cả cơ sở lưu trú</option>
-                    {properties.map((p) => (
-                        <option key={p.id} value={p.id}>
-                            {p.name}
-                        </option>
-                    ))}
-                </select>
-            </div>
-
-            {/* Content Table */}
-            {loading && <LoadingState message="Đang tải danh sách dịch vụ..." />}
-
-            {error && (
-                <ErrorState
-                    title="Lỗi tải dữ liệu"
-                    message={error}
-                    onRetry={loadServices}
-                />
-            )}
-
-            {!loading && !error && result && result.data && result.data.length === 0 && (
-                <EmptyState
-                    title="Chưa có dịch vụ nào"
-                    description="Cơ sở lưu trú chưa có dịch vụ nào trong danh mục. Hãy tạo dịch vụ mới."
-                    action={
-                        <Link to="/host/services/create" className="bk-btn bk-btn-primary bk-btn-sm">
-                            + Thêm dịch vụ đầu tiên
-                        </Link>
-                    }
-                />
-            )}
-
-            {!loading && !error && result && result.data && result.data.length > 0 && (
-                <div className="bk-card" style={{ padding: 0, overflowX: 'auto' }}>
-                    <table className="bk-table">
-                        <thead>
-                            <tr>
-                                <th>Tên dịch vụ</th>
-                                <th>Cơ sở lưu trú</th>
-                                <th>Đơn vị tính</th>
-                                <th>Đơn giá</th>
-                                <th>Trạng thái</th>
-                                <th style={{ textAlign: 'right' }}>Thao tác</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {result.data.map((s) => (
-                                <tr key={s.id}>
-                                    <td>
-                                        <strong>{s.name}</strong>
-                                        {s.description && (
-                                            <div style={{ fontSize: 12, color: '#64748b' }}>
-                                                {s.description}
-                                            </div>
-                                        )}
-                                    </td>
-                                    <td>{s.property?.name || '---'}</td>
-                                    <td>{s.unit}</td>
-                                    <td>
-                                        <strong>{formatCurrency(s.price)}</strong>
-                                    </td>
-                                    <td>
-                                        <span
-                                            className={`bk-status-badge ${
-                                                s.status ? 'bk-status-success' : 'bk-status-neutral'
-                                            }`}
-                                            style={{
-                                                color: s.status ? '#16a34a' : '#64748b',
-                                                backgroundColor: s.status ? '#dcfce7' : '#f1f5f9',
-                                            }}
-                                        >
-                                            {s.status ? 'Đang bật' : 'Tạm ngưng'}
-                                        </span>
-                                    </td>
-                                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                                        <button
-                                            type="button"
-                                            className={`bk-btn bk-btn-sm ${
-                                                s.status ? 'bk-btn-outline' : 'bk-btn-primary'
-                                            }`}
-                                            style={{ marginRight: 6 }}
-                                            disabled={togglingId === s.id}
-                                            onClick={() => handleToggleStatus(s)}
-                                        >
-                                            {togglingId === s.id ? '...' : (s.status ? 'Tắt' : 'Bật')}
-                                        </button>
-
-                                        <Link
-                                            to={`/host/services/${s.id}/edit`}
-                                            className="bk-btn bk-btn-outline bk-btn-sm"
-                                        >
-                                            Sửa
-                                        </Link>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-
-                    {result.meta && (
-                        <div style={{ padding: '0 16px 16px 16px' }}>
-                            <Pagination
-                                currentPage={result.meta.current_page}
-                                lastPage={result.meta.last_page}
-                                total={result.meta.total}
-                                perPage={result.meta.per_page}
-                                onPageChange={handlePageChange}
-                            />
-                        </div>
-                    )}
-                </div>
-            )}
-        </div>
-    );
+const blank={name:'',description:'',unit:'',price:''};
+export default function HostServiceListPage(){
+  const {propertyId}=useParams(); const nav=useNavigate(); const [props,setProps]=useState([]); const [propLoading,setPropLoading]=useState(true); const [data,setData]=useState(null); const [loading,setLoading]=useState(true); const [error,setError]=useState(''); const [saving,setSaving]=useState(false); const [toggleId,setToggleId]=useState(null); const [dialog,setDialog]=useState(false); const [editing,setEditing]=useState(null); const [form,setForm]=useState(blank); const [fields,setFields]=useState({}); const [formError,setFormError]=useState(''); const [page,setPage]=useState(1);
+  useEffect(()=>{getHostProperties().then(r=>setProps(r.data||[])).catch(e=>setError(getApiErrorMessage(e).message)).finally(()=>setPropLoading(false));},[]);
+  const load=useCallback(async()=>{if(!propertyId)return;setLoading(true);setError('');try{setData(await getHostServices({property_id:propertyId,page}));}catch(e){setError(e.response?.status===403?'Bạn không có quyền':getApiErrorMessage(e).message);}finally{setLoading(false);}},[propertyId,page]);
+  useEffect(()=>{Promise.resolve().then(load);},[load]);
+  if(propLoading)return <main className="p-6"><LoadingState/></main>;
+  if(!propertyId){if(error)return <main className="mx-auto max-w-5xl p-6"><ErrorState title="Không tải được danh sách cơ sở" message={error} onRetry={()=>{setPropLoading(true);getHostProperties().then(r=>{setProps(r.data||[]);setError('');}).catch(e=>setError(getApiErrorMessage(e).message)).finally(()=>setPropLoading(false));}}/></main>;if(props[0])return <Navigate replace to={`/host/properties/${props[0].id}/services`}/>;return <main className="mx-auto max-w-5xl p-6"><EmptyState title="Chưa có cơ sở lưu trú" description="Tạo cơ sở lưu trú để quản lý danh mục dịch vụ."/></main>;}
+  const prop=props.find(p=>String(p.id)===String(propertyId));
+  const change=(v)=>{setPage(1);nav(`/host/properties/${v}/services`);};
+  const open=(item=null)=>{setEditing(item);setForm(item?{name:item.name,description:item.description||'',unit:item.unit,price:String(item.price)}:blank);setFields({});setFormError('');setDialog(true);};
+  const save=async e=>{e.preventDefault();setSaving(true);setFields({});setFormError('');try{const payload={name:form.name.trim(),description:form.description.trim()||undefined,unit:form.unit.trim(),price:Number(form.price)};if(editing)await updateHostService(editing.id,payload);else await createHostService({...payload,property_id:Number(propertyId),status:true});setDialog(false);await load();}catch(e){const parsed=getApiErrorMessage(e);setFormError(parsed.message);setFields(parsed.fieldErrors||{});}finally{setSaving(false);}};
+  const toggle=async item=>{setToggleId(item.id);setError('');try{await setHostServiceStatus(item.id,!item.status);await load();}catch(e){setError(getApiErrorMessage(e).message);}finally{setToggleId(null);}};
+  const errorFor=k=>fields[k]?.[0]||fields[k];
+  return <main className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6"><header className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs uppercase tracking-[.2em] text-primary">Host · Dịch vụ</p><h1 className="mt-1 font-display text-3xl text-primary">Danh mục dịch vụ</h1><p className="mt-1 text-sm text-muted-foreground">{prop?.name||'Cơ sở lưu trú'}</p></div><Button className="rounded-xl" onClick={()=>open()}>Thêm dịch vụ</Button></header>
+  <Card className="rounded-2xl"><CardContent className="grid gap-2 pt-6 sm:max-w-md"><Label htmlFor="service-property">Cơ sở lưu trú</Label><select id="service-property" className="h-10 rounded-xl border bg-background px-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" value={propertyId} onChange={e=>change(e.target.value)}>{props.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></CardContent></Card>
+  {error&&<div role="alert" aria-live="polite"><ErrorState title="Không thể tải hoặc cập nhật" message={error} onRetry={load}/></div>}{loading&&<LoadingState message="Đang tải dịch vụ…"/>}
+  {!loading&&!error&&data?.data?.length===0&&<EmptyState title="Chưa có dịch vụ" description="Thêm dịch vụ đầu tiên cho cơ sở này." action={<Button onClick={()=>open()}>Thêm dịch vụ</Button>}/>}
+  {!loading&&!error&&!!data?.data?.length&&<Card className="overflow-hidden rounded-2xl"><CardHeader><CardTitle className="font-display text-xl">Dịch vụ của cơ sở</CardTitle></CardHeader><CardContent><div className="overflow-x-auto"><Table className="min-w-[700px]"><TableHeader><TableRow><TableHead>Tên</TableHead><TableHead>Đơn vị</TableHead><TableHead>Giá</TableHead><TableHead>Trạng thái</TableHead><TableHead className="text-right">Thao tác</TableHead></TableRow></TableHeader><TableBody>{data.data.map(s=><TableRow key={s.id}><TableCell><strong>{s.name}</strong>{s.description&&<div className="text-xs text-muted-foreground">{s.description}</div>}</TableCell><TableCell>{s.unit}</TableCell><TableCell>{formatCurrency(s.price)}</TableCell><TableCell><span className="mr-2 text-sm">{s.status?'Đang bật':'Tạm ngưng'}</span><Switch checked={Boolean(s.status)} disabled={toggleId===s.id} onCheckedChange={()=>toggle(s)} aria-label={`${s.status?'Tắt':'Bật'} dịch vụ ${s.name}`}/></TableCell><TableCell className="text-right"><Button variant="outline" size="sm" className="rounded-lg" onClick={()=>open(s)}>Sửa</Button></TableCell></TableRow>)}</TableBody></Table></div><div className="pt-4">{data.meta&&<Pagination currentPage={data.meta.current_page} lastPage={data.meta.last_page} total={data.meta.total} perPage={data.meta.per_page} onPageChange={setPage}/>}</div></CardContent></Card>}
+  <Dialog open={dialog} onOpenChange={setDialog}><DialogContent className="rounded-2xl"><form onSubmit={save}><DialogHeader><DialogTitle className="font-display text-2xl">{editing?'Sửa dịch vụ':'Thêm dịch vụ'}</DialogTitle><DialogDescription>Đổi giá chỉ áp dụng cho dịch vụ thêm sau.</DialogDescription></DialogHeader><div className="space-y-4 py-5">{formError&&<p role="alert" aria-live="polite" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{formError}</p>}{[['name','Tên dịch vụ'],['unit','Đơn vị']].map(([key,label])=><div key={key} className="space-y-2"><Label htmlFor={`service-${key}`}>{label}</Label><Input id={`service-${key}`} value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value})} aria-invalid={!!errorFor(key)} aria-describedby={errorFor(key)?`err-${key}`:undefined}/>{errorFor(key)&&<p id={`err-${key}`} className="text-sm text-destructive">{errorFor(key)}</p>}</div>)}<div className="space-y-2"><Label htmlFor="service-description">Mô tả</Label><Input id="service-description" value={form.description} onChange={e=>setForm({...form,description:e.target.value})} aria-invalid={!!errorFor('description')} aria-describedby={errorFor('description')?'err-description':undefined}/>{errorFor('description')&&<p id="err-description" className="text-sm text-destructive">{errorFor('description')}</p>}</div><div className="space-y-2"><Label htmlFor="service-price">Đơn giá (VND)</Label><Input id="service-price" type="number" min="0" step="0.01" value={form.price} onChange={e=>setForm({...form,price:e.target.value})} aria-invalid={!!errorFor('price')} aria-describedby={errorFor('price')?'err-price':undefined}/>{errorFor('price')&&<p id="err-price" className="text-sm text-destructive">{errorFor('price')}</p>}</div></div><DialogFooter><Button type="button" variant="outline" onClick={()=>setDialog(false)}>Đóng</Button><Button disabled={saving}>{saving?'Đang lưu…':'Lưu dịch vụ'}</Button></DialogFooter></form></DialogContent></Dialog>
+  </main>;
 }
