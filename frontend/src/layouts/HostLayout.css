@@ -1,0 +1,206 @@
+/* StayHub — Host Console Layout (Quiet Luxury Design System) */
+
+.host-shell {
+    display: flex;
+    min-height: 100vh;
+    width: 100%;
+    background-color: #faf8f5;
+    text-align: left;
+    color: #111a13;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    box-sizing: border-box;
+}
+
+/* Sidebar */
+.host-sidebar {
+    width: 260px;
+    background-color: #ffffff;
+    border-right: 1px solid #e9e4db;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.host-sidebar-brand {
+    padding: 20px 24px;
+    border-bottom: 1px solid #f0ece3;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+}
+
+.brand-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background-color: #1a2e20;
+    color: #fdfaf6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+}
+
+.brand-text {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: #1a2e20;
+    letter-spacing: -0.5px;
+    line-height: 1;
+}
+
+.brand-subtext {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #b08d57;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+.host-sidebar-nav {
+    padding: 16px 12px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.nav-section-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: #718096;
+    font-weight: 600;
+    padding: 8px 12px 4px;
+}
+
+.host-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #4a5568;
+    text-decoration: none;
+    transition: all 0.15s ease-in-out;
+}
+
+.host-nav-item:hover {
+    background-color: #f4ede0;
+    color: #1a2e20;
+}
+
+.host-nav-item.active {
+    background-color: #1a2e20;
+    color: #fdfaf6;
+}
+
+.host-nav-item .nav-badge {
+    margin-left: auto;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 9999px;
+    background-color: #f0ece3;
+    color: #718096;
+    font-weight: 600;
+}
+
+.host-nav-item.active .nav-badge {
+    background-color: rgba(255, 255, 255, 0.2);
+    color: #fdfaf6;
+}
+
+.host-sidebar-footer {
+    padding: 16px 12px;
+    border-top: 1px solid #f0ece3;
+    background-color: #fdfcf9;
+}
+
+.host-profile-snippet {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+}
+
+.host-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background-color: #f4ede0;
+    border: 1px solid #b08d57;
+    color: #1a2e20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 13px;
+}
+
+.host-profile-info {
+    overflow: hidden;
+}
+
+.host-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1a202c;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.host-role {
+    font-size: 11px;
+    color: #718096;
+}
+
+/* Main Content Area */
+.host-main-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.host-topbar {
+    height: 60px;
+    background-color: #ffffff;
+    border-bottom: 1px solid #e9e4db;
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.host-topbar-breadcrumb {
+    font-size: 13px;
+    color: #718096;
+}
+
+.host-content-area {
+    padding: 32px;
+    max-width: 1100px;
+    width: 100%;
+    margin: 0 auto;
+    box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+    .host-shell {
+        flex-direction: column;
+    }
+    .host-sidebar {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid #e9e4db;
+    }
+    .host-content-area {
+        padding: 16px;
+    }
+}
