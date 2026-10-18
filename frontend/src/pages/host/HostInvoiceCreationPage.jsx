@@ -5,7 +5,7 @@ import InvoiceDetail from '../../components/invoice/InvoiceDetail';
 import '../../components/invoice/Invoice.css';
 
 /**
- * Trang tạo và xem Hóa đơn dành cho đối tác Host (TV3 - Billing).
+ * Trang tạo và xem Hóa đơn dành cho đối tác Host (Billing Module).
  * Route: /host/bookings/:bookingId/create-invoice hoặc /host/invoices/create
  */
 function HostInvoiceCreationPage() {
@@ -138,7 +138,7 @@ function HostInvoiceCreationPage() {
                         />
                         {paramBookingId && (
                             <span style={{ display: 'block', fontSize: '12px', color: '#718096', marginTop: '6px' }}>
-                                (Mã Booking được tiếp nhận tự động từ đường dẫn của TV2)
+                                (Đang áp dụng mã đơn đặt phòng được chọn từ hệ thống)
                             </span>
                         )}
                     </div>

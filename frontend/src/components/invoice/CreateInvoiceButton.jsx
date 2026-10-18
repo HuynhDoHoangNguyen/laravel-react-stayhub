@@ -3,7 +3,7 @@ import { createHostInvoice, parseInvoiceError } from '../../services/invoiceServ
 import './Invoice.css';
 
 /**
- * Nút hành động Lập hóa đơn độc lập, tái sử dụng cho Host Dashboard hoặc Bảng Booking của TV2.
+ * Nút hành động Lập hóa đơn độc lập, tái sử dụng cho Host Dashboard hoặc Bảng Booking.
  */
 function CreateInvoiceButton({ bookingId, onSuccess, onError, disabled = false, className = '' }) {
     const [loading, setLoading] = useState(false);

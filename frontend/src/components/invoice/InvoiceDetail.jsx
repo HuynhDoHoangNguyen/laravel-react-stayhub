@@ -2,10 +2,8 @@ import { formatVnd } from '../../services/invoiceService';
 import './Invoice.css';
 
 /**
- * Component hiển thị chi tiết hóa đơn (Invoice Detail - TV3).
+ * Component hiển thị chi tiết hóa đơn (Invoice Detail).
  * Dữ liệu hoàn toàn được nạp từ response của Backend, không tự tính toán lại tiền.
- *
- * @param {{ invoice: Object }} props
  */
 function InvoiceDetail({ invoice }) {
     if (!invoice) return null;

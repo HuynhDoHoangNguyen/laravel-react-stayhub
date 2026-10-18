@@ -1,7 +1,7 @@
 import api from '../api/axios';
 
 /**
- * Service quản lý các yêu cầu API liên quan đến Hóa đơn (Invoice / Billing - TV3)
+ * Service quản lý các yêu cầu API liên quan đến Hóa đơn (Invoice / Billing)
  */
 
 /**
@@ -17,6 +17,84 @@ export async function createHostInvoice(bookingId) {
 
     const numericId = parseInt(bookingId, 10);
     const response = await api.post(`/api/host/bookings/${numericId}/invoice`);
+    return response.data;
+}
+
+/**
+ * Lấy danh sách hóa đơn phân trang của Host có bộ lọc và tìm kiếm.
+ *
+ * @param {Object} [params]
+ * @param {number} [params.page=1]
+ * @param {number} [params.perPage=10]
+ * @param {string} [params.status='']
+ * @param {string} [params.search='']
+ * @returns {Promise<Object>} Object gồm { data: Invoice[], meta: Object, links: Object }
+ */
+export async function getHostInvoices({ page = 1, perPage = 10, status = '', search = '' } = {}) {
+    const params = { page, per_page: perPage };
+    if (status && status !== 'ALL') {
+        params.status = status;
+    }
+    if (search && search.trim() !== '') {
+        params.search = search.trim();
+    }
+
+    const response = await api.get('/api/host/invoices', { params });
+    return response.data;
+}
+
+/**
+ * Lấy chi tiết một hóa đơn của Host theo ID.
+ *
+ * @param {number|string} invoiceId
+ * @returns {Promise<Object>} Object gồm { data: Invoice }
+ */
+export async function getHostInvoiceDetail(invoiceId) {
+    if (!invoiceId || isNaN(Number(invoiceId)) || Number(invoiceId) <= 0) {
+        throw new Error('Mã hóa đơn không hợp lệ.');
+    }
+
+    const numericId = parseInt(invoiceId, 10);
+    const response = await api.get(`/api/host/invoices/${numericId}`);
+    return response.data;
+}
+
+/**
+ * Lấy danh sách hóa đơn phân trang của Customer.
+ *
+ * @param {Object} [params]
+ * @param {number} [params.page=1]
+ * @param {number} [params.perPage=10]
+ * @param {string} [params.status='']
+ * @param {string} [params.search='']
+ * @returns {Promise<Object>} Object gồm { data: Invoice[], meta: Object, links: Object }
+ */
+export async function getCustomerInvoices({ page = 1, perPage = 10, status = '', search = '' } = {}) {
+    const params = { page, per_page: perPage };
+    if (status && status !== 'ALL') {
+        params.status = status;
+    }
+    if (search && search.trim() !== '') {
+        params.search = search.trim();
+    }
+
+    const response = await api.get('/api/customer/invoices', { params });
+    return response.data;
+}
+
+/**
+ * Lấy chi tiết một hóa đơn của Customer theo ID.
+ *
+ * @param {number|string} invoiceId
+ * @returns {Promise<Object>} Object gồm { data: Invoice }
+ */
+export async function getCustomerInvoiceDetail(invoiceId) {
+    if (!invoiceId || isNaN(Number(invoiceId)) || Number(invoiceId) <= 0) {
+        throw new Error('Mã hóa đơn không hợp lệ.');
+    }
+
+    const numericId = parseInt(invoiceId, 10);
+    const response = await api.get(`/api/customer/invoices/${numericId}`);
     return response.data;
 }
 

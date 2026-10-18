@@ -20,9 +20,8 @@ function HostLayout() {
             ),
         },
         {
-            to: '/host/invoices/create',
-            label: 'Lập hóa đơn',
-            badge: 'TV3',
+            to: '/host/invoices',
+            label: 'Quản lý Hóa đơn',
             icon: (
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -34,10 +33,8 @@ function HostLayout() {
             ),
         },
         {
-            to: '#',
+            to: '/host/bookings',
             label: 'Đơn đặt phòng',
-            badge: 'TV2',
-            disabled: true,
             icon: (
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
@@ -48,10 +45,8 @@ function HostLayout() {
             ),
         },
         {
-            to: '#',
+            to: '/host/properties',
             label: 'Cơ sở lưu trú',
-            badge: 'TV1',
-            disabled: true,
             icon: (
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
@@ -80,21 +75,6 @@ function HostLayout() {
                             ? currentPath === item.to
                             : currentPath.startsWith(item.to) && item.to !== '#';
 
-                        if (item.disabled) {
-                            return (
-                                <div
-                                    key={idx}
-                                    className="host-nav-item"
-                                    style={{ opacity: 0.5, cursor: 'not-allowed' }}
-                                    title="Tính năng đang được phát triển bởi thành viên khác"
-                                >
-                                    {item.icon}
-                                    <span>{item.label}</span>
-                                    {item.badge && <span className="nav-badge">{item.badge}</span>}
-                                </div>
-                            );
-                        }
-
                         return (
                             <Link
                                 key={idx}
@@ -103,7 +83,6 @@ function HostLayout() {
                             >
                                 {item.icon}
                                 <span>{item.label}</span>
-                                {item.badge && <span className="nav-badge">{item.badge}</span>}
                             </Link>
                         );
                     })}
@@ -114,7 +93,7 @@ function HostLayout() {
                         <div className="host-avatar">H</div>
                         <div className="host-profile-info">
                             <div className="host-name">Đối tác lưu trú</div>
-                            <div className="host-role">host1@stayhub.com</div>
+                            <div className="host-role">Quản trị cơ sở</div>
                         </div>
                     </div>
                     <div style={{ marginTop: '8px' }}>
