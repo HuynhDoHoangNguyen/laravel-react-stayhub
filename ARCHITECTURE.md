@@ -29,9 +29,11 @@ flowchart LR
     subgraph BE[Backend - Laravel API]
         R[Routes]
         MW[Middleware]
-        C[Controllers]
-        FR[Form Requests]
-        S[Application Services]
+        C[Controllers theo cụm chức năng]
+        FR[Form Requests HTTP]
+        S[Application Services theo domain]
+        V[Domain Validators]
+        P[Service Providers]
         M[Eloquent Models]
         Q[Jobs / Events]
     end
@@ -46,7 +48,10 @@ flowchart LR
     AX -->|HTTPS + JSON + cookie| R
     R --> MW --> C
     C --> FR
-    C --> S --> M --> DB
+    C --> S
+    S --> V
+    S --> M --> DB
+    P -. cấu hình / binding .-> S
     S -. tác vụ nền .-> Q
     S -. ngữ cảnh chatbot .-> LLM
 ```
@@ -64,12 +69,16 @@ flowchart LR
 
 ```text
 stayhub/
-├── backend/                         # Ứng dụng Laravel 12
-├── frontend/                        # Ứng dụng React 19 + Vite
-├── docs/
+├── backend/                         # Ứng dụng Laravel 12 (REST API & Sanctum)
+├── frontend/                        # Ứng dụng React 19 + Vite (SPA chính thức của StayHub)
+├── docs/                            # Tài liệu phân tích, thiết kế & template UI
 │   ├── stayhub-erd.md               # ERD và data dictionary mục tiêu
-│   ├── stayhub-screen-mockups.md    # Danh sách màn hình
-│   └── stayhub-usecase-system.md    # Actor, use case và luồng nghiệp vụ
+│   ├── stayhub-screen-mockups.md    # Danh sách màn hình và thiết kế UI
+│   ├── stayhub-usecase-system.md    # Actor, use case và luồng nghiệp vụ
+│   ├── stayhub-team-work-assignment.md # Phân công trách nhiệm 3 thành viên (TV1, TV2, TV3)
+│   ├── seed-data.md                 # Dữ liệu mẫu khởi tạo hệ thống
+│   ├── ai-frontend-development-guide.md # Hướng dẫn AI phát triển Frontend & tái sử dụng template
+│   └── StayNest-Frontend-template/  # Template giao diện tham khảo (React 19 + Tailwind v4)
 ├── ARCHITECTURE.md                  # Tài liệu kiến trúc này
 └── README.md                        # Giới thiệu và cách chạy dự án
 ```
@@ -204,29 +213,136 @@ Axios instance hiện đọc `VITE_BACKEND_URL`, gửi header `Accept: applicati
 
 ### 3.4 Cấu trúc frontend mục tiêu khi mở rộng
 
+Dưới đây là cấu trúc mở rộng hoàn chỉnh của `frontend/src/` cho toàn bộ các use cases và 3 vai trò:
+
 ```text
-src/
-├── api/
-│   └── axios.js
-├── assets/
-├── components/{common,customer,host,admin}/
-├── contexts/
-│   └── AuthContext.jsx
-├── hooks/
-├── layouts/
-├── pages/{public,customer,host,admin}/
-├── routes/
-│   ├── AppRouter.jsx
-│   ├── ProtectedRoute.jsx
-│   └── RoleRoute.jsx
-├── services/
-├── utils/
-├── App.jsx
-├── index.css
-└── main.jsx
+frontend/
+├── public/                          # Static assets phục vụ nguyên trạng
+├── src/
+│   ├── api/                         # Giao tiếp HTTP với Laravel REST API
+│   │   ├── axios.js                 # Axios instance (baseURL, withCredentials, XSRF token)
+│   │   ├── authApi.js               # /login, /register, /logout, /api/me
+│   │   ├── propertyApi.js           # /api/public/properties, /api/host/properties, rooms
+│   │   ├── bookingApi.js            # /api/customer/bookings, search, availability
+│   │   ├── invoiceApi.js            # /api/host/invoices, /api/customer/invoices
+│   │   ├── reviewApi.js             # /api/customer/bookings/{id}/review
+│   │   └── chatbotApi.js            # /api/customer/chat/sessions, messages
+│   │
+│   ├── assets/                      # Ảnh banner, logo, icon tĩnh
+│   │
+│   ├── components/                  # Thư viện component phân tách theo domain
+│   │   ├── common/                  # Component dùng chung (Navbar, Footer, Pagination, Modal, Loading, ErrorState)
+│   │   ├── ui/                      # UI primitives tái sử dụng (Button, Input, Dialog, Calendar, Table, Badge, Card...)
+│   │   ├── customer/                # Component dành cho khách (SearchForm, RoomCard, BookingSummary, InvoiceCard...)
+│   │   ├── host/                    # Component dành cho Host (PropertyEditor, RoomTable, MaintenanceDialog, ServiceManager...)
+│   │   ├── admin/                   # Component dành cho Admin (UserManagementTable, PropertyAuditCard, RevenueChart...)
+│   │   └── chatbot/                 # Khung chat AI, bong bóng tin nhắn, danh sách gợi ý
+│   │
+│   ├── contexts/                    # React Contexts
+│   │   └── AuthContext.jsx          # Trạng thái đăng nhập toàn cục & thông tin User hiện tại
+│   │
+│   ├── hooks/                       # Custom React Hooks
+│   │   ├── useAuth.js               # Hook truy xuất AuthContext tiện lợi
+│   │   ├── useAvailability.js       # Hook tính ngày trống và kiểm tra overlap
+│   │   └── useDebounce.js           # Hook tối ưu tìm kiếm theo thời gian thực
+│   │
+│   ├── layouts/                     # Khung sườn layout theo nhóm quyền
+│   │   ├── AdminLayout.jsx          # Sidebar Admin + Header + Outlet
+│   │   ├── HostLayout.jsx           # Sidebar Host + Header + Outlet
+│   │   ├── CustomerLayout.jsx       # Header Customer + Footer + Outlet
+│   │   └── PublicLayout.jsx         # Header công khai cho khách chưa đăng nhập
+│   │
+│   ├── pages/                       # Màn hình gắn liền với các route
+│   │   ├── public/                  # HomePage, SearchResultsPage, PropertyDetailPage, RoomDetailPage, LoginPage, RegisterPage
+│   │   ├── customer/                # CustomerDashboardPage, MyBookingsPage, BookingDetailPage, CustomerInvoicesPage, CustomerProfilePage
+│   │   ├── host/                    # HostDashboardPage, HostPropertiesPage, HostRoomsPage, HostBookingsPage, HostInvoicesPage, HostServicesPage
+│   │   └── admin/                   # AdminDashboardPage, AdminUsersPage, AdminPropertiesPage, AdminBookingsPage, AdminInvoicesPage
+│   │
+│   ├── routes/                      # Bộ định tuyến React Router DOM
+│   │   ├── AppRouter.jsx            # Định nghĩa toàn bộ route cây của ứng dụng
+│   │   ├── ProtectedRoute.jsx       # Chặn chuyển trang nếu chưa đăng nhập
+│   │   └── RoleRoute.jsx            # Chặn chuyển trang nếu không đúng role (ADMIN, HOST, CUSTOMER)
+│   │
+│   ├── services/                    # Tầng xử lý logic nghiệp vụ phía client (chuẩn hóa dữ liệu trước/sau khi gọi API)
+│   ├── utils/                       # Hàm tiện ích thuần (formatVND, formatDate, validateHelper)
+│   ├── App.jsx                      # Root Application component
+│   ├── index.css                    # Toàn cục stylesheet & typography
+│   └── main.jsx                     # Entry point React 19 mount vào #root
+├── .env                             # VITE_BACKEND_URL=http://localhost:8000
+├── eslint.config.js
+├── index.html
+├── package.json
+└── vite.config.js
 ```
 
 `ProtectedRoute` chỉ cải thiện trải nghiệm điều hướng. Nó không thay thế `auth:sanctum`, middleware role, policy và ownership check ở backend.
+
+### 3.5 Mối quan hệ với template tham khảo `StayNest-Frontend-template`
+
+Thư mục `docs/StayNest-Frontend-template/` chứa mã nguồn giao diện mẫu hoàn chỉnh (React 19, Tailwind CSS v4, shadcn/ui components, animations) được tích hợp làm nguồn tham khảo thị giác cho toàn bộ giao diện:
+
+#### Cấu trúc thư mục của template mẫu:
+
+```text
+docs/StayNest-Frontend-template/
+├── src/
+│   ├── assets/                      # Ảnh mẫu, hero banners, logos
+│   ├── components/
+│   │   ├── auth/                    # Form Auth mẫu (LoginForm, SignupForm, ResetPassword)
+│   │   ├── bookings/                # BookingCard, BookingStatusBadge, CancelBookingDialog
+│   │   ├── guests/                  # GuestSelector, SavedGuestsPreview
+│   │   ├── hotel/                   # HotelHeader, RoomsList, ReviewList, AmenityGrid
+│   │   ├── landing/                 # HeroSection, FeaturedHotels, SearchBar
+│   │   ├── manager/                 # Bảng điều khiển quản lý của Host / Manager
+│   │   │   ├── tabs/                # OverviewTab, RoomsTab, InventoryTab, BookingsTab, ReportsTab, SettingsTab
+│   │   │   ├── HotelProfileForm.jsx # Form thông tin cơ sở
+│   │   │   ├── InventoryCalendar.jsx# Lịch phòng trống trực quan
+│   │   │   ├── PhotoUploader.jsx    # Component upload ảnh
+│   │   │   ├── RequireManager.jsx   # Route guard cho vai trò Manager
+│   │   │   └── RoomFormDialog.jsx   # Dialog thêm/sửa phòng
+│   │   ├── profile/                 # ProfileHeader, PersonalInfoCard, EditProfileDialog, MyReviewsSection
+│   │   ├── search/                  # AssistantPanel (AI chatbot), ConversationalSearchBox, FilterSidebar, ResultsGrid, SearchHotelCard
+│   │   ├── ui/                      # 40+ shadcn/ui primitives (button, dialog, calendar, table, popover, sheet, tabs, sonner...)
+│   │   └── RootLayout.jsx           # Layout shell với Navbar & session watcher
+│   ├── hooks/
+│   │   ├── queries/                 # React Query data fetching hooks (useHotelSearch, useMyBookings...)
+│   │   │   └── manager/             # useRooms, useManagerHotel, useReservations...
+│   │   ├── useAuth.js
+│   │   └── use-mobile.jsx
+│   ├── lib/
+│   │   ├── api/                     # API client layer mẫu (client.js, hotels.js, bookings.js, admin.js...)
+│   │   └── utils.js                 # Helper hàm `cn()` (clsx + tailwind-merge)
+│   ├── routes/                      # Màn hình định tuyến phẳng theo file
+│   │   ├── index.jsx                # Landing page
+│   │   ├── search.jsx               # Kết quả tìm kiếm + AI assistant panel
+│   │   ├── hotels.$hotelId.jsx      # Chi tiết khách sạn & danh sách phòng
+│   │   ├── checkout.$bookingId.jsx  # Đặt phòng & thanh toán
+│   │   ├── bookings.index.jsx       # Danh sách booking cá nhân
+│   │   ├── bookings.$bookingId.jsx  # Chi tiết booking
+│   │   ├── profile.jsx              # Hồ sơ cá nhân
+│   │   └── manage.jsx               # Manager console (Hotels, Rooms, Bookings, Reports)
+│   ├── styles.css                   # Tailwind CSS v4 design tokens & CSS variables
+│   ├── App.jsx                      # App root router
+│   └── main.jsx                     # Entry point
+├── package.json
+└── vite.config.js
+```
+
+#### Bảng ánh xạ tái sử dụng từ template sang `frontend/`:
+
+| Module StayHub | Thành phần tham khảo từ StayNest template | Vị trí chuyển đổi trong `frontend/src/` |
+| --- | --- | --- |
+| **UI Primitives** | `components/ui/` (button, dialog, calendar, input, table, badge, sheet...) | `components/ui/` hoặc `components/common/` |
+| **Tìm kiếm & Availability** | `components/search/` (FilterSidebar, SearchHotelCard, ResultsGrid) | `pages/public/SearchResultsPage.jsx`, `components/customer/` |
+| **Quản lý của Host** | `components/manager/` (ManagerShell, InventoryCalendar, RoomFormDialog, tabs) | `pages/host/`, `components/host/` |
+| **Booking & Checkout** | `components/bookings/`, `routes/checkout.$bookingId.jsx` | `pages/customer/BookingDetailPage.jsx`, `components/customer/` |
+| **Hồ sơ & Đánh giá** | `components/profile/` (PersonalInfoCard, MyReviewsSection, EditProfileDialog) | `pages/customer/CustomerProfilePage.jsx` |
+| **Chatbot AI** | `components/search/AssistantPanel.jsx` | `components/chatbot/AssistantPanel.jsx` |
+
+#### Nguyên tắc làm việc với template:
+1. **Ranh giới thực thi**: Không chạy hoặc import trực tiếp từ `docs/StayNest-Frontend-template/` trong runtime của `frontend/`.
+2. **Cách kế thừa**: Khi xây dựng màn hình trong `frontend/`, sao chép component cần thiết từ template sang `frontend/src/`, điều chỉnh styling và nối với API endpoint thật của Laravel backend StayHub.
+3. **Chi tiết chỉ dẫn**: Tuân thủ nghiêm ngặt theo tài liệu [ai-frontend-development-guide.md](file:///e:/University/HK1-2026-2027/ma-nguon-mo/stayhub/docs/ai-frontend-development-guide.md).
 
 ## 4. Kiến trúc backend
 
@@ -303,35 +419,97 @@ Hiện tại backend mới có model `User`, migration nền của Laravel/Sanct
 
 `resources/js`, `resources/css`, `resources/views` và Vite trong `backend/` là phần còn lại của Laravel skeleton. Giao diện chính của StayHub nằm ở ứng dụng `frontend/`; không nên xây thêm một SPA thứ hai trong `backend/resources` nếu kiến trúc tách frontend/backend vẫn được giữ nguyên.
 
-### 4.3 Cấu trúc backend mục tiêu
+### 4.3 Cấu trúc backend mục tiêu (Tổ chức theo cụm chức năng / Domain Modules)
+
+Để đảm bảo tính mở rộng cao, tuân thủ nguyên lý Đơn nhiệm (Single Responsibility Principle) và giúp 3 thành viên (TV1, TV2, TV3) phát triển song song không bị xung đột mã nguồn, backend áp dụng mô hình tổ chức theo **cụm chức năng (Feature/Domain Modules)** đồng bộ cho `Controllers`, `Providers`, `Services` và `Validators`:
 
 ```text
-app/
+backend/app/
 ├── Enums/                           # Role, booking/invoice/room status
 ├── Exceptions/                      # Ngoại lệ nghiệp vụ
 ├── Http/
 │   ├── Controllers/
-│   │   ├── AuthController.php
-│   │   ├── Api/
-│   │   │   ├── Customer/
-│   │   │   ├── Host/
-│   │   │   ├── Admin/
-│   │   │   └── Public/
-│   │   └── Controller.php
+│   │   ├── Controller.php           # Base controller
+│   │   └── Api/                     # API Controllers phân theo cụm chức năng & vai trò
+│   │       ├── Auth/
+│   │       │   └── AuthController.php
+│   │       ├── Property/            # Cụm TV1: Cơ sở lưu trú & phòng
+│   │       │   ├── PublicPropertyController.php
+│   │       │   ├── HostPropertyController.php
+│   │       │   └── HostRoomController.php
+│   │       ├── Booking/             # Cụm TV2: Đặt phòng & hoạt động lưu trú
+│   │       │   ├── CustomerBookingController.php
+│   │       │   ├── HostBookingController.php
+│   │       │   └── AvailabilityController.php
+│   │       ├── Invoice/             # Cụm TV3: Hóa đơn & thanh toán
+│   │       │   ├── HostInvoiceController.php
+│   │       │   ├── CustomerInvoiceController.php
+│   │       │   └── AdminInvoiceController.php
+│   │       ├── Review/              # Cụm TV3: Đánh giá & phản hồi
+│   │       │   ├── CustomerReviewController.php
+│   │       │   └── PublicReviewController.php
+│   │       ├── Dashboard/           # Cụm TV3: Thống kê & giám sát
+│   │       │   ├── HostDashboardController.php
+│   │       │   └── AdminDashboardController.php
+│   │       └── Chatbot/             # Cụm TV3: Trợ lý ảo & FAQ
+│   │           ├── ChatbotController.php
+│   │           └── FaqController.php
+│   │
 │   ├── Middleware/                  # Role/status middleware
-│   ├── Requests/                    # Form Request theo module/use case
-│   └── Resources/                   # Chuẩn hóa JSON response
+│   ├── Requests/                    # Form Request (validate HTTP payload) phân theo cụm chức năng
+│   │   ├── Auth/
+│   │   ├── Property/
+│   │   ├── Booking/
+│   │   ├── Invoice/
+│   │   └── Review/
+│   │
+│   └── Resources/                   # API Resources (chuẩn hóa JSON response) theo cụm chức năng
+│       ├── Property/
+│       ├── Booking/
+│       ├── Invoice/
+│       └── Review/
+│
 ├── Jobs/                            # Email hoặc tác vụ chậm
-├── Models/                          # Eloquent models và relationships
+├── Models/                          # 17 Eloquent models và relationships
 ├── Policies/                        # Ownership và quyền trên resource
-├── Providers/
-└── Services/
-    ├── AvailabilityService.php
-    ├── BookingService.php
-    ├── ChatbotService.php
-    ├── InvoiceService.php
-    ├── PropertyService.php
-    └── RoomService.php
+│
+├── Providers/                       # Đăng ký dịch vụ, bindings & module providers
+│   ├── AppServiceProvider.php       # Bootstrap cấu hình chung
+│   └── Modules/                     # Service Provider riêng theo từng domain khi cần cấu hình/DI
+│       ├── InvoiceServiceProvider.php
+│       ├── BookingServiceProvider.php
+│       └── PropertyServiceProvider.php
+│
+├── Services/                        # Tầng xử lý nghiệp vụ, phân theo cụm chức năng (Domain Services)
+│   ├── Property/
+│   │   ├── PropertyService.php
+│   │   └── RoomService.php
+│   ├── Booking/
+│   │   ├── BookingService.php
+│   │   └── AvailabilityService.php
+│   ├── Invoice/
+│   │   ├── InvoiceCalculationService.php # Service tính toán độc lập, thuần BCMath
+│   │   └── InvoiceService.php            # Service xử lý workflow hóa đơn & lưu DB
+│   ├── Review/
+│   │   └── ReviewService.php
+│   ├── Dashboard/
+│   │   ├── HostDashboardService.php
+│   │   └── AdminDashboardService.php
+│   └── Chatbot/
+│       ├── ChatbotService.php
+│       └── FaqService.php
+│
+└── Validators/                      # Tầng validation nghiệp vụ/tính toán (Domain Validators) ngang cấp với Services
+    ├── Property/
+    │   └── PropertyValidator.php
+    ├── Booking/
+    │   ├── BookingValidator.php
+    │   └── AvailabilityValidator.php
+    ├── Invoice/
+    │   ├── InvoiceCalculationValidator.php # Validator ràng buộc tiền tệ, schema DECIMAL(12,2)
+    │   └── InvoiceValidator.php            # Validator trạng thái & workflow hóa đơn
+    └── Review/
+        └── ReviewValidator.php
 ```
 
 ### 4.4 Trách nhiệm từng lớp backend
@@ -351,23 +529,36 @@ Route ánh xạ HTTP method/URI tới controller và gắn middleware. Không đ
 
 Middleware xử lý yêu cầu cắt ngang như đăng nhập, role, trạng thái tài khoản và rate limit. Middleware role chỉ xác nhận nhóm quyền; quyền trên một bản ghi cụ thể do Policy hoặc service kiểm tra.
 
-#### Controller
+#### Controller (phân theo cụm chức năng)
 
-Controller chỉ điều phối HTTP: nhận request đã validate, gọi service, chọn Resource/status code và trả response. Controller không tự tính tiền, kiểm tra overlap hoặc thực hiện chuỗi cập nhật nhiều bảng.
+Controller chỉ điều phối HTTP: nhận request đã validate từ Form Request, gọi Service tương ứng, chọn Resource/status code và trả response JSON. Controller không chứa business logic, không tự tính tiền, không kiểm tra overlap phòng hoặc thực hiện chuỗi cập nhật database.
 
-#### Form Request
+Việc phân chia Controller theo từng cụm chức năng (`Api/Invoice/`, `Api/Booking/`...) kết hợp vai trò (Host, Customer, Admin) giúp bộ mã nguồn dễ định vị, Controller mỏng (Skinny Controller) và tránh một Controller khổng lồ xử lý quá nhiều hành động.
 
-Form Request thực hiện:
+#### Form Request (`app/Http/Requests/`)
 
-- `authorize()`: quyền thực hiện use case ở mức request/resource;
-- `rules()`: kiểu dữ liệu, định dạng, giới hạn, `exists`, `unique`;
-- thông báo lỗi nhất quán.
+Form Request phụ trách validation ở tầng HTTP:
+- `authorize()`: kiểm tra quyền thực hiện use case ở mức request;
+- `rules()`: kiểm tra kiểu dữ liệu, bắt buộc/không bắt buộc (`required`/`nullable`), định dạng chuỗi, email, regex, `exists`, `unique`;
+- trả về mã lỗi `422 Unprocessable Content` kèm thông báo lỗi nhất quán khi dữ liệu từ client gửi lên không đúng định dạng.
 
-Các quy tắc phụ thuộc nhiều bản ghi hoặc cần khóa/transaction vẫn thuộc Service.
+#### Domain Validator (`app/Validators/`)
 
-#### Service
+Ngang cấp với `Services/`, tầng **Validator** chuyên trách kiểm tra các ràng buộc logic nghiệp vụ chuyên sâu và kiểm tra tính hợp lệ của dữ liệu trước khi tính toán hoặc lưu trữ (Domain/Calculation Validation), hoàn toàn độc lập với HTTP Request:
+- **Khác biệt với Form Request:** Form Request validate payload thô gửi từ client qua HTTP; còn Domain Validator kiểm tra dữ liệu nội bộ hệ thống, snapshot giá phòng/dịch vụ, kiểm tra giới hạn tràn số của schema database (ví dụ: `DECIMAL(12,2)` tối đa `9999999999.99`), đảm bảo discount không vượt quá subtotal, kiểm tra tính toán tài chính và làm tròn số (`ROUND_HALF_UP`) không dùng float.
+- Được tiêm phụ thuộc (Dependency Injection) trực tiếp vào Service để tách biệt trách nhiệm: Service chỉ tính toán/điều phối, còn Validator chịu trách nhiệm kiểm tra tính hợp lệ và chặn dữ liệu sai lệch.
 
-Service triển khai use case và giữ transaction boundary. Ví dụ `BookingService::create()` kiểm tra availability, snapshot giá và tạo booking trong cùng một transaction. `InvoiceService::createForBooking()` khóa dữ liệu cần thiết, tạo header/items và tính tổng ở server.
+#### Service (`app/Services/`)
+
+Service triển khai use case nghiệp vụ và giữ ranh giới giao dịch (transaction boundary). Các service được phân chia theo từng cụm chức năng:
+- Tách biệt rõ ràng giữa **Service tính toán thuần (Pure Calculation Service)** và **Service điều phối nghiệp vụ/database (Workflow Service)**. Ví dụ: `InvoiceCalculationService` hoàn toàn độc lập với database, chỉ nhận snapshot và tính tiền chính xác bằng BCMath; trong khi `InvoiceService` quản lý transaction, truy vấn Eloquent, tạo Invoice header/items và cập nhật trạng thái.
+- Đảm bảo an toàn tài chính: không tin giá frontend gửi lên, không dùng kiểu `float/double`, kiểm tra tính toàn vẹn dữ liệu trước khi commit.
+
+#### Service Provider (`app/Providers/`)
+
+Provider là nơi đăng ký dependency injection, bind các interface với implementation cụ thể, đăng ký Singleton, Observer hoặc cấu hình riêng biệt cho từng cụm chức năng:
+- `AppServiceProvider.php`: thiết lập cấu hình chung toàn hệ thống;
+- `Modules/`: các provider riêng theo cụm chức năng (ví dụ: `InvoiceServiceProvider`, `BookingServiceProvider`) khi cần thiết lập cấu hình riêng, bind Service/Validator hoặc gắn Event/Listener chuyên biệt mà không làm phình to `AppServiceProvider`.
 
 #### Model
 
@@ -653,6 +844,10 @@ Frontend và backend là hai origin khác nhau nên CORS, CSRF và cookie phải
 - `README.md`: giới thiệu, yêu cầu môi trường và cách chạy;
 - `docs/stayhub-usecase-system.md`: phạm vi chức năng và actor;
 - `docs/stayhub-erd.md`: mô hình dữ liệu mục tiêu;
-- `docs/stayhub-screen-mockups.md`: danh sách màn hình dự kiến.
+- `docs/stayhub-screen-mockups.md`: danh sách màn hình dự kiến;
+- `docs/stayhub-team-work-assignment.md`: phân chia trách nhiệm và module giữa 3 thành viên;
+- `docs/seed-data.md`: kịch bản dữ liệu kiểm thử và phân bổ dữ liệu mẫu;
+- `docs/ai-frontend-development-guide.md`: chỉ dẫn cho AI khi phát triển giao diện frontend;
+- `docs/StayNest-Frontend-template/`: bộ mã nguồn giao diện mẫu tham khảo.
 
 Khi thay đổi route, schema, workflow hoặc cấu trúc thư mục, cần cập nhật tài liệu kiến trúc trong cùng pull request để tránh lệch giữa thiết kế và mã nguồn.
