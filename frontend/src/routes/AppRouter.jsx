@@ -8,6 +8,7 @@ import AdminLayout from '../layouts/AdminLayout';
 import HomePage from '../pages/public/HomePage';
 import CustomerDashboardPage from '../pages/customer/CustomerDashboardPage';
 import HostDashboardPage from '../pages/host/HostDashboardPage';
+import HostInvoiceCreationPage from '../pages/host/HostInvoiceCreationPage';
 import AdminDashboardPage from '../pages/admin/AdminDashboardPage';
 
 import ApiTestPage from '../pages/public/ApiTestPage';
@@ -30,6 +31,8 @@ function AppRouter() {
             {/* Host */}
             <Route path="/host" element={<HostLayout />}>
                 <Route index element={<HostDashboardPage />} />
+                <Route path="bookings/:bookingId/create-invoice" element={<HostInvoiceCreationPage />} />
+                <Route path="invoices/create" element={<HostInvoiceCreationPage />} />
             </Route>
 
             {/* Admin */}

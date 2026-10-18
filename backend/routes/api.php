@@ -15,3 +15,5 @@ Route::get('/me', function (Request $request) {
         'user' => $request->user(),
     ]);
 })->middleware('auth:sanctum');
+
+require __DIR__ . '/api/billing.php';
