@@ -17,3 +17,4 @@ Route::get('/me', function (Request $request) {
 })->middleware('auth:sanctum');
 
 require __DIR__ . '/api/billing.php';
+require __DIR__ . '/api/reviews.php';
