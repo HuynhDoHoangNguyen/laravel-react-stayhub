@@ -4,6 +4,7 @@ import {
     Compass,
     CalendarCheck,
     FileText,
+    Star,
     User,
     LogOut,
     Menu,
@@ -33,6 +34,7 @@ const NAV_LINKS = [
     { to: '/customer', label: 'Tổng quan', end: true, icon: LayoutDashboard },
     { to: '/customer/bookings', label: 'Đơn đặt phòng', icon: CalendarCheck },
     { to: '/customer/invoices', label: 'Hóa đơn của tôi', icon: FileText },
+    { to: '/customer/reviews', label: 'Đánh giá của tôi', icon: Star },
     { to: '/customer/profile', label: 'Hồ sơ cá nhân', icon: User },
     { to: '/search', label: 'Khám phá chỗ nghỉ', icon: Compass },
 ];

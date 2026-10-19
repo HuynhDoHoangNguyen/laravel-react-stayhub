@@ -61,6 +61,7 @@ export default function PropertyDetailPage() {
 
   // Data fetching
   const [property, setProperty] = useState(null);
+  const [propertySource, setPropertySource] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isError, setIsError] = useState(false);
   const [selectedRoomId, setSelectedRoomId] = useState(null);
@@ -81,6 +82,7 @@ export default function PropertyDetailPage() {
         if (isMounted) {
           const data = res?.data || null;
           setProperty(data);
+          setPropertySource(res?.source || null);
           if (data?.rooms?.length > 0) {
             setSelectedRoomId((prev) => prev ?? data.rooms[0].id);
           }
@@ -90,6 +92,7 @@ export default function PropertyDetailPage() {
       .catch(() => {
         if (isMounted) {
           setProperty(null);
+          setPropertySource(null);
           setIsError(true);
           setIsLoading(false);
         }
@@ -218,9 +221,16 @@ export default function PropertyDetailPage() {
 
             {/* Reviews Section */}
             <ReviewsSection
-              reviews={property.reviews ?? []}
-              averageRating={property.averageRating}
-              reviewCount={property.reviewCount}
+              propertyId={
+                import.meta.env.DEV && searchParams.has("backendPropertyId")
+                  ? searchParams.get("backendPropertyId")
+                  : property.id
+              }
+              propertySource={
+                import.meta.env.DEV && searchParams.has("backendPropertyId")
+                  ? "api"
+                  : propertySource
+              }
             />
           </div>
 

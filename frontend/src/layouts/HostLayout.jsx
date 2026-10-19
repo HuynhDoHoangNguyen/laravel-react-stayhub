@@ -1,4 +1,5 @@
 import { Link, useLocation, Outlet } from "react-router-dom";
+import { Star } from "lucide-react";
 import logoMark from "@/assets/logo-mark.png";
 import { Toaster } from "@/components/ui/sonner";
 import { useAuth } from "@/hooks/useAuth";
@@ -31,6 +32,7 @@ import {
 const NAV = [
   { to: "/host", label: "Tổng quan", icon: ConsoleIcon, exact: true },
   { to: "/host/invoices", label: "Quản lý Hóa đơn", icon: InvoiceIcon },
+  { to: "/host/reviews", label: "Đánh giá của khách", icon: Star },
   { to: "/host/bookings", label: "Đơn đặt phòng", icon: BookingsIcon },
   { to: "/host/properties", label: "Cơ sở lưu trú", icon: HotelIcon },
 ];

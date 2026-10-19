@@ -20,11 +20,13 @@ import CustomerCheckoutPage from '../pages/customer/CustomerCheckoutPage';
 import CustomerProfilePage from '../pages/customer/CustomerProfilePage';
 import CustomerInvoiceListPage from '../pages/customer/CustomerInvoiceListPage';
 import CustomerInvoiceDetailPage from '../pages/customer/CustomerInvoiceDetailPage';
+import CustomerReviewsPage from '../pages/customer/CustomerReviewsPage';
 
 import HostDashboardPage from '../pages/host/HostDashboardPage';
 import HostInvoiceListPage from '../pages/host/HostInvoiceListPage';
 import HostInvoiceDetailPage from '../pages/host/HostInvoiceDetailPage';
 import HostInvoiceCreationPage from '../pages/host/HostInvoiceCreationPage';
+import HostReviewsPage from '../pages/host/HostReviewsPage';
 
 import AdminDashboardPage from '../pages/admin/AdminDashboardPage';
 
@@ -54,6 +56,7 @@ function AppRouter() {
                     <Route path="profile" element={<CustomerProfilePage />} />
                     <Route path="invoices" element={<CustomerInvoiceListPage />} />
                     <Route path="invoices/:invoiceId" element={<CustomerInvoiceDetailPage />} />
+                    <Route path="reviews" element={<CustomerReviewsPage />} />
                 </Route>
             </Route>
 
@@ -65,6 +68,7 @@ function AppRouter() {
                     <Route path="invoices/:invoiceId" element={<HostInvoiceDetailPage />} />
                     <Route path="bookings/:bookingId/create-invoice" element={<HostInvoiceCreationPage />} />
                     <Route path="invoices/create" element={<HostInvoiceCreationPage />} />
+                    <Route path="reviews" element={<HostReviewsPage />} />
                 </Route>
             </Route>
 

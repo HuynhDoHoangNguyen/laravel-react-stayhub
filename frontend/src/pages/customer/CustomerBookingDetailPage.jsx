@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -15,6 +15,7 @@ import {
   AlertCircle,
   Sparkles,
   ExternalLink,
+  Star,
 } from 'lucide-react';
 import {
   bookingService,
@@ -24,6 +25,8 @@ import {
   formatLongDateVi,
   nightsBetween,
 } from '@/services/bookingService';
+import { reviewService } from '@/services/reviewService';
+import { ReviewCreateModal } from '@/components/reviews/ReviewCreateModal';
 
 function FieldItem({ icon: Icon, label, value }) {
   return (
@@ -45,6 +48,68 @@ export default function CustomerBookingDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState(null);
   const [isMockData, setIsMockData] = useState(false);
+
+  // Review data fetched from API
+  const [fetchedReviewState, setFetchedReviewState] = useState(null);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+
+  // Derive trạng thái review: tránh cascading render theo React 19
+  const reviewState = useMemo(() => {
+    if (!booking || booking.status !== 'COMPLETED') {
+      return { status: 'not_reviewed', review: null };
+    }
+    if (isMockData) {
+      return { status: 'not_reviewed', review: null };
+    }
+    if (booking.review) {
+      return { status: 'reviewed', review: booking.review };
+    }
+    return fetchedReviewState || { status: 'checking', review: null };
+  }, [booking, isMockData, fetchedReviewState]);
+
+  // Quét kiểm tra trạng thái review trên Backend khi booking là COMPLETED thật
+  useEffect(() => {
+    if (!booking || booking.status !== 'COMPLETED' || isMockData || booking.review) {
+      return;
+    }
+
+    let ignore = false;
+    const controller = new AbortController();
+
+    reviewService
+      .getCustomerReviewForBooking(booking.id, { signal: controller.signal })
+      .then((res) => {
+        if (!ignore) {
+          setFetchedReviewState(res);
+        }
+      })
+      .catch((err) => {
+        if (!ignore) {
+          if (err.name === 'CanceledError' || err.name === 'AbortError') return;
+          setFetchedReviewState({ status: 'error', review: null });
+        }
+      });
+
+    return () => {
+      ignore = true;
+      controller.abort();
+    };
+  }, [booking, isMockData]);
+
+  const handleReviewSuccess = (createdReview) => {
+    setFetchedReviewState({
+      status: 'reviewed',
+      review: createdReview,
+    });
+  };
+
+  const handleReviewConflict = () => {
+    if (booking?.id) {
+      reviewService.getCustomerReviewForBooking(booking.id).then((res) => {
+        setFetchedReviewState(res);
+      });
+    }
+  };
 
   useEffect(() => {
     let ignore = false;
@@ -267,6 +332,25 @@ export default function CustomerBookingDetailPage() {
                     <span>Xem hóa đơn</span>
                   </Link>
                 )}
+
+                {/* Nút hành động Đánh giá cho kỳ nghỉ COMPLETED */}
+                {effectiveStatus === 'COMPLETED' && (
+                  reviewState.status === 'reviewed' ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-xs font-semibold text-emerald-800">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                      <span>Đã đánh giá</span>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setIsReviewModalOpen(true)}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-accent/60 bg-accent/10 px-4 py-2.5 text-xs font-semibold text-accent-foreground hover:bg-accent/20 transition-colors cursor-pointer"
+                    >
+                      <Star className="h-3.5 w-3.5 fill-accent text-accent" />
+                      <span>{isMockData ? 'Đánh giá (Xem trước)' : 'Viết đánh giá'}</span>
+                    </button>
+                  )
+                )}
               </div>
             </div>
           </div>
@@ -275,8 +359,89 @@ export default function CustomerBookingDetailPage() {
 
       {/* Lower Details Grid: 2 Columns */}
       <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-        {/* Left Column: Guest info & Services */}
+        {/* Left Column: Guest info, Services, Review Section */}
         <div className="space-y-6">
+          {/* Review Section cho Booking đã COMPLETED */}
+          {effectiveStatus === 'COMPLETED' && (
+            reviewState.status === 'checking' ? (
+              <div className="rounded-2xl border border-border/60 bg-white p-6 shadow-xs animate-pulse">
+                <div className="h-5 w-48 rounded bg-muted" />
+                <div className="mt-3 h-4 w-72 rounded bg-muted/60" />
+              </div>
+            ) : reviewState.status === 'reviewed' ? (
+              <section className="rounded-2xl border border-border/60 bg-white p-6 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Star className="h-4 w-4 fill-accent text-accent" />
+                    <h2 className="font-display text-xl font-bold text-primary">
+                      Đánh giá của bạn về kỳ nghỉ
+                    </h2>
+                  </div>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800">
+                    <CheckCircle2 className="h-3 w-3" />
+                    Đã gửi đánh giá
+                  </span>
+                </div>
+
+                <div className="mt-4 rounded-xl border border-border/50 bg-surface/30 p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="inline-flex items-center gap-1">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Star
+                          key={i}
+                          className={`h-4 w-4 ${
+                            i < (Number(reviewState.review?.rating) || 5)
+                              ? 'fill-accent text-accent'
+                              : 'text-muted-foreground/30'
+                          }`}
+                        />
+                      ))}
+                      <span className="ml-1 text-xs font-bold text-ink">
+                        {reviewState.review?.rating}.0
+                      </span>
+                    </div>
+                    {reviewState.review?.created_at && (
+                      <span className="text-[11.5px] text-muted-foreground">
+                        {formatDateVi(reviewState.review.created_at)}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-3 text-xs leading-relaxed text-ink/85 whitespace-pre-line">
+                    {reviewState.review?.comment}
+                  </p>
+                </div>
+                <p className="mt-3 text-[11.5px] text-muted-foreground">
+                  Mỗi kỳ nghỉ chỉ được gửi một đánh giá duy nhất. Đánh giá của bạn đã được ghi nhận vào điểm tổng quan của cơ sở lưu trú.
+                </p>
+              </section>
+            ) : (
+              <section className="rounded-2xl border border-accent/30 bg-gradient-to-br from-surface/50 to-white p-6 shadow-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-accent" />
+                      <h2 className="font-display text-xl font-bold text-primary">
+                        Chia sẻ trải nghiệm kỳ nghỉ của bạn
+                      </h2>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground max-w-lg leading-relaxed">
+                      Kỳ nghỉ của bạn đã hoàn tất. Hãy dành ít phút đánh giá chất lượng phòng và dịch vụ để giúp các khách hàng khác có thêm thông tin tham khảo.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsReviewModalOpen(true)}
+                    className="inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-xs font-semibold text-primary-foreground shadow-xs hover:bg-primary-mid transition-all active:scale-95"
+                  >
+                    <Star className="h-3.5 w-3.5 fill-accent text-accent" />
+                    <span>{isMockData ? 'Viết đánh giá (Xem trước)' : 'Viết đánh giá ngay'}</span>
+                  </button>
+                </div>
+              </section>
+            )
+          )}
+
           {/* Guest Information Section */}
           <section className="rounded-2xl border border-border/60 bg-white p-6 shadow-xs">
             <h2 className="flex items-center gap-2 font-display text-xl font-bold text-primary">
@@ -486,6 +651,18 @@ export default function CustomerBookingDetailPage() {
           )}
         </aside>
       </div>
+
+      {/* Review Create Modal */}
+      {booking && (
+        <ReviewCreateModal
+          isOpen={isReviewModalOpen}
+          onClose={() => setIsReviewModalOpen(false)}
+          booking={booking}
+          isMock={isMockData}
+          onSuccess={handleReviewSuccess}
+          onConflict={handleReviewConflict}
+        />
+      )}
     </div>
   );
 }

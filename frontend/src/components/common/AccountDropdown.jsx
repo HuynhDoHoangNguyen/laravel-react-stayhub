@@ -4,6 +4,7 @@ import {
     LayoutDashboard,
     CalendarCheck,
     FileText,
+    Star,
     User,
     Building2,
     ShieldCheck,
@@ -132,6 +133,15 @@ export default function AccountDropdown({ triggerClassName, align = 'end' }) {
                             </Link>
 
                             <Link
+                                to="/customer/reviews"
+                                onClick={() => setOpen(false)}
+                                className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium text-ink transition-colors hover:bg-primary/[0.06] hover:text-primary"
+                            >
+                                <Star className="h-4 w-4" />
+                                <span>Đánh giá của tôi</span>
+                            </Link>
+
+                            <Link
                                 to="/customer/profile"
                                 onClick={() => setOpen(false)}
                                 className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium text-ink transition-colors hover:bg-primary/[0.06] hover:text-primary"
@@ -161,6 +171,15 @@ export default function AccountDropdown({ triggerClassName, align = 'end' }) {
                             >
                                 <FileText className="h-4 w-4" />
                                 <span>Quản lý Hóa đơn</span>
+                            </Link>
+
+                            <Link
+                                to="/host/reviews"
+                                onClick={() => setOpen(false)}
+                                className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium text-ink transition-colors hover:bg-primary/[0.06] hover:text-primary"
+                            >
+                                <Star className="h-4 w-4" />
+                                <span>Đánh giá của khách</span>
                             </Link>
 
                             <Link
