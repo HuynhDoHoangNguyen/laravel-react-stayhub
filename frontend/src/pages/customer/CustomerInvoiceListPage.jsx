@@ -1,19 +1,37 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getCustomerInvoices, formatVnd, parseInvoiceError } from '../../services/invoiceService';
-import '../../components/invoice/Invoice.css';
+import {
+    Compass,
+    Search,
+    X,
+    RotateCcw,
+    AlertCircle,
+    Sparkles,
+    ChevronLeft,
+    ChevronRight,
+    RefreshCw,
+} from 'lucide-react';
+import { getCustomerInvoices, parseInvoiceError } from '@/services/invoiceService';
+import CustomerInvoiceCard from '@/components/invoice/CustomerInvoiceCard';
+
+const TABS = [
+    { key: 'ALL', label: 'Tất cả' },
+    { key: 'UNPAID', label: 'Chưa thanh toán' },
+    { key: 'PAID', label: 'Đã thanh toán' },
+    { key: 'REFUNDED', label: 'Đã hoàn tiền' },
+];
 
 /**
- * Trang danh sách hóa đơn dành cho Khách hàng (StayNest Member Pattern).
- * Route: /customer/invoices
+ * Trang danh sách hóa đơn dành cho Khách hàng (StayNest Quiet Luxury Pattern).
+ * Tuyến đường: /customer/invoices
  */
-function CustomerInvoiceListPage() {
+export default function CustomerInvoiceListPage() {
     const [invoices, setInvoices] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [reloadTrigger, setReloadTrigger] = useState(0);
 
-    // Filters & Pagination
+    // Bộ lọc, tìm kiếm và phân trang phía Server
     const [status, setStatus] = useState('ALL');
     const [searchTerm, setSearchTerm] = useState('');
     const [activeSearch, setActiveSearch] = useState('');
@@ -22,12 +40,13 @@ function CustomerInvoiceListPage() {
         currentPage: 1,
         lastPage: 1,
         total: 0,
+        perPage: 9,
     });
 
     useEffect(() => {
         let isMounted = true;
 
-        const load = async () => {
+        const fetchInvoices = async () => {
             setLoading(true);
             setError(null);
             try {
@@ -45,6 +64,7 @@ function CustomerInvoiceListPage() {
                             currentPage: res.meta.current_page || 1,
                             lastPage: res.meta.last_page || 1,
                             total: res.meta.total || 0,
+                            perPage: res.meta.per_page || 9,
                         });
                     }
                 }
@@ -60,273 +80,265 @@ function CustomerInvoiceListPage() {
             }
         };
 
-        load();
+        fetchInvoices();
 
         return () => {
             isMounted = false;
         };
     }, [page, status, activeSearch, reloadTrigger]);
 
-    const handleSearchSubmit = (e) => {
-        e.preventDefault();
-        setPage(1);
-        setActiveSearch(searchTerm);
-    };
-
+    // Xử lý đổi Tab lọc
     const handleTabChange = (newStatus) => {
+        if (newStatus === status) return;
         setStatus(newStatus);
         setPage(1);
     };
 
-    const getStatusLabel = (st) => {
-        switch (st) {
-            case 'PAID':
-                return 'Đã thanh toán';
-            case 'REFUNDED':
-                return 'Đã hoàn tiền';
-            case 'UNPAID':
-            default:
-                return 'Chưa thanh toán';
-        }
+    // Xử lý tìm kiếm
+    const handleSearchSubmit = (e) => {
+        e.preventDefault();
+        setPage(1);
+        setActiveSearch(searchTerm.trim());
     };
 
-    const formatDate = (dateStr) => {
-        if (!dateStr) return '—';
-        try {
-            return new Date(dateStr).toLocaleDateString('vi-VN', {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-            });
-        } catch {
-            return dateStr;
-        }
+    // Xử lý xóa tìm kiếm
+    const handleClearSearch = () => {
+        setSearchTerm('');
+        setActiveSearch('');
+        setPage(1);
     };
+
+    // Reset toàn bộ bộ lọc
+    const handleResetAllFilters = () => {
+        setStatus('ALL');
+        setSearchTerm('');
+        setActiveSearch('');
+        setPage(1);
+    };
+
+    // Xử lý chuyển trang
+    const handlePageChange = (newPage) => {
+        setPage(newPage);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const isFiltered = status !== 'ALL' || activeSearch !== '';
 
     return (
-        <div style={{ maxWidth: '1060px', margin: '0 auto', textAlign: 'left' }}>
-            {/* Header */}
-            <div style={{ marginBottom: '24px' }}>
-                <p style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.24em', color: '#785a28', fontWeight: 600, margin: '0 0 6px' }}>
-                    Hội viên · Lịch sử thanh toán
+        <div className="mx-auto max-w-[1360px] pb-20 pt-2 text-left">
+            {/* 1. Page Header (StayNest Quiet Luxury Overline & Title) */}
+            <div className="border-b border-border/60 pb-6">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-accent">
+                    ✦ Hội viên · Lịch sử thanh toán
                 </p>
-                <h1
-                    style={{
-                        fontFamily: "'Cormorant Garamond', Georgia, serif",
-                        fontSize: '34px',
-                        fontWeight: 700,
-                        color: '#1a2e20',
-                        margin: '0 0 6px 0',
-                        letterSpacing: '-0.4px',
-                    }}
-                >
+                <h1 className="mt-1 font-display text-2xl font-bold leading-tight text-primary sm:text-3xl md:text-4xl">
                     Hóa đơn của tôi
                 </h1>
-                <p style={{ color: '#5c6960', fontSize: '15px', margin: 0 }}>
-                    Theo dõi chi phí lưu trú, dịch vụ phát sinh và trạng thái thanh toán cho các chuyến đi của bạn.
+                <p className="mt-1.5 text-xs text-muted-foreground sm:text-sm">
+                    Theo dõi chi phí lưu trú, chứng từ dịch vụ phát sinh và trạng thái quyết toán cho các kỳ nghỉ của bạn.
                 </p>
             </div>
 
-            {/* Filter Tabs & Search Bar */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
-                <div className="customer-tabs">
-                    <button
-                        type="button"
-                        className={`customer-tab-btn ${status === 'ALL' ? 'active' : ''}`}
-                        onClick={() => handleTabChange('ALL')}
-                    >
-                        Tất cả hóa đơn
-                    </button>
-                    <button
-                        type="button"
-                        className={`customer-tab-btn ${status === 'UNPAID' ? 'active' : ''}`}
-                        onClick={() => handleTabChange('UNPAID')}
-                    >
-                        Chưa thanh toán
-                    </button>
-                    <button
-                        type="button"
-                        className={`customer-tab-btn ${status === 'PAID' ? 'active' : ''}`}
-                        onClick={() => handleTabChange('PAID')}
-                    >
-                        Đã thanh toán
-                    </button>
-                    <button
-                        type="button"
-                        className={`customer-tab-btn ${status === 'REFUNDED' ? 'active' : ''}`}
-                        onClick={() => handleTabChange('REFUNDED')}
-                    >
-                        Đã hoàn tiền
-                    </button>
+            {/* 2. Controls Bar: Status Filter Tabs & Search Form */}
+            <div className="mt-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                {/* Status Tabs */}
+                <div
+                    className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0"
+                    role="tablist"
+                    aria-label="Lọc hóa đơn theo trạng thái"
+                >
+                    {TABS.map((t) => {
+                        const isActive = status === t.key;
+                        return (
+                            <button
+                                key={t.key}
+                                type="button"
+                                role="tab"
+                                aria-selected={isActive}
+                                onClick={() => handleTabChange(t.key)}
+                                className={`inline-flex shrink-0 items-center rounded-xl px-4 py-2 text-xs font-semibold transition-all cursor-pointer ${
+                                    isActive
+                                        ? 'bg-primary text-primary-foreground shadow-2xs'
+                                        : 'bg-surface/50 text-ink/80 hover:bg-surface hover:text-primary'
+                                }`}
+                            >
+                                <span>{t.label}</span>
+                            </button>
+                        );
+                    })}
                 </div>
 
-                {/* Search Bar */}
-                <form onSubmit={handleSearchSubmit} className="host-search-wrapper" style={{ maxWidth: '480px' }}>
-                    <span className="host-search-icon">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <circle cx="11" cy="11" r="8" />
-                            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                        </svg>
-                    </span>
-                    <input
-                        type="text"
-                        className="host-search-input"
-                        placeholder="Tìm theo mã hóa đơn hoặc tên khách sạn..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
+                {/* Search Form */}
+                <form
+                    onSubmit={handleSearchSubmit}
+                    className="relative w-full sm:max-w-md"
+                >
+                    <div className="relative flex items-center">
+                        <Search
+                            className="pointer-events-none absolute left-3.5 h-4 w-4 text-muted-foreground"
+                            aria-hidden="true"
+                        />
+                        <input
+                            type="text"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            placeholder="Tìm theo mã hóa đơn hoặc tên khách sạn..."
+                            className="h-10 w-full rounded-xl border border-border/70 bg-white pl-10 pr-10 text-xs text-ink placeholder:text-muted-foreground/70 outline-none transition-all focus:border-primary/50 focus:ring-2 focus:ring-primary/10 shadow-2xs"
+                        />
+                        {searchTerm && (
+                            <button
+                                type="button"
+                                onClick={handleClearSearch}
+                                className="absolute right-3 grid h-5 w-5 place-items-center rounded-full text-muted-foreground hover:bg-surface hover:text-ink transition-colors cursor-pointer"
+                                aria-label="Xóa từ khóa tìm kiếm"
+                            >
+                                <X className="h-3.5 w-3.5" />
+                            </button>
+                        )}
+                    </div>
                 </form>
             </div>
 
-            {/* Error State */}
+            {/* 3. Error State */}
             {error && (
-                <div className="invoice-alert error" style={{ justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <circle cx="12" cy="12" r="10" />
-                            <line x1="12" y1="8" x2="12" y2="12" />
-                            <line x1="12" y1="16" x2="12.01" y2="16" />
-                        </svg>
-                        <span>{error}</span>
+                <div className="mt-8 rounded-3xl border border-destructive/20 bg-destructive/5 p-8 text-center sm:p-10">
+                    <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-destructive/10 text-destructive">
+                        <AlertCircle className="h-6 w-6" aria-hidden="true" />
                     </div>
-                    <button
-                        onClick={() => setReloadTrigger((r) => r + 1)}
-                        style={{
-                            background: 'transparent',
-                            border: '1px solid currentColor',
-                            borderRadius: '8px',
-                            color: 'inherit',
-                            padding: '4px 10px',
-                            fontSize: '12px',
-                            cursor: 'pointer',
-                        }}
-                    >
-                        Thử lại
-                    </button>
-                </div>
-            )}
-
-            {/* Loading State */}
-            {loading && (
-                <div style={{ padding: '60px 0', textAlign: 'center', color: '#718096' }}>
-                    <div className="spinner" style={{ margin: '0 auto 12px', borderColor: '#1a2e20', borderTopColor: 'transparent', width: '28px', height: '28px' }} />
-                    <p style={{ fontSize: '14px' }}>Đang tải danh sách hóa đơn của bạn...</p>
-                </div>
-            )}
-
-            {/* Empty State */}
-            {!loading && !error && invoices.length === 0 && (
-                <div className="empty-state-box">
-                    <div className="empty-icon-circle">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect x="2" y="4" width="20" height="16" rx="2" />
-                            <line x1="6" y1="8" x2="10" y2="8" />
-                            <line x1="6" y1="12" x2="18" y2="12" />
-                            <line x1="6" y1="16" x2="14" y2="16" />
-                        </svg>
-                    </div>
-                    <h3 className="empty-title">Bạn chưa có hóa đơn nào</h3>
-                    <p className="empty-desc">
-                        {activeSearch || status !== 'ALL'
-                            ? 'Không tìm thấy hóa đơn nào phù hợp với bộ lọc tìm kiếm hiện tại.'
-                            : 'Khi bạn đặt phòng và hoàn tất kỳ lưu trú, các hóa đơn thanh toán sẽ xuất hiện tại đây.'}
+                    <h3 className="mt-4 font-display text-xl font-bold text-ink">
+                        Không thể tải danh sách hóa đơn
+                    </h3>
+                    <p className="mx-auto mt-1.5 max-w-md text-xs leading-relaxed text-muted-foreground">
+                        {error}
                     </p>
-                    <Link
-                        to="/"
-                        className="btn-create-invoice-link"
-                        style={{ display: 'inline-flex' }}
-                    >
-                        <span>Khám phá chỗ nghỉ StayHub</span>
-                    </Link>
+                    <div className="mt-6 flex justify-center">
+                        <button
+                            type="button"
+                            onClick={() => setReloadTrigger((r) => r + 1)}
+                            className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-semibold text-primary-foreground shadow-2xs transition-all hover:bg-primary-mid cursor-pointer"
+                        >
+                            <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                            <span>Thử lại</span>
+                        </button>
+                    </div>
                 </div>
             )}
 
-            {/* Invoices Cards Grid */}
+            {/* 4. Loading Skeleton State */}
+            {loading && !error && (
+                <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+                    {[1, 2, 3, 4, 5, 6].map((i) => (
+                        <div
+                            key={i}
+                            className="flex flex-col justify-between rounded-3xl border border-border/60 bg-white/80 p-6 shadow-xs animate-pulse"
+                        >
+                            <div>
+                                <div className="flex items-start justify-between gap-3 border-b border-border/40 pb-4">
+                                    <div className="space-y-2 flex-1">
+                                        <div className="h-5 w-40 rounded-lg bg-surface" />
+                                        <div className="h-3 w-24 rounded bg-surface" />
+                                    </div>
+                                    <div className="h-5 w-20 rounded-full bg-surface" />
+                                </div>
+                                <div className="mt-4 space-y-2.5">
+                                    <div className="h-3.5 w-32 rounded bg-surface" />
+                                    <div className="h-3.5 w-28 rounded bg-surface" />
+                                    <div className="h-3.5 w-36 rounded bg-surface" />
+                                </div>
+                            </div>
+                            <div className="mt-6 flex items-end justify-between border-t border-border/40 pt-4">
+                                <div className="space-y-1">
+                                    <div className="h-2.5 w-16 rounded bg-surface" />
+                                    <div className="h-6 w-28 rounded-lg bg-surface" />
+                                </div>
+                                <div className="h-8 w-24 rounded-xl bg-surface" />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* 5. Empty State */}
+            {!loading && !error && invoices.length === 0 && (
+                <div className="mt-8 rounded-3xl border border-dashed border-border/80 bg-background/50 p-10 text-center sm:p-14">
+                    <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-surface text-primary">
+                        <Sparkles className="h-6 w-6 text-accent" aria-hidden="true" />
+                    </div>
+
+                    <h3 className="mt-4 font-display text-xl sm:text-2xl font-bold text-primary">
+                        {isFiltered ? 'Không tìm thấy hóa đơn phù hợp' : 'Bạn chưa có hóa đơn nào'}
+                    </h3>
+
+                    <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-muted-foreground">
+                        {isFiltered
+                            ? 'Không có hóa đơn nào khớp với bộ lọc trạng thái hoặc từ khóa tìm kiếm của bạn. Hãy thử thay đổi tiêu chí.'
+                            : 'Khi bạn đặt phòng và hoàn tất kỳ lưu trú tại các cơ sở StayHub, chứng từ hóa đơn chính thức sẽ xuất hiện đầy đủ tại đây.'}
+                    </p>
+
+                    <div className="mt-6 flex flex-wrap justify-center gap-3">
+                        {isFiltered ? (
+                            <button
+                                type="button"
+                                onClick={handleResetAllFilters}
+                                className="inline-flex items-center gap-2 rounded-xl border border-border/80 bg-white px-4 py-2.5 text-xs font-semibold text-ink shadow-2xs hover:border-primary/40 hover:bg-surface transition-all cursor-pointer"
+                            >
+                                <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                                <span>Xóa bộ lọc tìm kiếm</span>
+                            </button>
+                        ) : (
+                            <Link
+                                to="/search"
+                                className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-xs font-semibold text-primary-foreground shadow-2xs transition-all hover:bg-primary-mid"
+                            >
+                                <Compass className="h-4 w-4" aria-hidden="true" />
+                                <span>Khám phá chỗ nghỉ StayHub</span>
+                            </Link>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* 6. Invoices Cards Grid */}
             {!loading && !error && invoices.length > 0 && (
                 <>
-                    <div className="customer-invoice-grid">
-                        {invoices.map((inv) => {
-                            const st = inv.payment_status || 'UNPAID';
-                            return (
-                                <div key={inv.id} className="customer-invoice-card">
-                                    <div>
-                                        <div className="customer-card-header">
-                                            <div>
-                                                <h3 className="customer-property-title">
-                                                    {inv.property_name || 'Cơ sở lưu trú StayHub'}
-                                                </h3>
-                                                <div style={{ fontSize: '12.5px', color: '#785a28', fontWeight: 500 }}>
-                                                    {inv.room_name || 'Phòng nghỉ'}
-                                                </div>
-                                            </div>
-                                            <span className={`status-badge ${st.toLowerCase()}`}>
-                                                {getStatusLabel(st)}
-                                            </span>
-                                        </div>
-
-                                        <div className="customer-card-meta">
-                                            <div>Mã hóa đơn: <strong>#{inv.invoice_code}</strong></div>
-                                            <div>Mã đặt phòng: <strong>#{inv.booking_id}</strong></div>
-                                            <div>Ngày lập: {formatDate(inv.created_at)}</div>
-                                        </div>
-                                    </div>
-
-                                    <div className="customer-card-footer">
-                                        <div>
-                                            <div style={{ fontSize: '11px', textTransform: 'uppercase', color: '#718096', letterSpacing: '0.5px' }}>
-                                                Tổng chi phí
-                                            </div>
-                                            <div className="customer-card-amount">
-                                                {formatVnd(inv.total_amount)}
-                                            </div>
-                                        </div>
-
-                                        <Link
-                                            to={`/customer/invoices/${inv.id}`}
-                                            className="action-btn-link"
-                                            title="Xem chi tiết hóa đơn này"
-                                        >
-                                            <span>Xem chi tiết</span>
-                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                                <polyline points="9 18 15 12 9 6" />
-                                            </svg>
-                                        </Link>
-                                    </div>
-                                </div>
-                            );
-                        })}
+                    <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+                        {invoices.map((inv) => (
+                            <CustomerInvoiceCard key={inv.id} invoice={inv} />
+                        ))}
                     </div>
 
-                    {/* Pagination */}
+                    {/* 7. Pagination Controls */}
                     {paginationMeta.lastPage > 1 && (
-                        <div className="host-pagination">
-                            <button
-                                type="button"
-                                className="page-btn"
-                                disabled={page <= 1}
-                                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                            >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <polyline points="15 18 9 12 15 6" />
-                                </svg>
-                                <span>Trước</span>
-                            </button>
-
-                            <span className="page-indicator">
-                                Trang {paginationMeta.currentPage} / {paginationMeta.lastPage} (Tổng {paginationMeta.total} hóa đơn)
+                        <div className="mt-10 flex flex-wrap items-center justify-between gap-4 border-t border-border/60 pt-6">
+                            <span className="text-xs text-muted-foreground">
+                                Hiển thị trang <strong className="font-semibold text-ink">{paginationMeta.currentPage}</strong> /{' '}
+                                <strong className="font-semibold text-ink">{paginationMeta.lastPage}</strong> (Tổng cộng{' '}
+                                <strong className="font-semibold text-ink">{paginationMeta.total}</strong> hóa đơn)
                             </span>
 
-                            <button
-                                type="button"
-                                className="page-btn"
-                                disabled={page >= paginationMeta.lastPage}
-                                onClick={() => setPage((p) => Math.min(paginationMeta.lastPage, p + 1))}
-                            >
-                                <span>Sau</span>
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <polyline points="9 18 15 12 9 6" />
-                                </svg>
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    disabled={page <= 1}
+                                    onClick={() => handlePageChange(page - 1)}
+                                    className="inline-flex items-center gap-1.5 rounded-xl border border-border/70 bg-white px-3.5 py-2 text-xs font-medium text-ink shadow-2xs transition-colors hover:border-primary/40 hover:bg-surface disabled:pointer-events-none disabled:opacity-40 cursor-pointer"
+                                    aria-label="Trang trước"
+                                >
+                                    <ChevronLeft className="h-4 w-4" />
+                                    <span>Trước</span>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    disabled={page >= paginationMeta.lastPage}
+                                    onClick={() => handlePageChange(page + 1)}
+                                    className="inline-flex items-center gap-1.5 rounded-xl border border-border/70 bg-white px-3.5 py-2 text-xs font-medium text-ink shadow-2xs transition-colors hover:border-primary/40 hover:bg-surface disabled:pointer-events-none disabled:opacity-40 cursor-pointer"
+                                    aria-label="Trang sau"
+                                >
+                                    <span>Sau</span>
+                                    <ChevronRight className="h-4 w-4" />
+                                </button>
+                            </div>
                         </div>
                     )}
                 </>
@@ -334,5 +346,3 @@ function CustomerInvoiceListPage() {
         </div>
     );
 }
-
-export default CustomerInvoiceListPage;
