@@ -11,7 +11,6 @@ class BookingService extends Model
 {
     /** @use HasFactory<BookingServiceFactory> */
     use HasFactory;
-
     protected $fillable = [
         'booking_id',
         'service_id',
@@ -33,11 +32,11 @@ class BookingService extends Model
 
     public function booking(): BelongsTo
     {
-        return $this->belongsTo(Booking::class);
+        return $this->belongsTo(Booking::class, 'booking_id');
     }
 
     public function service(): BelongsTo
     {
-        return $this->belongsTo(Service::class);
+        return $this->belongsTo(Service::class, 'service_id');
     }
 }

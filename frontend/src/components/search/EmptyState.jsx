@@ -1,12 +1,25 @@
-import { Compass } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
+import { Compass, RefreshCw } from "lucide-react";
 
-export default function SearchEmptyState() {
-  return <Card className="rounded-3xl border-dashed bg-card">
-    <CardContent className="flex flex-col items-center px-6 py-14 text-center">
-      <Compass className="mb-4 size-9 text-primary" aria-hidden="true" />
-      <h2 className="text-xl font-medium">Chưa tìm thấy phòng phù hợp</h2>
-      <p className="mt-2 max-w-md text-sm text-muted-foreground">Thử đổi ngày nhận/trả hoặc bỏ bớt bộ lọc tiện nghi, loại phòng và khoảng giá.</p>
-    </CardContent>
-  </Card>;
+export function EmptyState({ title, message, onRetry }) {
+  return (
+    <div className="mx-auto flex max-w-md flex-col items-center px-6 py-20 text-center">
+      <div className="grid h-16 w-16 place-items-center rounded-full bg-accent-pale/60 text-primary">
+        <Compass className="h-7 w-7" strokeWidth={1.4} aria-hidden />
+      </div>
+      <h3 className="font-display mt-6 text-[26px] text-ink">{title}</h3>
+      <p className="mt-3 text-[14px] leading-relaxed text-muted-foreground">
+        {message}
+      </p>
+      {onRetry && (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-6 inline-flex items-center gap-2 rounded-2xl border border-primary px-5 py-2.5 text-sm font-medium text-primary transition-colors hover:bg-accent-pale/40"
+        >
+          <RefreshCw className="h-4 w-4" />
+          Thử lại
+        </button>
+      )}
+    </div>
+  );
 }

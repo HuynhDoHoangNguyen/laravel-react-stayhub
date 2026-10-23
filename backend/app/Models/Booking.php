@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-
+use Illuminate\Database\Eloquent\Relations\HasOne;
 class Booking extends Model
 {
     /** @use HasFactory<BookingFactory> */
@@ -58,7 +58,20 @@ class Booking extends Model
         return $this->hasMany(BookingService::class);
     }
 
-    // TODO: Member 3 - invoice(), review()
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'customer_id');
+    }
+
+    public function invoice(): HasOne
+    {
+        return $this->hasOne(Invoice::class, 'booking_id');
+    }
+
+    public function review(): HasOne
+    {
+        return $this->hasOne(Review::class, 'booking_id');
+    }
 
     public function scopeHoldingRoom(Builder $query): Builder
     {

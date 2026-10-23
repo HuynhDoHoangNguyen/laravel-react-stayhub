@@ -12,7 +12,6 @@ class Service extends Model
 {
     /** @use HasFactory<ServiceFactory> */
     use HasFactory;
-
     protected $fillable = [
         'property_id',
         'name',
@@ -32,11 +31,11 @@ class Service extends Model
 
     public function property(): BelongsTo
     {
-        return $this->belongsTo(Property::class);
+        return $this->belongsTo(Property::class, 'property_id');
     }
 
     public function bookingServices(): HasMany
     {
-        return $this->hasMany(BookingService::class);
+        return $this->hasMany(BookingService::class, 'service_id');
     }
 }

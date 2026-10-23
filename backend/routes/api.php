@@ -18,4 +18,5 @@ Route::get('/me', function (Request $request) {
 
 // TEMP-M2-WIRING
 require __DIR__ . '/api/booking.php';
-
+require __DIR__ . '/api/billing.php';
+require __DIR__ . '/api/reviews.php';

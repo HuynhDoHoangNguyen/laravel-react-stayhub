@@ -15,14 +15,8 @@ class Room extends Model
     use HasFactory;
 
     protected $fillable = [
-        'property_id',
-        'room_type_id',
-        'room_number',
-        'name',
-        'description',
-        'capacity',
-        'price_per_night',
-        'status',
+        'property_id', 'room_type_id', 'room_number', 'name', 'description',
+        'capacity', 'price_per_night', 'status',
     ];
 
     protected function casts(): array
@@ -36,31 +30,36 @@ class Room extends Model
 
     public function property(): BelongsTo
     {
-        return $this->belongsTo(Property::class);
+        return $this->belongsTo(Property::class, 'property_id');
     }
 
     public function roomType(): BelongsTo
     {
-        return $this->belongsTo(RoomType::class);
+        return $this->belongsTo(RoomType::class, 'room_type_id');
+    }
+
+    public function roomImages(): HasMany
+    {
+        return $this->hasMany(RoomImage::class, 'room_id');
+    }
+
+    public function images(): HasMany
+    {
+        return $this->roomImages();
+    }
+
+    public function bookings(): HasMany
+    {
+        return $this->hasMany(Booking::class, 'room_id');
+    }
+
+    public function maintenances(): HasMany
+    {
+        return $this->hasMany(Maintenance::class, 'room_id');
     }
 
     public function amenities(): BelongsToMany
     {
         return $this->belongsToMany(Amenity::class, 'room_amenities', 'room_id', 'amenity_id');
-    }
-
-    public function maintenances(): HasMany
-    {
-        return $this->hasMany(Maintenance::class);
-    }
-
-    public function bookings(): HasMany
-    {
-        return $this->hasMany(Booking::class);
-    }
-
-    public function images(): HasMany
-    {
-        return $this->hasMany(RoomImage::class);
     }
 }

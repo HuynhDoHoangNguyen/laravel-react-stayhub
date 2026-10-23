@@ -12,13 +12,7 @@ class Maintenance extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'room_id',
-        'start_date',
-        'end_date',
-        'reason',
-        'status',
-    ];
+    protected $fillable = ['room_id', 'start_date', 'end_date', 'reason', 'status'];
 
     protected function casts(): array
     {
@@ -31,6 +25,6 @@ class Maintenance extends Model
 
     public function room(): BelongsTo
     {
-        return $this->belongsTo(Room::class);
+        return $this->belongsTo(Room::class, 'room_id');
     }
 }

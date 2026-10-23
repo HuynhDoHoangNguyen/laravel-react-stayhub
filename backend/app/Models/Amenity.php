@@ -11,18 +11,11 @@ class Amenity extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'name',
-        'icon',
-        'description',
-        'status',
-    ];
+    protected $fillable = ['name', 'icon', 'description', 'status'];
 
     protected function casts(): array
     {
-        return [
-            'status' => 'boolean',
-        ];
+        return ['status' => 'boolean'];
     }
 
     public function rooms(): BelongsToMany

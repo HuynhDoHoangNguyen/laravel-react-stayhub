@@ -11,7 +11,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class RoomType extends Model
 {
     use HasFactory;
-
     protected $fillable = [
         'property_id',
         'name',
@@ -20,11 +19,11 @@ class RoomType extends Model
 
     public function property(): BelongsTo
     {
-        return $this->belongsTo(Property::class);
+        return $this->belongsTo(Property::class, 'property_id');
     }
 
     public function rooms(): HasMany
     {
-        return $this->hasMany(Room::class);
+        return $this->hasMany(Room::class, 'room_type_id');
     }
 }

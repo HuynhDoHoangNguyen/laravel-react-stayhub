@@ -15,15 +15,8 @@ class Property extends Model
     use HasFactory;
 
     protected $fillable = [
-        'host_id',
-        'name',
-        'type',
-        'address',
-        'description',
-        'phone',
-        'check_in_time',
-        'check_out_time',
-        'status',
+        'host_id', 'name', 'type', 'address', 'description', 'phone',
+        'check_in_time', 'check_out_time', 'status',
     ];
 
     protected function casts(): array
@@ -41,21 +34,31 @@ class Property extends Model
 
     public function rooms(): HasMany
     {
-        return $this->hasMany(Room::class);
+        return $this->hasMany(Room::class, 'property_id');
     }
 
     public function roomTypes(): HasMany
     {
-        return $this->hasMany(RoomType::class);
+        return $this->hasMany(RoomType::class, 'property_id');
     }
 
     public function images(): HasMany
     {
-        return $this->hasMany(PropertyImage::class);
+        return $this->hasMany(PropertyImage::class, 'property_id');
+    }
+
+    public function propertyImages(): HasMany
+    {
+        return $this->images();
     }
 
     public function services(): HasMany
     {
-        return $this->hasMany(Service::class);
+        return $this->hasMany(Service::class, 'property_id');
+    }
+
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(Review::class, 'property_id');
     }
 }
