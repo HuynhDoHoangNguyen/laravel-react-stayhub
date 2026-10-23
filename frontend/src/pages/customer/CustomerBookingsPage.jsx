@@ -17,10 +17,12 @@ import { QuickPicks } from '@/components/bookings/QuickPicks';
 import { bookingService } from '@/services/bookingService';
 
 const TABS = [
+  { key: 'PENDING', label: 'Chờ xác nhận' },
   { key: 'UPCOMING', label: 'Sắp tới' },
   { key: 'CHECKED_IN', label: 'Đang lưu trú' },
   { key: 'COMPLETED', label: 'Hoàn thành' },
   { key: 'CANCELLED', label: 'Đã hủy' },
+  { key: 'REJECTED', label: 'Bị từ chối' },
   { key: 'ALL', label: 'Tất cả' },
 ];
 
@@ -67,7 +69,7 @@ export default function CustomerBookingsPage() {
           setAllBookings(res.all || []);
           setStats(res.stats || null);
           setTotalCount(res.meta?.total || 0);
-          setTotalPages(res.meta?.total_pages || 1);
+          setTotalPages(res.meta?.total_pages || res.meta?.last_page || 1);
           setIsMockData(Boolean(res.isMock));
           setErrorMessage(null);
           setIsLoading(false);
@@ -118,6 +120,12 @@ export default function CustomerBookingsPage() {
   // Thông tin trạng thái Empty tùy biến theo từng tab
   const emptyInfo = useMemo(() => {
     switch (tab) {
+      case 'PENDING':
+        return {
+          title: 'Chưa có đơn chờ xác nhận',
+          desc: 'Các đơn đang chờ cơ sở lưu trú phản hồi sẽ hiển thị tại đây.',
+          showExplore: false,
+        };
       case 'UPCOMING':
         return {
           title: 'Chưa có kỳ nghỉ nào sắp diễn ra',
@@ -140,6 +148,12 @@ export default function CustomerBookingsPage() {
         return {
           title: 'Không có đơn đặt phòng nào bị hủy hoặc bị từ chối',
           desc: 'Mọi đơn đặt phòng bị hủy hoặc bị cơ sở từ chối tiếp nhận sẽ hiển thị tại đây để bạn tiện theo dõi.',
+          showExplore: false,
+        };
+      case 'REJECTED':
+        return {
+          title: 'Chưa có đơn bị từ chối',
+          desc: 'Các đơn không được cơ sở lưu trú tiếp nhận sẽ hiển thị tại đây.',
           showExplore: false,
         };
       case 'ALL':
@@ -253,8 +267,8 @@ export default function CustomerBookingsPage() {
               })}
             </div>
 
-            {/* Sort Dropdown */}
-            <div className="relative self-end sm:self-auto">
+            {/* API chỉ hỗ trợ sắp xếp theo thời gian tạo; tùy chọn sort chỉ dành cho mock local. */}
+            {isMockData && <div className="relative self-end sm:self-auto">
               <button
                 type="button"
                 onClick={() => setSortOpen((v) => !v)}
@@ -294,7 +308,7 @@ export default function CustomerBookingsPage() {
                   </motion.div>
                 )}
               </AnimatePresence>
-            </div>
+            </div>}
           </div>
 
           {/* Booking List Container */}

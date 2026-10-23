@@ -9,10 +9,12 @@ const vndFormatter = new Intl.NumberFormat('vi-VN', {
 export function CheckoutPriceSummary({
   room,
   nights = 1,
-  roomTotal = 0,
+  quote,
 }) {
-  const nightlyPrice = room ? Number(room.price || room.price_per_night || 0) : 0;
-  const validNights = Math.max(1, Number(nights) || 1);
+  const nightlyPrice = quote?.price_per_night ?? room?.price_per_night ?? room?.price;
+  const quotedNights = quote?.number_of_nights ?? nights;
+  const hasQuote = quote?.room_total !== undefined && quote?.room_total !== null;
+  const roomTotal = hasQuote ? Number(quote.room_total) : null;
 
   return (
     <aside className="space-y-5 rounded-3xl border border-border/70 bg-white p-6 shadow-[0_20px_50px_-24px_rgba(26,46,32,0.22)] ring-1 ring-black/[0.03]">
@@ -45,12 +47,8 @@ export function CheckoutPriceSummary({
       {/* Breakdown Items */}
       <div className="space-y-3 text-xs text-muted-foreground border-t border-border/60 pt-4">
         <div className="flex items-center justify-between">
-          <span>
-            {vndFormatter.format(nightlyPrice)} × {validNights} đêm
-          </span>
-          <span className="font-semibold text-ink">
-            {vndFormatter.format(roomTotal)}
-          </span>
+          <span>{nightlyPrice !== undefined ? `${vndFormatter.format(Number(nightlyPrice))} × ${quotedNights} đêm` : `${quotedNights} đêm lưu trú`}</span>
+          <span className="font-semibold text-ink">{hasQuote ? vndFormatter.format(roomTotal) : 'Chưa có báo giá'}</span>
         </div>
 
         <div className="flex items-center justify-between">
@@ -63,12 +61,12 @@ export function CheckoutPriceSummary({
       <div className="border-t border-border/60 pt-4">
         <div className="flex items-baseline justify-between">
           <div>
-            <div className="text-[13px] font-bold text-ink">Dự toán tiền phòng</div>
-            <div className="text-[11px] text-muted-foreground">Tính theo đơn giá và số đêm đã chọn</div>
+            <div className="text-[13px] font-bold text-ink">Tiền phòng theo báo giá</div>
+            <div className="text-[11px] text-muted-foreground">Tổng tiền lấy từ hệ thống StayHub</div>
           </div>
           <div className="text-right">
             <div className="font-display text-2xl font-bold text-primary">
-              {vndFormatter.format(roomTotal)}
+              {hasQuote ? vndFormatter.format(roomTotal) : '—'}
             </div>
           </div>
         </div>
@@ -76,7 +74,7 @@ export function CheckoutPriceSummary({
 
       {/* Factual Note */}
       <div className="rounded-2xl bg-surface/70 p-3.5 text-[11px] text-muted-foreground leading-relaxed border border-border/60">
-        Chi phí trên là ước tính tiền phòng dựa trên đơn giá niêm yết của hạng phòng và khoảng thời gian lưu trú được chọn.
+        {hasQuote ? 'Báo giá được hệ thống xác nhận cho khoảng thời gian lưu trú đã chọn.' : 'Mở bước xem lại và yêu cầu báo giá để xem tổng tiền phòng chính thức.'}
       </div>
     </aside>
   );

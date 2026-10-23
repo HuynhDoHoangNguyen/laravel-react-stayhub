@@ -30,9 +30,6 @@ export default function SearchResultsPage() {
       maxPrice: searchParams.get("maxPrice")
         ? Number(searchParams.get("maxPrice"))
         : undefined,
-      minRating: searchParams.get("minRating")
-        ? Number(searchParams.get("minRating"))
-        : undefined,
       sortBy: searchParams.get("sortBy") || "PRICE_ASC",
     };
   }, [searchParams]);
@@ -57,35 +54,20 @@ export default function SearchResultsPage() {
 
   // Filter state
   const [selectedAmenities, setSelectedAmenities] = useState([]);
-  const [selectedPropertyTypes, setSelectedPropertyTypes] = useState([]);
-
   const filters = useMemo(
     () => ({
       minPrice: search.minPrice,
       maxPrice: search.maxPrice,
-      minRating: search.minRating,
       sortBy: search.sortBy,
       selectedAmenities,
-      selectedPropertyTypes,
     }),
-    [
-      search.minPrice,
-      search.maxPrice,
-      search.minRating,
-      search.sortBy,
-      selectedAmenities,
-      selectedPropertyTypes,
-    ]
+    [search.minPrice, search.maxPrice, search.sortBy, selectedAmenities]
   );
 
   const setFilters = (next) => {
     if (next.selectedAmenities !== undefined) {
       setSelectedAmenities(next.selectedAmenities);
     }
-    if (next.selectedPropertyTypes !== undefined) {
-      setSelectedPropertyTypes(next.selectedPropertyTypes);
-    }
-
     const params = new URLSearchParams(searchParams);
     params.delete("page");
     if (next.minPrice !== undefined) {
@@ -100,12 +82,6 @@ export default function SearchResultsPage() {
       params.delete("maxPrice");
     }
 
-    if (next.minRating !== undefined) {
-      params.set("minRating", String(next.minRating));
-    } else {
-      params.delete("minRating");
-    }
-
     if (next.sortBy) {
       params.set("sortBy", next.sortBy);
     }
@@ -115,11 +91,9 @@ export default function SearchResultsPage() {
 
   const resetFilters = () => {
     setSelectedAmenities([]);
-    setSelectedPropertyTypes([]);
     const params = new URLSearchParams(searchParams);
     params.delete("minPrice");
     params.delete("maxPrice");
-    params.delete("minRating");
     params.delete("q");
     params.delete("page");
     params.set("sortBy", "PRICE_ASC");
@@ -139,13 +113,34 @@ export default function SearchResultsPage() {
 
   // Data fetching
   const [properties, setProperties] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isError, setIsError] = useState(false);
-  const [isUnavailable, setIsUnavailable] = useState(false);
+  const [pagination, setPagination] = useState(null);
+  const [loadedKey, setLoadedKey] = useState(null);
+  const [requestError, setRequestError] = useState(null);
   const [retryKey, setRetryKey] = useState(0);
+  const currentPage = Math.max(1, Number(searchParams.get("page")) || 1);
+  const isMissingDates = !search.startDate || !search.endDate;
+  const requestKey = JSON.stringify({
+    city: search.city,
+    startDate: search.startDate,
+    endDate: search.endDate,
+    adults: search.adults,
+    children: search.children,
+    keyword: search.q,
+    minPrice: filters.minPrice,
+    maxPrice: filters.maxPrice,
+    sortBy: filters.sortBy,
+    amenities: filters.selectedAmenities,
+    page: currentPage,
+    retryKey,
+  });
+  const isLoading = !isMissingDates && loadedKey !== requestKey;
+  const isError = requestError?.key === requestKey;
+  const errorMessage = isError ? requestError.message : '';
 
   useEffect(() => {
     let active = true;
+
+    if (isMissingDates) return undefined;
 
     propertyService
       .searchProperties({
@@ -157,28 +152,28 @@ export default function SearchResultsPage() {
         children: search.children,
         minPrice: filters.minPrice,
         maxPrice: filters.maxPrice,
-        minRating: filters.minRating,
         sortBy: filters.sortBy,
         amenities: filters.selectedAmenities,
-        propertyTypes: filters.selectedPropertyTypes,
         keyword: search.q,
+        page: currentPage,
       })
       .then((res) => {
         if (active) {
           if (res.unavailable) {
-            setIsUnavailable(true);
             setProperties([]);
           } else {
             setProperties(res.data || []);
           }
-          setIsLoading(false);
+          setPagination(res.meta || null);
+          setLoadedKey(requestKey);
+          setRequestError(null);
         }
       })
-      .catch(() => {
+      .catch((error) => {
         if (active) {
-          setIsError(true);
           setProperties([]);
-          setIsLoading(false);
+          setLoadedKey(requestKey);
+          setRequestError({ key: requestKey, message: error.message || 'Không thể tải danh sách phòng.' });
         }
       });
 
@@ -186,6 +181,9 @@ export default function SearchResultsPage() {
       active = false;
     };
   }, [
+    requestKey,
+    isMissingDates,
+    currentPage,
     search.city,
     search.startDate,
     search.endDate,
@@ -195,23 +193,16 @@ export default function SearchResultsPage() {
     search.q,
     filters.minPrice,
     filters.maxPrice,
-    filters.minRating,
     filters.sortBy,
     filters.selectedAmenities,
-    filters.selectedPropertyTypes,
-    retryKey,
   ]);
 
-  const PAGE_SIZE = 10;
-  const currentPage = Math.max(1, Number(searchParams.get("page")) || 1);
-  const total = properties.length;
-  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const PAGE_SIZE = Number(pagination?.per_page) || 15;
+  const total = Number(pagination?.total) || 0;
+  const totalPages = Number(pagination?.last_page) || 1;
   const activePage = totalPages > 0 ? Math.min(currentPage, totalPages) : 1;
   const startIndex = (activePage - 1) * PAGE_SIZE;
-  const paginatedProperties = properties.slice(
-    startIndex,
-    startIndex + PAGE_SIZE
-  );
+  const paginatedProperties = properties;
 
   const from = total === 0 ? 0 : startIndex + 1;
   const to = Math.min(startIndex + PAGE_SIZE, total);
@@ -233,9 +224,6 @@ export default function SearchResultsPage() {
   };
 
   const handleRetry = () => {
-    setIsLoading(true);
-    setIsError(false);
-    setIsUnavailable(false);
     setRetryKey((k) => k + 1);
   };
 
@@ -284,13 +272,13 @@ export default function SearchResultsPage() {
                 {isError ? (
                   <EmptyState
                     title="Đã xảy ra lỗi kết nối"
-                    message="Không thể tải danh sách chỗ nghỉ vào lúc này. Vui lòng kiểm tra lại đường truyền và thử lại."
+                    message={errorMessage || "Không thể tải danh sách phòng vào lúc này. Vui lòng kiểm tra lại đường truyền và thử lại."}
                     onRetry={handleRetry}
                   />
-                ) : isUnavailable ? (
+                ) : isMissingDates ? (
                   <EmptyState
-                    title="Tính năng chưa khả dụng"
-                    message="Hệ thống đang hoàn thiện dịch vụ tìm kiếm phòng trực tuyến. Vui lòng quay lại sau."
+                    title="Chọn ngày lưu trú"
+                    message="Vui lòng chọn ngày nhận phòng và trả phòng để tìm phòng còn trống."
                   />
                 ) : !isLoading && total === 0 ? (
                   <EmptyState
@@ -309,6 +297,7 @@ export default function SearchResultsPage() {
                         endDate: search.endDate,
                         roomsCount: search.roomsCount,
                         adults: search.adults,
+                        children: search.children,
                       }}
                     />
                     {!isLoading && totalPages > 1 && (

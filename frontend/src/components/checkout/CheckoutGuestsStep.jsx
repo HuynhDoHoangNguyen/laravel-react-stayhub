@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { User, Phone, Mail, Users, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
 
 export function CheckoutGuestsStep({
@@ -7,37 +6,17 @@ export function CheckoutGuestsStep({
   adults,
   children,
   note,
-  contactPhone,
   onAdultsChange,
   onChildrenChange,
   onNoteChange,
-  onContactPhoneChange,
   onContinue,
 }) {
-  const [phoneError, setPhoneError] = useState('');
-
   const maxCapacity = Number(room?.capacity) || 2;
   const totalGuests = (Number(adults) || 1) + (Number(children) || 0);
   const isOverCapacity = totalGuests > maxCapacity;
 
-  const handlePhoneBlur = (e) => {
-    const val = (e.target.value || '').trim();
-    if (!val) {
-      setPhoneError('Vui lòng cung cấp số điện thoại liên hệ để tiện tham khảo.');
-    } else if (!/^[0-9+() -]{9,15}$/.test(val)) {
-      setPhoneError('Định dạng số điện thoại chưa hợp lệ.');
-    } else {
-      setPhoneError('');
-    }
-  };
-
   const handleNext = (e) => {
     e.preventDefault();
-    const phone = (contactPhone || '').trim();
-    if (!phone) {
-      setPhoneError('Vui lòng cung cấp số điện thoại liên hệ.');
-      return;
-    }
     if (isOverCapacity) {
       return;
     }
@@ -88,48 +67,31 @@ export function CheckoutGuestsStep({
             <input
               type="email"
               readOnly
-              value={user?.email || 'customer@stayhub.com'}
+              value={user?.email || ''}
               className="w-full rounded-xl border border-border/70 bg-surface/60 px-3.5 py-2.5 text-xs font-medium text-ink/80 cursor-not-allowed focus:outline-none"
             />
-            <p className="text-[11px] text-muted-foreground">Thông báo sẽ được gửi tới hòm thư này</p>
+            <p className="text-[11px] text-muted-foreground">Email đăng nhập trong hồ sơ tài khoản</p>
           </div>
 
-          {/* Contact Phone (Editable if needed) */}
+          {/* Contact Phone from the account profile */}
           <div className="space-y-1.5 sm:col-span-2">
             <label className="text-xs font-semibold text-ink flex items-center gap-1.5">
               <Phone className="h-3.5 w-3.5 text-muted-foreground" />
-              <span>Số điện thoại liên hệ <span className="text-destructive">*</span></span>
+              <span>Số điện thoại trong hồ sơ</span>
             </label>
             <input
               type="tel"
-              required
-              value={contactPhone || ''}
-              onChange={(e) => {
-                onContactPhoneChange(e.target.value);
-                if (phoneError) setPhoneError('');
-              }}
-              onBlur={handlePhoneBlur}
-              placeholder="Ví dụ: 0912 345 678"
-              className={`w-full rounded-xl border px-3.5 py-2.5 text-xs text-ink transition-colors focus:outline-none focus:ring-1 ${
-                phoneError
-                  ? 'border-destructive focus:border-destructive focus:ring-destructive/30'
-                  : 'border-border/80 bg-white focus:border-primary focus:ring-primary/20'
-              }`}
+              readOnly
+              value={user?.phone || ''}
+              placeholder="Chưa có số điện thoại trong hồ sơ"
+              className="w-full rounded-xl border border-border/70 bg-surface/60 px-3.5 py-2.5 text-xs font-medium text-ink/80 focus:outline-none"
             />
-            {phoneError ? (
-              <p className="text-[11px] text-destructive flex items-center gap-1">
-                <AlertCircle className="h-3 w-3 shrink-0" />
-                <span>{phoneError}</span>
-              </p>
-            ) : (
-              <p className="text-[11px] text-muted-foreground">
-                Số điện thoại dùng để hiển thị trong bản xem trước và trao đổi với cơ sở (chưa ghi nhận vào hồ sơ đặt phòng).
-              </p>
-            )}
+            <p className="text-[11px] text-muted-foreground">
+              Thông tin này chỉ được đọc từ hồ sơ tài khoản; booking hiện không lưu số điện thoại riêng.
+            </p>
           </div>
         </div>
       </div>
-
       {/* 2. Guest Count & Capacity Card */}
       <div className="rounded-3xl border border-border/70 bg-white p-6 sm:p-8 shadow-xs">
         <div className="border-b border-border/60 pb-4">
@@ -250,7 +212,7 @@ export function CheckoutGuestsStep({
       <div className="flex items-center justify-end pt-2">
         <button
           type="submit"
-          disabled={isOverCapacity || !contactPhone}
+          disabled={isOverCapacity}
           className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-primary px-6 py-3 text-xs font-semibold text-primary-foreground shadow-xs transition-all hover:bg-primary-mid disabled:cursor-not-allowed disabled:opacity-50"
         >
           <span>Tiếp tục kiểm tra đơn</span>

@@ -33,7 +33,7 @@ export function ResultsGrid({ properties, isLoading, context, view = "grid" }) {
       ? "flex flex-col gap-5"
       : "grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 2xl:grid-cols-2";
 
-  if (isLoading && properties.length === 0) {
+  if (isLoading) {
     return (
       <div className={containerClass}>
         {Array.from({ length: 6 }).map((_, i) => (
@@ -47,7 +47,7 @@ export function ResultsGrid({ properties, isLoading, context, view = "grid" }) {
     <div className={containerClass}>
       {properties.map((p, i) => (
         <motion.div
-          key={p.id}
+          key={p.resultId ?? p.id}
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{

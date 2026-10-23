@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, AlertCircle, Compass, BedDouble } from 'lucide-react';
+import { ArrowLeft, AlertCircle, Compass, BedDouble, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { propertyService } from '@/services/propertyService';
-import { nightsBetween } from '@/services/bookingService';
+import { bookingService, nightsBetween } from '@/services/bookingService';
 import { CheckoutStepper } from '@/components/checkout/CheckoutStepper';
 import { CheckoutGuestsStep } from '@/components/checkout/CheckoutGuestsStep';
 import { CheckoutReviewStep } from '@/components/checkout/CheckoutReviewStep';
@@ -27,8 +27,13 @@ export default function CustomerCheckoutPage() {
   const [adults, setAdults] = useState(urlAdults);
   const [children, setChildren] = useState(urlChildren);
   const [note, setNote] = useState('');
-  const [customPhone, setCustomPhone] = useState(null);
-  const contactPhone = customPhone !== null ? customPhone : (user?.phone || '');
+  const [preview, setPreview] = useState(null);
+  const [previewError, setPreviewError] = useState('');
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  const [createError, setCreateError] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+  const [createdBooking, setCreatedBooking] = useState(null);
+  const createLock = useRef(false);
 
   // 3. Tải thông tin cơ sở lưu trú và hạng phòng thật
   const [property, setProperty] = useState(null);
@@ -47,7 +52,12 @@ export default function CustomerCheckoutPage() {
 
       setIsLoading(true);
       try {
-        const res = await propertyService.getPropertyById(propertyId);
+        const res = await propertyService.getPropertyById(propertyId, {
+          startDate,
+          endDate,
+          adults: urlAdults,
+          children: urlChildren,
+        });
         if (!ignore) {
           if (res?.data) {
             setProperty(res.data);
@@ -70,7 +80,7 @@ export default function CustomerCheckoutPage() {
     return () => {
       ignore = true;
     };
-  }, [propertyId]);
+  }, [propertyId, startDate, endDate, urlAdults, urlChildren]);
 
   // 4. Tìm hạng phòng tương ứng trong danh sách phòng của cơ sở
   const selectedRoom = useMemo(() => {
@@ -90,17 +100,62 @@ export default function CustomerCheckoutPage() {
     return nightsBetween(startDate, endDate);
   }, [startDate, endDate, isValidDateRange]);
 
-  // 6. Tính toán tiền phòng chính xác (Integer Scaled Arithmetic)
-  const roomTotal = useMemo(() => {
-    if (!selectedRoom || nights <= 0) return 0;
-    const nightlyPrice = Math.round(Number(selectedRoom.price || selectedRoom.price_per_night || 0));
-    return nightlyPrice * nights; // 1 phòng theo quy định nghiệp vụ
-  }, [selectedRoom, nights]);
-
   // Đường dẫn quay lại chi tiết chỗ nghỉ
   const backToPropertyUrl = propertyId
     ? `/properties/${propertyId}?checkIn=${startDate || ''}&checkOut=${endDate || ''}&adults=${adults}`
     : '/search';
+
+  const bookingPayload = useMemo(() => ({
+    room_id: Number(roomId),
+    check_in_date: startDate,
+    check_out_date: endDate,
+    guest_count: (Number(adults) || 1) + (Number(children) || 0),
+    note: note.trim() || null,
+  }), [roomId, startDate, endDate, adults, children, note]);
+
+  const handlePreviewBooking = async () => {
+    setPreview(null);
+    setPreviewError('');
+    setCreateError('');
+    setIsPreviewing(true);
+    try {
+      const result = await bookingService.previewBooking({
+        room_id: bookingPayload.room_id,
+        check_in_date: bookingPayload.check_in_date,
+        check_out_date: bookingPayload.check_out_date,
+        guest_count: bookingPayload.guest_count,
+      });
+      setPreview(result);
+    } catch (error) {
+      setPreviewError(error.message);
+    } finally {
+      setIsPreviewing(false);
+    }
+  };
+
+  const updateGuestCount = (setter, value) => {
+    setter(value);
+    setPreview(null);
+    setPreviewError('');
+    setCreateError('');
+  };
+
+  const handleCreateBooking = async () => {
+    if (createLock.current || !preview?.availability?.available) return;
+    createLock.current = true;
+    setCreateError('');
+    setIsCreating(true);
+    try {
+      const result = await bookingService.createBooking(bookingPayload);
+      setCreatedBooking(result);
+    } catch (error) {
+      setCreateError(error.message);
+      if (error.status === 409 || error.status === 422) setPreview(null);
+    } finally {
+      createLock.current = false;
+      setIsCreating(false);
+    }
+  };
 
   // State: Loading Skeleton
   if (isLoading) {
@@ -166,6 +221,26 @@ export default function CustomerCheckoutPage() {
     );
   }
 
+  if (createdBooking) {
+    return (
+      <div className="mx-auto max-w-xl px-4 py-16 text-center sm:px-6">
+        <div className="rounded-3xl border border-emerald-200 bg-white p-8 shadow-xs sm:p-12">
+          <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-emerald-50 text-emerald-700">
+            <CheckCircle2 className="h-7 w-7" />
+          </div>
+          <p className="mt-6 text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-700">Đặt phòng thành công</p>
+          <h1 className="mt-2 font-display text-2xl font-bold text-primary sm:text-3xl">StayHub đã nhận booking của bạn</h1>
+          <p className="mt-3 text-sm text-muted-foreground">Mã booking</p>
+          <p className="mt-1 font-mono text-xl font-bold text-ink">{createdBooking.booking_code}</p>
+          <p className="mt-4 text-sm text-muted-foreground">Đơn đang chờ cơ sở lưu trú xác nhận.</p>
+          <Link to="/customer/bookings" className="mt-8 inline-flex items-center justify-center rounded-xl bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary-mid">
+            Xem đơn đặt phòng
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-[1240px] px-4 pt-2 pb-20 text-left sm:px-6">
       {/* Breadcrumb Navigation */}
@@ -210,11 +285,9 @@ export default function CustomerCheckoutPage() {
               adults={adults}
               children={children}
               note={note}
-              contactPhone={contactPhone}
-              onAdultsChange={setAdults}
-              onChildrenChange={setChildren}
+              onAdultsChange={(value) => updateGuestCount(setAdults, value)}
+              onChildrenChange={(value) => updateGuestCount(setChildren, value)}
               onNoteChange={setNote}
-              onContactPhoneChange={setCustomPhone}
               onContinue={() => setStep('review')}
             />
           ) : (
@@ -227,10 +300,16 @@ export default function CustomerCheckoutPage() {
               adults={adults}
               children={children}
               note={note}
-              contactPhone={contactPhone}
               user={user}
               onEditGuests={() => setStep('guests')}
               onBackToProperty={() => navigate(backToPropertyUrl)}
+              preview={preview}
+              previewError={previewError}
+              createError={createError}
+              isPreviewing={isPreviewing}
+              isCreating={isCreating}
+              onRequestPreview={handlePreviewBooking}
+              onCreateBooking={handleCreateBooking}
             />
           )}
         </div>
@@ -240,7 +319,7 @@ export default function CustomerCheckoutPage() {
           <CheckoutPriceSummary
             room={selectedRoom}
             nights={nights}
-            roomTotal={roomTotal}
+            quote={preview}
           />
         </div>
       </div>

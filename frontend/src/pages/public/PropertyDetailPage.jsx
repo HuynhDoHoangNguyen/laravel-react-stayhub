@@ -25,6 +25,7 @@ export default function PropertyDetailPage() {
   const roomsCount = Math.max(1, Number(searchParams.get("roomsCount")) || 1);
   const adults = Math.max(1, Number(searchParams.get("adults")) || 2);
   const children = Math.max(0, Number(searchParams.get("children")) || 0);
+  const requestedRoomId = searchParams.get("roomId");
 
   const startDate = rawStart;
   const endDate = useMemo(() => {
@@ -77,14 +78,17 @@ export default function PropertyDetailPage() {
     let isMounted = true;
 
     propertyService
-      .getPropertyById(propertyId)
+      .getPropertyById(propertyId, { startDate, endDate, adults, children })
       .then((res) => {
         if (isMounted) {
           const data = res?.data || null;
           setProperty(data);
           setPropertySource(res?.source || null);
           if (data?.rooms?.length > 0) {
-            setSelectedRoomId((prev) => prev ?? data.rooms[0].id);
+            const requestedRoom = data.rooms.find(
+              (room) => String(room.id) === String(requestedRoomId),
+            );
+            setSelectedRoomId(requestedRoom?.id ?? data.rooms[0].id);
           }
           setIsLoading(false);
         }
@@ -101,7 +105,7 @@ export default function PropertyDetailPage() {
     return () => {
       isMounted = false;
     };
-  }, [propertyId]);
+  }, [propertyId, startDate, endDate, adults, children, requestedRoomId]);
 
   // Active selected room
   const selectedRoom = useMemo(() => {

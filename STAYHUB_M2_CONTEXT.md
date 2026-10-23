@@ -1,10 +1,10 @@
-Dự án StayHub (Laravel 12 + Sanctum SPA + MySQL; React 19 + Vite + React Router 7 + Axios). Tôi là THÀNH VIÊN 2, làm độc lập, phụ trách: Search, Availability, Booking, Booking Workflow, Services (bảng services, bookings, booking_services). Thành viên 1 (Identity, Property, Room, Amenity, Maintenance) và 3 (Invoice, Review, Dashboard, Chatbot) chưa có code trong repo.
+Dự án StayHub (Laravel 12 + Sanctum SPA + MySQL; React 19 + Vite + React Router 7 + Axios). Tôi là THÀNH VIÊN 2, làm độc lập, phụ trách: Search, Availability, Booking, Booking Workflow, Services (bảng services, bookings, booking_services). Repo hiện đã có code nền và dữ liệu mẫu của TV1, TV2, TV3; cần kiểm tra code thực tế trước khi kết luận trạng thái bàn giao giữa các thành viên.
 
 Tài liệu (chỉ đọc mục liên quan khi cần): docs/stayhub-team-work-assignment.md mục 4; docs/stayhub-erd.md (services, bookings, booking_services, Business rules); docs/stayhub-usecase-system.md mục 4.4-4.6, 6-9; docs/stayhub-screen-mockups.md mục 2.2, 2.5-2.7, 4, 6, 7; docs/api/booking-module.md.
 
 ## Trạng thái hiện tại
 - **Backend B1 - B5**: Đã hoàn thành 100%.
-- **Số test đang pass**: 79/79 tests (296 assertions) qua lệnh `php artisan test`.
+- **Kiểm thử Backend (lần xác minh lịch sử)**: 83 tests (435 assertions) đã pass ngày 13/10/2026 theo ghi nhận cuối file. Chưa xác nhận lại bằng lần chạy mới trong phiên cập nhật context này; chạy `php artisan test` để biết trạng thái hiện tại.
 - **Danh sách 22 endpoint (rút gọn)**:
   - *Public (3)*:
     - `GET  /api/public/rooms/search`: Tìm kiếm phòng trống (lọc ngày, khách, tiện nghi, giá, từ khóa).
@@ -44,6 +44,16 @@ Tài liệu (chỉ đọc mục liên quan khi cần): docs/stayhub-team-work-as
   - Customer 4 (BLOCKED): `customer4@stayhub.com`
   - Customer 5 (INACTIVE): `customer5@stayhub.com`
   - Chi tiết trạng thái, số bản ghi và kịch bản: `docs/seed-data.md`.
+
+## Trạng thái Frontend TV2
+- Các luồng giao diện TV2 đã được nối với domain service và API booking hiện có: tìm phòng, xem thông tin phòng/kiểm tra availability, preview và tạo booking, lịch sử/chi tiết/hủy booking phía Customer; danh sách/chi tiết và workflow confirm/reject/check-in/check-out phía Host; danh mục dịch vụ Host và dịch vụ phát sinh trong booking.
+- Route thực tế trong `frontend/src/routes/AppRouter.jsx`: `/search`, `/properties/:propertyId`, `/customer/checkout`, `/customer/bookings`, `/customer/bookings/:bookingId`, `/host/bookings`, `/host/bookings/:bookingId`, `/host/bookings/:bookingId/services`, `/host/services`, `/host/properties/:propertyId/services`.
+- Availability được dùng trong tìm kiếm và bước preview booking. `GET /api/public/rooms/{room}/availability` có trong API; cần kiểm tra lại UI hiện hành nếu yêu cầu một màn hình availability độc lập.
+- Checkout lấy báo giá phòng từ API preview; frontend không tự tính tổng tiền chính thức. Backend không nhận số điện thoại riêng trong payload tạo booking, nên checkout không bắt nhập số điện thoại tùy ý.
+- Khi chạy UI với API thật, đặt `VITE_ENABLE_PROPERTY_MOCKS=false` và `VITE_ENABLE_BOOKING_MOCKS=false` trong `frontend/.env`; đặt `VITE_BACKEND_URL=http://localhost:8000`. `frontend/.env.example` đang bật hai mock flag, cần chú ý khi sao chép mẫu.
+- Trang đăng nhập nhanh development `/login-test` có preset Host 1, Host 2, Customer 1, Customer 2; mật khẩu seeder là `12345678`. Tài khoản chỉ đăng nhập được nếu seeder đã được chạy trên database tương ứng; customer4 đang BLOCKED, customer5 INACTIVE.
+- Frontend `npm run lint` và `npm run build` đã pass sau các cập nhật UI TV2 gần nhất; lint còn 3 cảnh báo Fast Refresh trong shared components và build có cảnh báo bundle lớn. Chưa chạy lại trong lần cập nhật tài liệu này.
+- Chưa xác nhận end-to-end trên browser với database của người dùng. Luồng kiểm tra đề xuất: Customer tạo booking → Host xác nhận → check-in → ghi nhận dịch vụ → check-out; đồng thời kiểm tra tìm kiếm, preview, lịch sử/chi tiết và hủy booking theo trạng thái.
 
 ---
 

@@ -78,7 +78,8 @@ export function BookingPreviewCard({
 
   const handleProceedToCheckout = () => {
     if (!room || !isValidDates) return;
-    const propId = propertyId || room.property_id || room.property?.id || 1;
+    const propId = propertyId || room.property_id || room.property?.id;
+    if (!propId || !room.id) return;
     navigate(
       `/customer/checkout?propertyId=${propId}&roomId=${room.id}&startDate=${startDate}&endDate=${endDate}&roomsCount=1&adults=${adults}&children=${children}`
     );

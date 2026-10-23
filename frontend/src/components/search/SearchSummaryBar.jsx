@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { DestinationField } from "@/components/landing/search/DestinationField";
 import { DateField } from "@/components/landing/search/DateField";
 import { GuestsField } from "@/components/landing/search/GuestsField";
+import { toast } from "sonner";
 
 function toIsoDate(d) {
   if (!d || !(d instanceof Date) || isNaN(d)) return "";
@@ -83,6 +84,10 @@ export function SearchSummaryBar({
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!checkIn || !checkOut) {
+      toast.error("Vui lòng chọn ngày nhận phòng và trả phòng.");
+      return;
+    }
     const params = new URLSearchParams(searchParams);
     if (destination.trim()) {
       params.set("city", destination.trim());

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -48,6 +48,9 @@ export default function CustomerBookingDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState(null);
   const [isMockData, setIsMockData] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState('');
+  const cancelLock = useRef(false);
 
   // Review data fetched from API
   const [fetchedReviewState, setFetchedReviewState] = useState(null);
@@ -108,6 +111,24 @@ export default function CustomerBookingDetailPage() {
       reviewService.getCustomerReviewForBooking(booking.id).then((res) => {
         setFetchedReviewState(res);
       });
+    }
+  };
+
+  const handleCancelBooking = async () => {
+    if (cancelLock.current) return;
+    if (!window.confirm('Bạn có chắc chắn muốn hủy đơn đặt phòng này?')) return;
+
+    cancelLock.current = true;
+    setIsCancelling(true);
+    setCancelError('');
+    try {
+      const updatedBooking = await bookingService.cancelBooking(booking.id);
+      setBooking((current) => ({ ...current, ...updatedBooking }));
+    } catch (error) {
+      setCancelError(error.message || 'Không thể hủy đơn đặt phòng. Vui lòng thử lại.');
+    } finally {
+      cancelLock.current = false;
+      setIsCancelling(false);
     }
   };
 
@@ -313,6 +334,16 @@ export default function CustomerBookingDetailPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2.5">
+                {!isMockData && ['PENDING', 'CONFIRMED'].includes(effectiveStatus) && (
+                  <button
+                    type="button"
+                    onClick={handleCancelBooking}
+                    disabled={isCancelling}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-semibold text-rose-800 transition-colors hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isCancelling ? 'Đang hủy…' : 'Hủy đơn'}
+                  </button>
+                )}
                 {property.id && (
                   <Link
                     to={`/properties/${property.id}`}
@@ -353,6 +384,11 @@ export default function CustomerBookingDetailPage() {
                 )}
               </div>
             </div>
+            {cancelError && (
+              <p role="alert" className="mt-3 text-xs font-medium text-rose-700">
+                {cancelError}
+              </p>
+            )}
           </div>
         </div>
       </motion.div>

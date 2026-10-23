@@ -51,7 +51,15 @@ export function SearchPropertyCard({ property, context, view = "grid" }) {
     };
   }, [hovered, photos.length]);
 
-  const detailUrl = `/properties/${property.id}?startDate=${context?.startDate ?? ""}&endDate=${context?.endDate ?? ""}&roomsCount=${context?.roomsCount ?? 1}&adults=${context?.adults ?? 2}`;
+  const detailParams = new URLSearchParams({
+    startDate: context?.startDate ?? "",
+    endDate: context?.endDate ?? "",
+    roomsCount: String(context?.roomsCount ?? 1),
+    adults: String(context?.adults ?? 2),
+    children: String(context?.children ?? 0),
+  });
+  if (property.roomId) detailParams.set("roomId", String(property.roomId));
+  const detailUrl = `/properties/${property.id}?${detailParams.toString()}`;
 
   return (
     <motion.article
@@ -146,6 +154,12 @@ export function SearchPropertyCard({ property, context, view = "grid" }) {
           )}
         </div>
 
+        {property.roomName && (
+          <p className="mt-2 truncate text-sm font-semibold text-primary">
+            {property.roomName}{property.roomTypeName ? ` · ${property.roomTypeName}` : ""}
+          </p>
+        )}
+
         <p className="mt-1 inline-flex items-center gap-1 text-[13px] text-muted-foreground">
           <MapPin className="h-3.5 w-3.5" aria-hidden />
           {property.city}
@@ -166,7 +180,7 @@ export function SearchPropertyCard({ property, context, view = "grid" }) {
         <div className="mt-auto flex items-center justify-between gap-3 border-t border-border/40 pt-4">
           <div className="min-w-0 flex-1">
             <div className="truncate text-[16px] font-semibold tracking-tight text-ink sm:text-[17px]">
-              {vndCurrency.format(property.price)}
+            {vndCurrency.format(Number(property.price) || 0)}
             </div>
             <div className="text-[11.5px] text-muted-foreground">/ đêm</div>
           </div>

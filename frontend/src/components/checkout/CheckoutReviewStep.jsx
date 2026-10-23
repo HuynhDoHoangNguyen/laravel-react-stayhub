@@ -11,6 +11,7 @@ import {
   Info,
   ExternalLink,
   X,
+  Loader2,
 } from 'lucide-react';
 import { formatLongDateVi } from '@/services/bookingService';
 
@@ -23,10 +24,16 @@ export function CheckoutReviewStep({
   adults,
   children,
   note,
-  contactPhone,
   user,
   onEditGuests,
   onBackToProperty,
+  preview,
+  previewError,
+  createError,
+  isPreviewing,
+  isCreating,
+  onRequestPreview,
+  onCreateBooking,
 }) {
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
 
@@ -44,6 +51,7 @@ export function CheckoutReviewStep({
 
   const handleOpenPreview = () => {
     setPreviewModalOpen(true);
+    onRequestPreview();
   };
 
   return (
@@ -150,10 +158,10 @@ export function CheckoutReviewStep({
           </div>
           <div className="flex items-center justify-between py-2.5">
             <div>
-              <span className="text-muted-foreground">Số điện thoại liên hệ</span>
+              <span className="text-muted-foreground">Số điện thoại trong hồ sơ</span>
               <span className="block text-[10px] text-muted-foreground/70">Thông tin tham khảo</span>
             </div>
-            <span className="font-semibold text-ink">{contactPhone || '—'}</span>
+            <span className="font-semibold text-ink">{user?.phone || '—'}</span>
           </div>
           <div className="flex items-center justify-between py-2.5">
             <span className="text-muted-foreground">Hòm thư điện tử</span>
@@ -219,7 +227,7 @@ export function CheckoutReviewStep({
               Xem lại thông tin đặt phòng
             </div>
             <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-              Quý khách vui lòng rà soát lại thông tin lưu trú và dự toán chi phí. Hệ thống hiện cung cấp bản xem trước chi tiết để tham khảo trước khi liên hệ hoặc hoàn tất thủ tục lưu trú.
+              Kiểm tra tình trạng phòng và báo giá mới nhất từ hệ thống trước khi xác nhận đặt phòng.
             </p>
           </div>
         </div>
@@ -239,7 +247,7 @@ export function CheckoutReviewStep({
             className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary px-7 py-3 text-xs font-semibold text-primary-foreground shadow-xs transition-all hover:bg-primary-mid active:scale-95"
           >
             <Info className="h-4 w-4" />
-            <span>Xem lại thông tin dự kiến</span>
+            <span>Kiểm tra và đặt phòng</span>
           </button>
         </div>
       </div>
@@ -278,46 +286,69 @@ export function CheckoutReviewStep({
                 Bản xem trước thông tin lưu trú
               </h4>
               <p className="text-xs text-muted-foreground leading-relaxed pt-2">
-                Hệ thống tiếp nhận đơn trực tuyến đang trong giai đoạn hoàn tất kết nối. Quý khách có thể sử dụng thông tin tóm tắt bên dưới để tham khảo và chủ động liên hệ lễ tân cơ sở lưu trú nếu cần tìm hiểu thêm:
+                Báo giá và tình trạng phòng được lấy trực tiếp từ StayHub. Giá cuối cùng do hệ thống xác nhận khi tạo booking.
               </p>
 
-              <div className="my-4 rounded-2xl bg-surface/80 p-4 border border-border/60 text-xs space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Chỗ nghỉ:</span>
-                  <span className="font-bold text-ink">{property?.name}</span>
+              {isPreviewing ? (
+                <div className="my-5 flex items-center gap-2 rounded-xl bg-surface p-4 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Đang kiểm tra giá và tình trạng phòng…
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Hạng phòng:</span>
-                  <span className="font-semibold text-ink">{room?.name}</span>
+              ) : previewError ? (
+                <div role="alert" className="my-5 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+                  {previewError}
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Thời gian:</span>
-                  <span className="font-semibold text-ink">{nights} đêm ({startDate} → {endDate})</span>
-                </div>
-                {property?.phone && (
-                  <div className="flex justify-between border-t border-border/60 pt-2 text-primary">
-                    <span className="font-semibold">Hotline hỗ trợ:</span>
-                    <span className="font-bold font-mono text-sm">{property.phone}</span>
+              ) : preview ? (
+                <div className="my-4 space-y-3 rounded-2xl border border-border/60 bg-surface/80 p-4 text-xs">
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Chỗ nghỉ</span>
+                    <span className="text-right font-bold text-ink">{property?.name}</span>
                   </div>
-                )}
-              </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Phòng</span>
+                    <span className="text-right font-semibold text-ink">{room?.name}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Thời gian</span>
+                    <span className="text-right font-semibold text-ink">{preview.number_of_nights} đêm ({startDate} → {endDate})</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Giá mỗi đêm</span>
+                    <span className="font-semibold text-ink">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(Number(preview.price_per_night))}</span>
+                  </div>
+                  <div className="flex justify-between gap-3 border-t border-border/60 pt-3">
+                    <span className="font-semibold text-ink">Tổng tiền phòng</span>
+                    <span className="font-bold text-primary">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(Number(preview.room_total))}</span>
+                  </div>
+                  <p className={preview.availability?.available ? 'text-emerald-700' : 'text-destructive'}>
+                    {preview.availability?.available ? 'Phòng còn trống trong khoảng ngày đã chọn.' : 'Phòng hiện không còn trống trong khoảng ngày đã chọn.'}
+                  </p>
+                </div>
+              ) : null}
 
-              <div className="flex flex-col-reverse sm:flex-row gap-2.5 pt-2">
+              {createError && (
+                <div role="alert" className="mb-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
+                  {createError}
+                </div>
+              )}
+
+              <div className="flex flex-col-reverse gap-2.5 pt-2 sm:flex-row">
                 <button
                   type="button"
                   onClick={() => setPreviewModalOpen(false)}
                   className="w-full sm:w-auto cursor-pointer rounded-xl border border-border/80 bg-white px-4 py-2.5 text-xs font-semibold text-ink hover:bg-surface transition-colors"
                 >
-                  Đóng xem lại
+                  Đóng
                 </button>
-                {property?.phone && (
-                  <a
-                    href={`tel:${property.phone}`}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-xs font-semibold text-primary-foreground hover:bg-primary-mid transition-all"
+                {preview?.availability?.available && (
+                  <button
+                    type="button"
+                    onClick={onCreateBooking}
+                    disabled={isCreating || isPreviewing}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-xs font-semibold text-primary-foreground transition-all hover:bg-primary-mid disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                   >
-                    <Phone className="h-3.5 w-3.5" />
-                    <span>Hotline lễ tân</span>
-                  </a>
+                    {isCreating && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    <span>{isCreating ? 'Đang tạo booking…' : 'Xác nhận đặt phòng'}</span>
+                  </button>
                 )}
               </div>
             </motion.div>

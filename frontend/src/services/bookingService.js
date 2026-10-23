@@ -154,9 +154,48 @@ function sortBookings(list, sort) {
 const ENDPOINTS = {
   customerBookings: '/api/customer/bookings',
   customerBookingDetail: (id) => `/api/customer/bookings/${id}`,
+  customerBookingCancel: (id) => `/api/customer/bookings/${id}/cancel`,
+  customerBookingServices: (id) => `/api/customer/bookings/${id}/services`,
+  bookingPreview: '/api/public/bookings/preview',
+  createBooking: '/api/customer/bookings',
 };
 
+function bookingApiError(error, fallback) {
+  const status = error.response?.status;
+  const serverMessage = error.response?.data?.message;
+  const messages = {
+    401: 'Vui lòng đăng nhập để tiếp tục.',
+    403: 'Tài khoản hiện tại không có quyền thực hiện thao tác này.',
+    404: 'Không tìm thấy thông tin đơn đặt phòng hoặc bạn không có quyền truy cập.',
+    409: 'Phòng vừa được đặt trong khoảng ngày này. Vui lòng chọn ngày hoặc phòng khác.',
+    422: 'Yêu cầu không thể thực hiện. Vui lòng kiểm tra trạng thái đơn đặt phòng.',
+  };
+  const parsed = new Error(serverMessage || messages[status] || fallback);
+  parsed.status = status;
+  parsed.errors = error.response?.data?.errors || null;
+  parsed.isNetworkError = !error.response;
+  return parsed;
+}
+
 export const bookingService = {
+  async previewBooking(payload) {
+    try {
+      const response = await api.post(ENDPOINTS.bookingPreview, payload);
+      return response.data?.data || response.data;
+    } catch (error) {
+      throw bookingApiError(error, 'Không thể kiểm tra giá và tình trạng phòng.');
+    }
+  },
+
+  async createBooking(payload) {
+    try {
+      const response = await api.post(ENDPOINTS.createBooking, payload);
+      return response.data?.data || response.data;
+    } catch (error) {
+      throw bookingApiError(error, 'Không thể hoàn tất đặt phòng. Vui lòng thử lại.');
+    }
+  },
+
   /**
    * Lấy danh sách đơn đặt phòng của khách hàng hiện tại.
    * Tuân thủ Mock Safety & Aggregate Statistics Rules:
@@ -203,17 +242,30 @@ export const bookingService = {
 
     // Khi không bật mock (hoặc trên production) -> Gọi API thật
     try {
+      const statusByTab = {
+        PENDING: 'PENDING',
+        UPCOMING: 'CONFIRMED',
+        CHECKED_IN: 'CHECKED_IN',
+        COMPLETED: 'COMPLETED',
+        CANCELLED: 'CANCELLED',
+        REJECTED: 'REJECTED',
+      };
+      const params = { page, per_page: perPage };
+      if (statusByTab[tab]) params.status = statusByTab[tab];
+
       const response = await api.get(ENDPOINTS.customerBookings, {
-        params: { tab, sort, page, per_page: perPage },
+        params,
       });
 
       const resData = response.data;
       const list = resData?.data || (Array.isArray(resData) ? resData : []);
-      const meta = resData?.meta || {
-        total: list.length,
-        page,
-        per_page: perPage,
-        total_pages: Math.ceil(list.length / perPage) || 1,
+      const apiMeta = resData?.meta || {};
+      const meta = {
+        ...apiMeta,
+        total: apiMeta.total ?? list.length,
+        page: apiMeta.current_page || apiMeta.page || page,
+        per_page: apiMeta.per_page || perPage,
+        total_pages: apiMeta.last_page || apiMeta.total_pages || Math.ceil(list.length / perPage) || 1,
       };
 
       // Chỉ lấy stats tổng hợp khi backend có cung cấp aggregate metadata
@@ -230,16 +282,7 @@ export const bookingService = {
       };
     } catch (err) {
       // Phân loại mã lỗi rõ ràng, không giả mạo thành công hay ngầm tráo mock
-      const status = err.response?.status;
-      const message =
-        status === 404
-          ? 'Dịch vụ Đơn đặt phòng hiện đang được kết nối với hệ thống.'
-          : err.response?.data?.message || 'Không thể tải danh sách đơn đặt phòng. Vui lòng thử lại sau.';
-
-      const parsedError = new Error(message);
-      parsedError.status = status;
-      parsedError.isNetworkError = !err.response;
-      throw parsedError;
+      throw bookingApiError(err, 'Không thể tải danh sách đơn đặt phòng. Vui lòng thử lại sau.');
     }
   },
 
@@ -290,6 +333,24 @@ export const bookingService = {
       const parsedError = new Error(message);
       parsedError.status = status;
       throw parsedError;
+    }
+  },
+
+  async getBookingServices(bookingId) {
+    try {
+      const response = await api.get(ENDPOINTS.customerBookingServices(bookingId));
+      return response.data?.data || [];
+    } catch (error) {
+      throw bookingApiError(error, 'Không thể tải danh sách dịch vụ của đơn đặt phòng.');
+    }
+  },
+
+  async cancelBooking(bookingId) {
+    try {
+      const response = await api.post(ENDPOINTS.customerBookingCancel(bookingId));
+      return response.data?.data || response.data;
+    } catch (error) {
+      throw bookingApiError(error, 'Không thể hủy đơn đặt phòng. Vui lòng thử lại.');
     }
   },
 };

@@ -1,14 +1,5 @@
 import { ChevronDown } from "lucide-react";
 import { useState } from "react";
-import { AMENITIES, PROPERTY_TYPES } from "@/lib/filterConstants";
-
-const RATINGS = [
-  { label: "Tất cả", value: undefined },
-  { label: "3+ ★", value: 3 },
-  { label: "4+ ★", value: 4 },
-  { label: "4.5+ ★", value: 4.5 },
-  { label: "5 ★", value: 5 },
-];
 
 function Section({ title, children, defaultOpen = true }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -55,24 +46,24 @@ export function FilterSidebar({
   availableProperties = [],
 }) {
   const set = (k, v) => onChange({ ...value, [k]: v });
-  const min = value.minPrice ?? 500000;
-  const max = value.maxPrice ?? 15000000;
+  const min = value.minPrice ?? 0;
+  const max = value.maxPrice ?? 20000000;
 
   const selectedAmenities = value.selectedAmenities || [];
-  const selectedPropertyTypes = value.selectedPropertyTypes || [];
+  const amenityOptions = [...new Map(
+    availableProperties.flatMap((room) =>
+      (room.amenities || []).map((name, index) => [
+        room.amenityIds?.[index],
+        { id: room.amenityIds?.[index], label: name },
+      ]),
+    ).filter(([id]) => Number.isInteger(Number(id))),
+  ).values()];
 
   const toggleAmenity = (id) => {
     const next = selectedAmenities.includes(id)
       ? selectedAmenities.filter((x) => x !== id)
       : [...selectedAmenities, id];
     set("selectedAmenities", next);
-  };
-
-  const togglePropertyType = (id) => {
-    const next = selectedPropertyTypes.includes(id)
-      ? selectedPropertyTypes.filter((x) => x !== id)
-      : [...selectedPropertyTypes, id];
-    set("selectedPropertyTypes", next);
   };
 
   const handleApply = () => {
@@ -147,75 +138,24 @@ export function FilterSidebar({
         </div>
       </Section>
 
-      <Section title="Điểm đánh giá">
-        <div className="flex flex-wrap gap-2">
-          {RATINGS.map((r) => {
-            const active = value.minRating === r.value;
-            return (
-              <button
-                key={r.label}
-                type="button"
-                onClick={() => set("minRating", r.value)}
-                className={[
-                  "rounded-full border px-3.5 py-1.5 text-[12px] transition-colors",
-                  active
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-background text-ink hover:border-primary",
-                ].join(" ")}
-              >
-                {r.label}
-              </button>
-            );
-          })}
-        </div>
-      </Section>
-
       <Section title="Tiện nghi">
         <ul className="space-y-2.5">
-          {AMENITIES.map((a) => {
-            const isChecked = selectedAmenities.includes(a.id);
+          {amenityOptions.map((amenity) => {
+            const isChecked = selectedAmenities.includes(amenity.id);
             const count = availableProperties.filter((p) =>
-              p.amenityIds?.includes(a.id)
+              p.amenityIds?.includes(amenity.id)
             ).length;
 
             return (
-              <li key={a.id} className="flex items-center justify-between">
+              <li key={amenity.id} className="flex items-center justify-between">
                 <label className="inline-flex cursor-pointer items-center gap-2 text-[13px] text-ink">
                   <input
                     type="checkbox"
                     checked={isChecked}
-                    onChange={() => toggleAmenity(a.id)}
+                    onChange={() => toggleAmenity(amenity.id)}
                     className="h-4 w-4 rounded border-border accent-[color:var(--primary)]"
                   />
-                  {a.label}
-                </label>
-                <span className="text-[11.5px] text-muted-foreground">
-                  {count > 0 ? count : (availableProperties.length > 0 ? 0 : "-")}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-      </Section>
-
-      <Section title="Loại hình lưu trú">
-        <ul className="space-y-2.5">
-          {PROPERTY_TYPES.map((p) => {
-            const isChecked = selectedPropertyTypes.includes(p.id);
-            const count = availableProperties.filter(
-              (item) => item.propertyType === p.id
-            ).length;
-
-            return (
-              <li key={p.id} className="flex items-center justify-between">
-                <label className="inline-flex cursor-pointer items-center gap-2 text-[13px] text-ink">
-                  <input
-                    type="checkbox"
-                    checked={isChecked}
-                    onChange={() => togglePropertyType(p.id)}
-                    className="h-4 w-4 rounded border-border accent-[color:var(--primary)]"
-                  />
-                  {p.label}
+                  {amenity.label}
                 </label>
                 <span className="text-[11.5px] text-muted-foreground">
                   {count > 0 ? count : (availableProperties.length > 0 ? 0 : "-")}

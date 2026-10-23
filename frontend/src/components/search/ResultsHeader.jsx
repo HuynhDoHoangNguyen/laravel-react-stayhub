@@ -18,7 +18,7 @@ export function ResultsHeader({
     >
       <div>
         <h2 className="font-display text-[26px] leading-tight text-ink md:text-[30px]">
-          {total.toLocaleString("vi-VN")} nơi lưu trú
+          {total.toLocaleString("vi-VN")} phòng phù hợp
           {city ? ` tại ${city}` : ""}
         </h2>
         <p className="mt-1 text-[12.5px] text-muted-foreground">
