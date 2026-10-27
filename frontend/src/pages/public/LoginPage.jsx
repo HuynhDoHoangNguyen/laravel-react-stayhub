@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import logoMark from '@/assets/logo-mark.png';
 import heroAsset from '@/assets/hero.png';
 import { useAuth } from '@/hooks/useAuth';
+import { getAuthDestination } from '@/utils/authNavigation';
 
 /**
  * Trang Đăng nhập chuẩn thương mại Quiet Luxury (StayNest Auth Pattern).
@@ -25,7 +26,7 @@ import { useAuth } from '@/hooks/useAuth';
 export default function LoginPage() {
     const [searchParams, setSearchParams] = useSearchParams();
     const navigate = useNavigate();
-    const { login, isAuthenticated, user, loading: authChecking } = useAuth();
+    const { login, isAuthenticated, user, loading: authChecking, authError: sessionError } = useAuth();
 
     // Lấy ngữ cảnh vai trò ban đầu từ URL (?role=host hoặc ?role=customer)
     const roleParam = searchParams.get('role');
@@ -39,6 +40,18 @@ export default function LoginPage() {
     const [showPassword, setShowPassword] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [authError, setAuthError] = useState(null);
+    const [fieldErrors, setFieldErrors] = useState({});
+    const [retryAfter, setRetryAfter] = useState(0);
+    const submitLock = useRef(false);
+    const emailInput = useRef(null);
+    const passwordInput = useRef(null);
+    const isRateLimited = retryAfter > 0;
+
+    useEffect(() => {
+        if (!isRateLimited) return;
+        const timer = setInterval(() => setRetryAfter((seconds) => Math.max(0, seconds - 1)), 1000);
+        return () => clearInterval(timer);
+    }, [isRateLimited]);
 
     const isHostContext = selectedRole === 'HOST';
 
@@ -56,25 +69,10 @@ export default function LoginPage() {
 
     // Nếu đã đăng nhập, tự động chuyển hướng theo vai trò thật
     useEffect(() => {
-        if (!authChecking && isAuthenticated && user) {
-            const safeReturn = returnToParam && returnToParam.startsWith('/') && !returnToParam.startsWith('//') && !returnToParam.includes('/login')
-                ? returnToParam
-                : null;
-
-            if (safeReturn) {
-                navigate(safeReturn, { replace: true });
-                return;
-            }
-
-            if (user.role === 'HOST') {
-                navigate('/host', { replace: true });
-            } else if (user.role === 'ADMIN') {
-                navigate('/admin', { replace: true });
-            } else {
-                navigate('/customer', { replace: true });
-            }
+        if (!authChecking && !sessionError && isAuthenticated && user) {
+            navigate(getAuthDestination(user.role, returnToParam), { replace: true });
         }
-    }, [authChecking, isAuthenticated, user, navigate, returnToParam]);
+    }, [authChecking, sessionError, isAuthenticated, user, navigate, returnToParam]);
 
     const handleRoleChange = (role) => {
         setSelectedRole(role);
@@ -88,47 +86,45 @@ export default function LoginPage() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (submitLock.current || isRateLimited || isSignupMode || authChecking) return;
         setAuthError(null);
-
-        if (!email.trim()) {
-            setAuthError('Vui lòng nhập địa chỉ email.');
+        const errors = {};
+        if (!email.trim()) errors.email = ['Vui lòng nhập địa chỉ email.'];
+        if (!password) errors.password = ['Vui lòng nhập mật khẩu.'];
+        setFieldErrors(errors);
+        if (Object.keys(errors).length) {
+            (errors.email ? emailInput : passwordInput).current?.focus();
             return;
         }
 
-        if (!password) {
-            setAuthError('Vui lòng nhập mật khẩu.');
-            return;
-        }
-
+        submitLock.current = true;
         setSubmitting(true);
         try {
             const loggedInUser = await login({ email: email.trim(), password });
-
-            const safeReturn = returnToParam && returnToParam.startsWith('/') && !returnToParam.startsWith('//') && !returnToParam.includes('/login')
-                ? returnToParam
-                : null;
+            if (!loggedInUser) return;
 
             // Xử lý thông báo và điều hướng theo vai trò thực tế từ Backend
             if (loggedInUser.role === 'HOST') {
                 toast.success(`Chào mừng Đối tác ${loggedInUser.name}`);
-                navigate(safeReturn || '/host', { replace: true });
             } else if (loggedInUser.role === 'ADMIN') {
                 toast.success(`Chào mừng Quản trị viên ${loggedInUser.name}`);
-                navigate(safeReturn || '/admin', { replace: true });
             } else {
                 if (isHostContext) {
                     toast.info(`Tài khoản của bạn là Khách hàng. Đang chuyển tới Khu vực Khách hàng...`);
                 } else {
                     toast.success(`Chào mừng ${loggedInUser.name} trở lại StayHub`);
                 }
-                navigate(safeReturn || '/customer', { replace: true });
             }
+            navigate(getAuthDestination(loggedInUser.role, returnToParam), { replace: true });
         } catch (err) {
-            const msg = err.response?.data?.errors?.email?.[0]
-                || err.response?.data?.message
-                || 'Email hoặc mật khẩu không chính xác. Vui lòng thử lại.';
-            setAuthError(msg);
+            setAuthError(err.message);
+            setFieldErrors(err.fields || {});
+            if (err.retryAfter) setRetryAfter(err.retryAfter);
+            if (err.fields?.email) emailInput.current?.focus();
+            else if (err.fields?.password) passwordInput.current?.focus();
         } finally {
+            setPassword('');
+            submitLock.current = false;
             setSubmitting(false);
         }
     };
@@ -295,7 +291,7 @@ export default function LoginPage() {
 
                         {/* Error Alert Box */}
                         {authError && (
-                            <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs font-medium text-destructive">
+                            <div role="alert" className="mt-4 flex items-start gap-2.5 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs font-medium text-destructive">
                                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                                 <span>{authError}</span>
                             </div>
@@ -304,13 +300,20 @@ export default function LoginPage() {
                         {/* Form */}
                         <form onSubmit={handleSubmit} className="mt-5 space-y-4" noValidate>
                             <div>
-                                <label className="block text-xs font-semibold text-ink">
+                                <label htmlFor="login-email" className="block text-xs font-semibold text-ink">
                                     Địa chỉ Email
                                 </label>
                                 <div className="group relative mt-1.5 flex h-11 items-center rounded-xl border border-border/80 bg-background transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
                                     <Mail className="absolute left-3.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
                                     <input
+                                        id="login-email"
+                                        ref={emailInput}
+                                        name="email"
                                         type="email"
+                                        required
+                                        disabled={submitting}
+                                        aria-invalid={!!fieldErrors.email}
+                                        aria-describedby={fieldErrors.email ? 'login-email-error' : undefined}
                                         autoComplete="email"
                                         placeholder={isHostContext ? 'host@stayhub.com' : 'khachhang@stayhub.com'}
                                         value={email}
@@ -318,16 +321,24 @@ export default function LoginPage() {
                                         className="h-full w-full bg-transparent pl-10 pr-4 text-xs font-medium text-ink placeholder:text-muted-foreground/60 focus:outline-none"
                                     />
                                 </div>
+                                {fieldErrors.email && <p id="login-email-error" className="mt-1 text-xs text-destructive">{fieldErrors.email[0]}</p>}
                             </div>
 
                             <div>
-                                <label className="block text-xs font-semibold text-ink">
+                                <label htmlFor="login-password" className="block text-xs font-semibold text-ink">
                                     Mật khẩu
                                 </label>
                                 <div className="group relative mt-1.5 flex h-11 items-center rounded-xl border border-border/80 bg-background transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
                                     <Lock className="absolute left-3.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
                                     <input
+                                        id="login-password"
+                                        ref={passwordInput}
+                                        name="password"
                                         type={showPassword ? 'text' : 'password'}
+                                        required
+                                        disabled={submitting}
+                                        aria-invalid={!!fieldErrors.password}
+                                        aria-describedby={fieldErrors.password ? 'login-password-error' : undefined}
                                         autoComplete="current-password"
                                         placeholder="Nhập mật khẩu"
                                         value={password}
@@ -343,11 +354,12 @@ export default function LoginPage() {
                                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                     </button>
                                 </div>
+                                {fieldErrors.password && <p id="login-password-error" className="mt-1 text-xs text-destructive">{fieldErrors.password[0]}</p>}
                             </div>
 
                             <button
                                 type="submit"
-                                disabled={submitting}
+                                disabled={submitting || isRateLimited || authChecking || isSignupMode}
                                 className="mt-2 inline-flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary text-xs font-semibold text-primary-foreground shadow-xs transition-all hover:bg-primary-mid disabled:cursor-not-allowed disabled:opacity-70"
                             >
                                 {submitting ? (
@@ -356,7 +368,7 @@ export default function LoginPage() {
                                         <span>Đang xác thực...</span>
                                     </>
                                 ) : (
-                                    <span>{isHostContext ? 'Đăng nhập Đối tác' : 'Đăng nhập Khách hàng'}</span>
+                                    <span>{isSignupMode ? 'Đăng ký chưa khả dụng' : isRateLimited ? `Thử lại sau ${retryAfter} giây` : isHostContext ? 'Đăng nhập Đối tác' : 'Đăng nhập Khách hàng'}</span>
                                 )}
                             </button>
 

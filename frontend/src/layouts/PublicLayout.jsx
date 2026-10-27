@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/sheet";
 
 export default function PublicLayout() {
-  const { user, loading, isAuthenticated, logout } = useAuth();
+  const { user, loading, isAuthenticated, logout, isLoggingOut } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const isHomePage = location.pathname === "/";
@@ -241,6 +241,7 @@ export default function PublicLayout() {
                     ) : (
                       <button
                         type="button"
+                        disabled={isLoggingOut}
                         onClick={() => {
                           setMobileOpen(false);
                           logout();

@@ -16,7 +16,7 @@ Route::get('/public/properties/{property}/reviews', [PublicReviewController::cla
     ->name('public.properties.reviews.index');
 
 // Authenticated Reviews (Customer & Host)
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
     // Customer Reviews
     Route::post('/customer/bookings/{booking}/review', [CustomerReviewController::class, 'store'])
         ->name('customer.bookings.review.store');

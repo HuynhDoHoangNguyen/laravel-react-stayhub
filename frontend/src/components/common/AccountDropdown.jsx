@@ -52,8 +52,7 @@ export default function AccountDropdown({ triggerClassName, align = 'end' }) {
 
     const handleLogout = async () => {
         setOpen(false);
-        await logout();
-        navigate('/');
+        if (await logout()) navigate('/');
     };
 
     return (
