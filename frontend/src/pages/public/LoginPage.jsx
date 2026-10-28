@@ -8,6 +8,7 @@ import {
     EyeOff,
     User,
     Building2,
+    ShieldCheck,
     AlertCircle,
     Loader2,
     ArrowLeft,
@@ -19,22 +20,28 @@ import heroAsset from '@/assets/hero.png';
 import { useAuth } from '@/hooks/useAuth';
 import { getAuthDestination } from '@/utils/authNavigation';
 
+const LOGIN_ROLES = [
+    { value: 'CUSTOMER', param: 'customer', label: 'Khách hàng', icon: User },
+    { value: 'HOST', param: 'host', label: 'Đối tác', icon: Building2 },
+    { value: 'ADMIN', param: 'admin', label: 'Quản trị viên', icon: ShieldCheck },
+];
+
 /**
  * Trang Đăng nhập chuẩn thương mại Quiet Luxury (StayNest Auth Pattern).
- * Hỗ trợ chuyển đổi nhanh ngữ cảnh đăng nhập Khách hàng và Đối tác lưu trú (Host).
+ * Chọn khu vực đăng nhập Khách hàng, Đối tác hoặc Quản trị viên.
  */
 export default function LoginPage() {
     const [searchParams, setSearchParams] = useSearchParams();
     const navigate = useNavigate();
     const { login, isAuthenticated, user, loading: authChecking, authError: sessionError } = useAuth();
 
-    // Lấy ngữ cảnh vai trò ban đầu từ URL (?role=host hoặc ?role=customer)
+    // The backend verifies this requested context against the authenticated user's actual role.
     const roleParam = searchParams.get('role');
     const returnToParam = searchParams.get('returnTo');
     const modeParam = searchParams.get('mode');
-    const isSignupMode = modeParam === 'signup';
-
-    const [selectedRole, setSelectedRole] = useState(roleParam === 'host' ? 'HOST' : 'CUSTOMER');
+    const selectedRole = roleParam === 'admin' ? 'ADMIN' : roleParam === 'host' ? 'HOST' : 'CUSTOMER';
+    const isAdminContext = selectedRole === 'ADMIN';
+    const isSignupMode = modeParam === 'signup' && !isAdminContext;
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -54,6 +61,7 @@ export default function LoginPage() {
     }, [isRateLimited]);
 
     const isHostContext = selectedRole === 'HOST';
+    const contextLabel = isAdminContext ? 'Quản trị viên' : isHostContext ? 'Đối tác' : 'Khách hàng';
 
     const handleModeChange = (mode) => {
         setSearchParams((prev) => {
@@ -75,11 +83,14 @@ export default function LoginPage() {
     }, [authChecking, sessionError, isAuthenticated, user, navigate, returnToParam]);
 
     const handleRoleChange = (role) => {
-        setSelectedRole(role);
+        const context = LOGIN_ROLES.find((option) => option.value === role);
+        if (!context) return;
         setAuthError(null);
+        setFieldErrors({});
         setSearchParams((prev) => {
             const next = new URLSearchParams(prev);
-            next.set('role', role === 'HOST' ? 'host' : 'customer');
+            next.set('role', context.param);
+            if (role === 'ADMIN') next.delete('mode');
             return next;
         }, { replace: true });
     };
@@ -100,7 +111,7 @@ export default function LoginPage() {
         submitLock.current = true;
         setSubmitting(true);
         try {
-            const loggedInUser = await login({ email: email.trim(), password });
+            const loggedInUser = await login({ email: email.trim(), password, expectedRole: selectedRole });
             if (!loggedInUser) return;
 
             // Xử lý thông báo và điều hướng theo vai trò thực tế từ Backend
@@ -109,11 +120,7 @@ export default function LoginPage() {
             } else if (loggedInUser.role === 'ADMIN') {
                 toast.success(`Chào mừng Quản trị viên ${loggedInUser.name}`);
             } else {
-                if (isHostContext) {
-                    toast.info(`Tài khoản của bạn là Khách hàng. Đang chuyển tới Khu vực Khách hàng...`);
-                } else {
-                    toast.success(`Chào mừng ${loggedInUser.name} trở lại StayHub`);
-                }
+                toast.success(`Chào mừng ${loggedInUser.name} trở lại StayHub`);
             }
             navigate(getAuthDestination(loggedInUser.role, returnToParam), { replace: true });
         } catch (err) {
@@ -201,7 +208,7 @@ export default function LoginPage() {
                             <span>Về trang chủ</span>
                         </Link>
 
-                        <div className="flex items-center gap-2 text-xs">
+                        {!isAdminContext && <div className="flex items-center gap-2 text-xs">
                             <span className="hidden text-muted-foreground sm:inline">
                                 {isSignupMode ? 'Đã có tài khoản?' : 'Chưa có tài khoản?'}
                             </span>
@@ -212,20 +219,18 @@ export default function LoginPage() {
                             >
                                 {isSignupMode ? 'Đăng nhập' : 'Đăng ký'}
                             </button>
-                        </div>
+                        </div>}
                     </div>
 
                     {/* Form Container */}
                     <div className="mx-auto my-auto w-full max-w-[380px] py-6 text-left">
                         <h1 className="font-display text-3xl font-bold tracking-tight text-primary sm:text-4xl">
-                            {isSignupMode
-                                ? (isHostContext ? 'Đăng ký Đối tác' : 'Đăng ký Khách hàng')
-                                : (isHostContext ? 'Đăng nhập Đối tác' : 'Đăng nhập Khách hàng')}
+                            {isSignupMode ? `Đăng ký ${contextLabel}` : `Đăng nhập ${contextLabel}`}
                         </h1>
                         <p className="mt-1.5 text-xs text-muted-foreground">
                             {isSignupMode
                                 ? 'Trở thành thành viên để tận hưởng trọn vẹn đặc quyền lưu trú tại StayHub.'
-                                : (isHostContext
+                                : isAdminContext ? 'Dành cho quản trị viên hệ thống StayHub.' : (isHostContext
                                     ? 'Dành cho đối tác quản lý cơ sở lưu trú và hóa đơn phòng.'
                                     : 'Dành cho khách hàng đặt phòng và theo dõi kỳ nghỉ.')}
                         </p>
@@ -250,43 +255,23 @@ export default function LoginPage() {
                             </div>
                         )}
 
-                        {/* StayNest RoleToggle */}
-                        <div className="mt-6">
-                            <div
-                                role="group"
-                                aria-label="Ngữ cảnh đăng nhập"
-                                className="relative flex h-[46px] w-full items-center rounded-2xl border border-border/70 bg-surface/60 p-1"
-                            >
-                                <span
-                                    aria-hidden
-                                    className={`absolute bottom-1 top-1 w-[calc(50%-4px)] rounded-xl bg-primary shadow-xs transition-transform duration-300 ease-out ${
-                                        isHostContext ? 'translate-x-[calc(100%+0px)]' : 'translate-x-0'
-                                    }`}
-                                    style={{ left: 4 }}
-                                />
-
-                                <button
-                                    type="button"
-                                    onClick={() => handleRoleChange('CUSTOMER')}
-                                    className={`relative z-10 flex h-full flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl text-xs font-semibold transition-colors duration-200 ${
-                                        !isHostContext ? 'text-primary-foreground' : 'text-ink/70 hover:text-ink'
-                                    }`}
-                                >
-                                    <User className="h-4 w-4" />
-                                    <span>Khách hàng</span>
+                        {/* Login context selector */}
+                        <div className="mt-6 grid grid-cols-3 gap-1 rounded-2xl border border-border/70 bg-surface/60 p-1"
+                            role="group" aria-label="Khu vực đăng nhập">
+                            {LOGIN_ROLES.map(({ value, label, icon: Icon }) => (
+                                <button key={value} type="button"
+                                    disabled={submitting || authChecking}
+                                    aria-pressed={selectedRole === value}
+                                    onClick={() => handleRoleChange(value)}
+                                    className={`flex min-w-0 items-center justify-center gap-1 rounded-xl px-1 py-2.5 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 sm:gap-1.5 sm:px-2 sm:text-xs ${
+                                        selectedRole === value
+                                            ? 'bg-primary text-primary-foreground shadow-xs'
+                                            : 'text-ink/70 hover:bg-primary/5 hover:text-ink'
+                                    }`}>
+                                    <Icon className="hidden h-3.5 w-3.5 shrink-0 sm:block" aria-hidden />
+                                    <span className="leading-tight">{label}</span>
                                 </button>
-
-                                <button
-                                    type="button"
-                                    onClick={() => handleRoleChange('HOST')}
-                                    className={`relative z-10 flex h-full flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl text-xs font-semibold transition-colors duration-200 ${
-                                        isHostContext ? 'text-primary-foreground' : 'text-ink/70 hover:text-ink'
-                                    }`}
-                                >
-                                    <Building2 className="h-4 w-4" />
-                                    <span>Đối tác (Host)</span>
-                                </button>
-                            </div>
+                            ))}
                         </div>
 
                         {/* Error Alert Box */}
@@ -315,7 +300,7 @@ export default function LoginPage() {
                                         aria-invalid={!!fieldErrors.email}
                                         aria-describedby={fieldErrors.email ? 'login-email-error' : undefined}
                                         autoComplete="email"
-                                        placeholder={isHostContext ? 'host@stayhub.com' : 'khachhang@stayhub.com'}
+                                        placeholder={isAdminContext ? 'admin@stayhub.com' : isHostContext ? 'host@stayhub.com' : 'khachhang@stayhub.com'}
                                         value={email}
                                         onChange={(e) => setEmail(e.target.value)}
                                         className="h-full w-full bg-transparent pl-10 pr-4 text-xs font-medium text-ink placeholder:text-muted-foreground/60 focus:outline-none"
@@ -368,12 +353,12 @@ export default function LoginPage() {
                                         <span>Đang xác thực...</span>
                                     </>
                                 ) : (
-                                    <span>{isSignupMode ? 'Đăng ký chưa khả dụng' : isRateLimited ? `Thử lại sau ${retryAfter} giây` : isHostContext ? 'Đăng nhập Đối tác' : 'Đăng nhập Khách hàng'}</span>
+                                    <span>{isSignupMode ? 'Đăng ký chưa khả dụng' : isRateLimited ? `Thử lại sau ${retryAfter} giây` : `Đăng nhập ${contextLabel}`}</span>
                                 )}
                             </button>
 
                             {/* Mode Toggle Link below submit */}
-                            <div className="mt-4 text-center text-xs text-muted-foreground">
+                            {!isAdminContext && <div className="mt-4 text-center text-xs text-muted-foreground">
                                 {isSignupMode ? (
                                     <p>
                                         Đã có tài khoản?{' '}
@@ -397,7 +382,7 @@ export default function LoginPage() {
                                         </button>
                                     </p>
                                 )}
-                            </div>
+                            </div>}
                         </form>
                     </div>
 

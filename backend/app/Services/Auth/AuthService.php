@@ -2,6 +2,7 @@
 
 namespace App\Services\Auth;
 
+use App\Enums\UserRole;
 use App\Enums\UserStatus;
 use App\Models\User;
 use Illuminate\Contracts\Session\Session;
@@ -17,7 +18,7 @@ class AuthService
     private const MAX_FAILURES = 5;
     private const DECAY_SECONDS = 60;
 
-    /** @param array{email: string, password: string} $credentials */
+    /** @param array{email: string, password: string, expected_role?: string} $credentials */
     public function login(array $credentials, string $ip, Session $session): User
     {
         // Hash the identifier so the cache key does not contain an email or IP.
@@ -31,12 +32,21 @@ class AuthService
             ], 429, ['Retry-After' => (string) $retryAfter]));
         }
 
+        // Login context can restrict access; it never grants or changes a user's role.
+        $expectedRole = isset($credentials['expected_role']) ? UserRole::from($credentials['expected_role']) : null;
+        unset($credentials['expected_role']);
         $rejectedStatus = null;
+        $roleMismatch = false;
         $guard = Auth::guard('web');
-        $authenticated = $guard->attemptWhen($credentials, function (User $user) use (&$rejectedStatus): bool {
+        $authenticated = $guard->attemptWhen($credentials, function (User $user) use (&$rejectedStatus, &$roleMismatch, $expectedRole): bool {
             // Laravel only invokes this callback after verifying the password.
             if ($user->status !== UserStatus::ACTIVE) {
                 $rejectedStatus = $user->status;
+                return false;
+            }
+
+            if ($expectedRole !== null && $user->role !== $expectedRole) {
+                $roleMismatch = true;
                 return false;
             }
 
@@ -49,6 +59,18 @@ class AuthService
             if ($rejectedStatus !== null) {
                 $this->logout($session);
                 throw new AccountStatusException($rejectedStatus);
+            }
+
+            if ($roleMismatch) {
+                $this->logout($session);
+                $area = match ($expectedRole) {
+                    UserRole::CUSTOMER => 'Khách hàng',
+                    UserRole::HOST => 'Đối tác (Host)',
+                    UserRole::ADMIN => 'Quản trị viên',
+                };
+                throw ValidationException::withMessages([
+                    'email' => ["Tài khoản này không thuộc khu vực {$area}. Vui lòng chọn đúng khu vực đăng nhập."],
+                ]);
             }
 
             throw ValidationException::withMessages([

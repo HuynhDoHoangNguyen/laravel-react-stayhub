@@ -4,10 +4,12 @@ import { normalizeAuthError, subscribeToAuthFailures } from './authSession';
 const options = { timeout: 10000 };
 
 export const authService = {
-    async login({ email, password }) {
+    async login({ email, password, expectedRole }) {
         try {
             await api.get('/sanctum/csrf-cookie', options);
-            const response = await api.post('/login', { email: email.trim(), password }, options);
+            const payload = { email: email.trim(), password };
+            if (expectedRole !== undefined) payload.expected_role = expectedRole;
+            const response = await api.post('/login', payload, options);
             return response.data.user;
         } catch (error) {
             throw normalizeAuthError(error);

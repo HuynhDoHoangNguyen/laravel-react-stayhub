@@ -312,6 +312,93 @@ class AuthenticationTest extends TestCase
         $this->browser('GET', '/api/me')->assertForbidden()->assertJsonPath('code', 'ACCOUNT_BLOCKED');
     }
 
+    #[DataProvider('roles')]
+    public function test_matching_login_context_creates_a_session_for_the_actual_role(string $role): void
+    {
+        $user = $this->user(UserRole::from($role));
+        $this->login($user, ['expected_role' => $role])->assertOk()->assertJsonPath('user.role', $role);
+        $this->browser('GET', '/api/me')->assertOk()->assertJsonPath('user.id', $user->id);
+    }
+
+    public static function mismatchedRoles(): array
+    {
+        return [
+            ['HOST', 'CUSTOMER', 'Khách hàng'],
+            ['CUSTOMER', 'HOST', 'Đối tác (Host)'],
+            ['ADMIN', 'CUSTOMER', 'Khách hàng'],
+            ['ADMIN', 'HOST', 'Đối tác (Host)'],
+            ['HOST', 'ADMIN', 'Quản trị viên'],
+            ['CUSTOMER', 'ADMIN', 'Quản trị viên'],
+        ];
+    }
+
+    #[DataProvider('mismatchedRoles')]
+    public function test_wrong_login_context_never_creates_a_session_or_changes_the_role(string $actualRole, string $expectedRole, string $area): void
+    {
+        $user = $this->user(UserRole::from($actualRole));
+        $this->login($user, ['expected_role' => $expectedRole, 'role' => $expectedRole])
+            ->assertUnprocessable()->assertJsonValidationErrors('email')
+            ->assertJsonPath('errors.email.0', "Tài khoản này không thuộc khu vực {$area}. Vui lòng chọn đúng khu vực đăng nhập.")
+            ->assertJsonMissingPath('user');
+        $this->browser('GET', '/api/me')->assertUnauthorized();
+        $this->assertSame($actualRole, $user->fresh()->role->value);
+    }
+
+    public function test_wrong_password_does_not_reveal_role_mismatch(): void
+    {
+        $user = $this->user(UserRole::HOST);
+        $wrong = $this->login($user, ['password' => 'wrong', 'expected_role' => 'CUSTOMER'])
+            ->assertUnprocessable()->assertJsonPath('errors.email.0', 'Email hoặc mật khẩu không chính xác.');
+        $unknown = $this->browser('POST', '/login', [
+            'email' => 'unknown@example.test', 'password' => 'wrong', 'expected_role' => 'CUSTOMER',
+        ])->assertUnprocessable();
+        $this->assertSame($wrong->json(), $unknown->json());
+    }
+
+    public function test_role_mismatch_clears_any_previously_authenticated_session(): void
+    {
+        $user = $this->user(UserRole::HOST);
+        $this->login($user, ['expected_role' => 'HOST'])->assertOk();
+        $this->login($user, ['expected_role' => 'CUSTOMER'])->assertUnprocessable();
+        $this->browser('GET', '/api/me')->assertUnauthorized();
+    }
+
+    public static function invalidContexts(): array
+    {
+        return [['ROOT'], [''], [null], [['HOST']]];
+    }
+
+    #[DataProvider('invalidContexts')]
+    public function test_invalid_login_context_is_rejected_before_authentication(mixed $context): void
+    {
+        $response = $this->login($this->user(), ['expected_role' => $context])
+            ->assertUnprocessable()->assertJsonValidationErrors('expected_role');
+        if ($context === 'ROOT') {
+            $response->assertJsonPath('errors.expected_role.0', 'Khu vực đăng nhập không hợp lệ.');
+        }
+        $this->browser('GET', '/api/me')->assertUnauthorized();
+    }
+
+    public function test_switching_login_context_does_not_bypass_the_failed_login_limit(): void
+    {
+        $this->freezeTime();
+        $user = $this->user(UserRole::HOST);
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $this->login($user, ['expected_role' => 'CUSTOMER'])->assertUnprocessable();
+        }
+        $this->login($user, ['expected_role' => 'HOST'])->assertStatus(429)->assertHeader('Retry-After');
+        $this->travel(61)->seconds();
+        $this->login($user, ['expected_role' => 'HOST'])->assertOk();
+    }
+
+    #[DataProvider('rejectedStatuses')]
+    public function test_account_status_denial_is_preserved_even_in_a_different_login_context(string $status, string $code): void
+    {
+        $user = $this->user(UserRole::HOST, UserStatus::from($status));
+        $this->login($user, ['expected_role' => 'CUSTOMER'])->assertForbidden()->assertJsonPath('code', $code);
+        $this->browser('GET', '/api/me')->assertUnauthorized();
+    }
+
     public function test_every_existing_protected_route_checks_account_status_after_auth(): void
     {
         $protected = 0;

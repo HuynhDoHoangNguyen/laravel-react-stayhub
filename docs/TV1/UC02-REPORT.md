@@ -1,5 +1,7 @@
 # StayHub TV1 — UC2: Đăng nhập / Đăng xuất
 
+> Các mục 1–8 ghi nhận lần triển khai UC2 ban đầu. Mục 9 bổ sung đăng nhập đúng chế độ; mục 10 bổ sung nút Quản trị viên trên giao diện theo yêu cầu tiếp theo của người dùng.
+
 ## 1. Kết quả và snapshot
 
 **Đã hoàn thành implementation backend/frontend UC2 và kiểm thử tự động khả thi. Chưa nghiệm thu end-to-end bằng trình duyệt.** Không triển khai register, profile mutation, account-status mutation UC42 hoặc UC khác.
@@ -242,3 +244,88 @@ Add session/status/rate-limit tests and document remaining browser verification.
 ```
 
 Dừng sau báo cáo; nhiệm vụ tiếp theo chỉ bắt đầu khi developer giao prompt riêng.
+
+## 9. Bổ sung: kiểm tra vai trò theo chế độ đăng nhập
+
+### 9.1 Yêu cầu và phạm vi
+
+Ngày 28/10/2026, người dùng đã kiểm thử bằng trình duyệt và yêu cầu: chọn Khách hàng chỉ nhận CUSTOMER; chọn Đối tác chỉ nhận HOST, nhập tài khoản khác loại phải báo lỗi. Đã xác nhận yêu cầu này trước khi sửa. Đây là cập nhật quyết định UI/nghiệp vụ UC2, thay cho việc chỉ dùng role toggle làm ngữ cảnh giao diện ở lần triển khai ban đầu.
+
+Branch `feature/tv1-uc02-auth`, HEAD nền mới `82d30b4f77fbff2af2dd3a994a102101de5296b4`; working tree sạch trước lượt sửa. Đã đọc lại AGENTS và đối chiếu code/tài liệu auth, trình bày contract và mini plan trước khi thực hiện theo quyền tiếp tục UC2 đã có. Không tạo/chuyển branch hoặc commit.
+
+Chỉ sửa 6 file:
+
+- `backend/app/Http/Requests/Auth/LoginRequest.php`.
+- `backend/app/Services/Auth/AuthService.php`.
+- `backend/tests/Feature/Auth/AuthenticationTest.php`.
+- `frontend/src/services/authService.js`.
+- `frontend/src/pages/public/LoginPage.jsx`.
+- `docs/TV1/UC02-REPORT.md`.
+
+Không chạy migration/seeder, sửa dữ liệu MySQL, `.env`, enum/schema hoặc logic Invoice/Review.
+
+### 9.2 Contract cập nhật
+
+Frontend gửi `expected_role` trong POST `/login`, lấy từ chế độ của form:
+
+| Chế độ / URL | `expected_role` | Tài khoản được đăng nhập |
+| --- | --- | --- |
+| Khách hàng: `/login` hoặc `/login?role=customer` | CUSTOMER | Chỉ CUSTOMER ACTIVE |
+| Đối tác: `/login?role=host` | HOST | Chỉ HOST ACTIVE |
+| Quản trị: `/login?role=admin` | ADMIN | Chỉ ADMIN ACTIVE |
+
+`LoginRequest` kiểm tra giá trị theo `UserRole` hiện có, từ chối rỗng/null/kiểu dữ liệu sai/giá trị lạ với 422 `errors.expected_role` tiếng Việt. Trường này là điều kiện so khớp, **không phải quyền được cấp**; raw `role/status/id` từ client vẫn không thay đổi dữ liệu tài khoản.
+
+AuthService bỏ `expected_role` khỏi credential query trước khi gọi SessionGuard. Sau khi mật khẩu hợp lệ, kiểm tra ACTIVE như trước, rồi mới so vai trò thật với vai trò yêu cầu. Sai mật khẩu vẫn trả lỗi chung; không tiết lộ role mismatch trước khi xác minh mật khẩu. BLOCKED/INACTIVE vẫn ưu tiên account code 403 như contract ban đầu.
+
+Nếu credential đúng nhưng sai chế độ: 422, `errors.email[0]` là “Tài khoản này không thuộc khu vực … Vui lòng chọn đúng khu vực đăng nhập.” Không tạo phiên mới và dọn phiên web cũ nếu có; request `/api/me` sau đó là 401. Lần sai chế độ tính vào limiter email+IP hiện hành; đổi chế độ không xóa/bỏ qua giới hạn 5 lần/60 giây.
+
+Giữ `expected_role` tùy chọn cho callers API/dev portal cũ không gửi ngữ cảnh; các caller đó vẫn đăng nhập theo role thật của tài khoản và chịu các kiểm tra ACTIVE/role/ownership hiện hành. Form production luôn gửi chế độ đã chọn. Endpoint/response success `{message,user}` và các protected routes không đổi.
+
+Frontend lấy chế độ trực tiếp từ URL để không giữ nhầm state khi chuyển giữa các ngữ cảnh; khóa role toggle trong lúc gửi, xóa lỗi cũ khi đổi chế độ và hiển thị lỗi mismatch tại ô email. Role và destination sau success vẫn từ user do server trả. Form Admin dùng query `role=admin` trên LoginPage hiện có, không hiện signup/toggle Customer/Host. Truy cập `/admin` khi guest vẫn qua ProtectedRoute tới ngữ cảnh Admin này; không thêm route hoặc endpoint mới.
+
+### 9.3 Kiểm chứng bổ sung
+
+Môi trường test được cố định như mục 6: APP_ENV testing, SQLite `:memory:`, DB_URL rỗng, cache/session array, không config cache. Guard an toàn chạy trước RefreshDatabase. Tài khoản/trạng thái chỉ được tạo trong fixture SQLite, không sử dụng dữ liệu demo/live để chạy test.
+
+| Command | Exit code | Kết quả lượt bổ sung |
+| --- | --- | --- |
+| `php artisan test --filter=AuthenticationTest --compact --no-ansi` | 0 | 49 cases / 292 assertions trước lần bổ sung assertion thông báo validation tiếng Việt cuối cùng |
+| `php artisan test --compact --no-ansi` | 0 | **216 tests / 957 assertions PASS**, 31.27 giây, bao gồm assertion tiếng Việt cuối cùng |
+| `node --test tests/auth.test.js` ngoài sandbox | 0 | **11 tests PASS**, kiểm tra hồi quy frontend helpers/interceptors |
+| `npm.cmd run lint` | 0 | **0 errors / 3 warnings** nền tại UI badge/button/sidebar |
+| `npm.cmd run build` ngoài sandbox | 0 | **PASS**, 3303 modules; JS 1,056.41 kB (gzip 295.12 kB), cảnh báo chunk lớn có sẵn |
+| `git diff --check` | 0 | Không có whitespace error; Git có thông báo chuyển LF → CRLF theo cấu hình working copy |
+
+Build trong sandbox gặp `spawn EPERM`; chạy lại ngoài sandbox với quyền được cấp thành công, không sửa dependencies/config để né lỗi. Test backend mới bao phủ 3 role đúng ngữ cảnh, 6 tổ hợp sai ngữ cảnh, không tạo session/không sửa role, không lộ mismatch khi password sai, hủy phiên cũ, validation context, limiter khi đổi context và giữ account-status denial. Tổng Auth suite tăng từ 31 lên **49 cases**; toàn bộ regression Invoice/Review vẫn PASS.
+
+Chưa có browser tool để tự xác nhận giao diện/cookie bằng trình duyệt trong lượt bổ sung. Người dùng đã báo thử được luồng cũ; việc đó chưa được coi là nghiệm thu hành vi mới. Không gọi Node helper tests là React DOM/E2E tests.
+
+### 9.4 Thử tay sau cập nhật
+
+1. Đăng xuất phiên hiện tại, tải lại trang login. Nếu đã có session hợp lệ, LoginPage vẫn đưa về dashboard của tài khoản đang đăng nhập; cần logout trước khi thử một lần đăng nhập mới.
+2. Chọn Khách hàng, nhập tài khoản Host ACTIVE: phải thấy lỗi khu vực Khách hàng ở ô email và vẫn ở form login.
+3. Chọn Host, nhập tài khoản Customer ACTIVE: phải thấy lỗi khu vực Đối tác, không vào dashboard.
+4. Chọn đúng chế độ/tài khoản: đăng nhập thành công; thử với mật khẩu sai phải nhận lỗi credential chung.
+5. Dùng `/login?role=admin` với tài khoản Admin; tài khoản Admin không đăng nhập qua form Customer/Host.
+6. Nếu vừa thử sai nhiều lần, chờ hết Retry-After trước khi thử tiếp. Không cần seed hoặc migrate lại database.
+
+Đề xuất commit cho developer tự dùng: `fix(auth): enforce selected login context`. Dừng sau cập nhật UC2, không làm UC khác.
+
+## 10. Bổ sung nút Quản trị viên trên form login
+
+Ngày 28/10/2026, theo yêu cầu người dùng, thêm nút **Quản trị viên** ngay cạnh Khách hàng và Đối tác. Cả ba nút xuất hiện ở mọi chế độ, có trạng thái được chọn và `aria-pressed`; dùng grid ba cột, ẩn icon trên màn hình nhỏ để dành chỗ cho nhãn. Trong lúc xác thực, các nút bị khóa như trước.
+
+Nút Quản trị viên cập nhật query `role=admin`, hiển thị form Admin và gửi `expected_role=ADMIN` qua luồng auth đã có. Chuyển từ signup notice sang Admin sẽ bỏ `mode=signup`. Có thể bấm hai nút còn lại để quay về Customer/Host; lỗi field cũ được xóa khi chuyển chế độ. Kiểm tra role/status, API và database không thay đổi.
+
+Lượt bổ sung này chỉ sửa `frontend/src/pages/public/LoginPage.jsx` và báo cáo này; giữ nguyên các thay đổi UC2 chưa commit từ lượt trước. Không thêm dependency, test mô phỏng implementation, route, migration hoặc seeder.
+
+Kiểm chứng thực tế:
+
+| Command | Exit code | Kết quả |
+| --- | --- | --- |
+| `npm.cmd run lint` | 0 | 0 errors / 3 warnings Fast Refresh có sẵn |
+| `npm.cmd run build` ngoài sandbox | 0 | PASS; 3303 modules, JS 1,055.89 kB (gzip 295.09 kB), warning chunk lớn có sẵn |
+| `git diff --check` | 0 | Không có whitespace error; thông báo LF/CRLF của working copy không phải lỗi |
+
+Backend không thay đổi ở lượt thêm nút, không chạy lại backend tests. Chưa tự kiểm chứng bằng browser. Thử tay: logout phiên cũ → mở `/login` → bấm Quản trị viên → thấy tiêu đề Admin và nút Admin được chọn → đăng nhập tài khoản Admin; thử Customer/Host trong chế độ Admin vẫn phải nhận lỗi mismatch do backend mục 9.
