@@ -1,27 +1,12 @@
+import { emailError, passwordErrors } from './credentialValidation.js';
 import { normalizeAuthError } from './authSession.js';
-
-const EMAIL_PATTERN = /^[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$/;
 
 // Mirror signup rules for immediate feedback; the server remains authoritative.
 export function validateRegistration(values) {
-    const errors = {};
-    const email = values.email.trim();
-    const password = values.password;
+    const errors = passwordErrors(values);
     if (!values.name.trim()) errors.name = ['Vui lòng nhập họ và tên.'];
-    if (!email) errors.email = ['Vui lòng nhập địa chỉ email.'];
-    else if (email.length > 254 || email.split('@')[0].length > 64 || !EMAIL_PATTERN.test(email)) {
-        errors.email = ['Email phải đúng định dạng, ví dụ: ten@example.com.'];
-    }
-    if (!password) errors.password = ['Vui lòng nhập mật khẩu.'];
-    else if ([...password].length < 8) errors.password = ['Mật khẩu phải có ít nhất 8 ký tự.'];
-    else if (new TextEncoder().encode(password).length > 72) errors.password = ['Mật khẩu không được vượt quá 72 byte UTF-8.'];
-    else if (/[\s\p{C}]/u.test(password)) errors.password = ['Mật khẩu không được chứa khoảng trắng hoặc ký tự điều khiển.'];
-    else if (!/\p{Lu}/u.test(password) || !/\p{Ll}/u.test(password) || !/[0-9]/.test(password)
-        || !/[^\p{L}\p{N}\s\p{C}]/u.test(password)) {
-        errors.password = ['Mật khẩu phải có chữ hoa, chữ thường, số và ký tự đặc biệt.'];
-    }
-    if (!values.password_confirmation) errors.password_confirmation = ['Vui lòng xác nhận mật khẩu.'];
-    else if (password !== values.password_confirmation) errors.password_confirmation = ['Mật khẩu xác nhận không khớp.'];
+    const email = emailError(values.email);
+    if (email) errors.email = [email];
     return errors;
 }
 

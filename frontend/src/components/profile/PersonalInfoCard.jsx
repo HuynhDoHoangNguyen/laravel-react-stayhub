@@ -23,11 +23,9 @@ function formatMemberSince(isoDate) {
 }
 
 /**
- * Component PersonalInfoCard hiển thị thông tin hồ sơ tài khoản thật từ /api/me:
- * Định dạng danh sách lưới 2 cột Quiet Luxury (StayNest PersonalInfoCard pattern).
- * Không tạo form chỉnh sửa giả lập khi Backend chưa có API cập nhật.
+ * Display saved profile details or the shared editor supplied by ProfilePage.
  */
-export function PersonalInfoCard({ user }) {
+export function PersonalInfoCard({ user, onEdit, disabled = false, children }) {
   const roleLabel =
     user?.role === 'CUSTOMER'
       ? 'Khách hàng hội viên'
@@ -51,6 +49,8 @@ export function PersonalInfoCard({ user }) {
     : 'Chưa xác thực';
 
   const rows = [
+    { icon: User, label: 'Giới tính', value: { MALE: 'Nam', FEMALE: 'Nữ', OTHER: 'Khác' }[user?.gender] || 'Chưa cung cấp' },
+    { icon: Calendar, label: 'Ngày sinh', value: user?.date_of_birth ? user.date_of_birth.split('-').reverse().join('/') : 'Chưa cung cấp' },
     {
       icon: User,
       label: 'Họ và tên',
@@ -111,13 +111,12 @@ export function PersonalInfoCard({ user }) {
           </div>
         </div>
 
-        <span className="inline-flex items-center gap-1.5 self-start rounded-full border border-border/70 bg-surface px-3 py-1 text-[11px] font-semibold text-muted-foreground">
-          Dữ liệu định danh
-        </span>
+        {onEdit && <button type="button" onClick={onEdit} disabled={disabled}
+          className="self-start rounded-xl border border-primary/30 px-4 py-2 text-xs font-semibold text-primary disabled:opacity-50">Chỉnh sửa</button>}
       </div>
 
       {/* Lưới định nghĩa 2 cột theo chuẩn StayNest */}
-      <dl className="mt-2 grid grid-cols-1 divide-y divide-border/60 sm:grid-cols-2 sm:divide-y-0">
+      {children || <dl className="mt-2 grid grid-cols-1 divide-y divide-border/60 sm:grid-cols-2 sm:divide-y-0">
         {rows.map((row, i) => {
           const Icon = row.icon;
           const isLeft = i % 2 === 0;
@@ -142,11 +141,11 @@ export function PersonalInfoCard({ user }) {
             </div>
           );
         })}
-      </dl>
+      </dl>}
 
       {/* Ghi chú chân thẻ */}
       <div className="mt-4 rounded-2xl bg-surface/70 p-4 border border-border/60 text-xs text-muted-foreground leading-relaxed">
-        Thông tin trên được sử dụng để lập hóa đơn điện tử và liên hệ đón tiếp khi đặt phòng. Mọi thay đổi dữ liệu hồ sơ được hỗ trợ qua các kênh chính thức của StayHub.
+        Bạn có thể cập nhật thông tin liên hệ để StayHub hỗ trợ đặt phòng và đón tiếp.
       </div>
     </div>
   );

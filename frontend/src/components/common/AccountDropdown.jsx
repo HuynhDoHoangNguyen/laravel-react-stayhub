@@ -12,7 +12,7 @@ import {
     ChevronDown,
     Loader2,
 } from 'lucide-react';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
     Popover,
     PopoverContent,
@@ -67,6 +67,7 @@ export default function AccountDropdown({ triggerClassName, align = 'end' }) {
                     }
                 >
                     <Avatar className="h-7 w-7 border border-primary/20">
+                        {user.avatar && <AvatarImage src={user.avatar} alt="" />}
                         <AvatarFallback className="bg-gradient-to-br from-primary to-primary-mid font-display text-[11px] font-semibold text-primary-foreground">
                             {initialsOf(user.name)}
                         </AvatarFallback>
@@ -101,6 +102,11 @@ export default function AccountDropdown({ triggerClassName, align = 'end' }) {
 
                 {/* Role-Specific Navigation Menu */}
                 <div className="space-y-0.5">
+                    {['HOST', 'ADMIN'].includes(user.role) && <Link
+                        to={`/${user.role.toLowerCase()}/profile`} onClick={() => setOpen(false)}
+                        className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium text-ink transition-colors hover:bg-primary/[0.06] hover:text-primary">
+                        <User className="h-4 w-4" /><span>Hồ sơ cá nhân</span>
+                    </Link>}
                     {/* CUSTOMER Menu */}
                     {user.role === 'CUSTOMER' && (
                         <>
