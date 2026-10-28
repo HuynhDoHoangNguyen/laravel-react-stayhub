@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Resources\Auth\AuthUserResource;
 use App\Services\Auth\AuthService;
+use App\Services\Auth\RegistrationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -23,6 +25,13 @@ class AuthController extends Controller
             'message' => 'Đăng nhập thành công.',
             'user' => (new AuthUserResource($user))->resolve($request),
         ]);
+    }
+
+    public function register(RegisterRequest $request, RegistrationService $registrationService): JsonResponse
+    {
+        $registrationService->register($request->safe()->only(['name', 'email', 'password']));
+
+        return response()->json(['message' => 'Đăng ký thành công. Vui lòng đăng nhập để tiếp tục.'], 201);
     }
 
     public function me(Request $request): JsonResponse

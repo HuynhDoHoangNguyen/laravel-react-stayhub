@@ -1,9 +1,14 @@
 import api from '../api/axios';
 import { normalizeAuthError, subscribeToAuthFailures } from './authSession';
+import { registerCustomer } from './registration';
 
 const options = { timeout: 10000 };
 
 export const authService = {
+    register(payload, options) {
+        return registerCustomer(api, payload, options);
+    },
+
     async login({ email, password, expectedRole }) {
         try {
             await api.get('/sanctum/csrf-cookie', options);

@@ -19,6 +19,7 @@ import logoMark from '@/assets/logo-mark.png';
 import heroAsset from '@/assets/hero.png';
 import { useAuth } from '@/hooks/useAuth';
 import { getAuthDestination } from '@/utils/authNavigation';
+import RegisterForm from '@/components/auth/RegisterForm';
 
 const LOGIN_ROLES = [
     { value: 'CUSTOMER', param: 'customer', label: 'Khách hàng', icon: User },
@@ -41,12 +42,13 @@ export default function LoginPage() {
     const modeParam = searchParams.get('mode');
     const selectedRole = roleParam === 'admin' ? 'ADMIN' : roleParam === 'host' ? 'HOST' : 'CUSTOMER';
     const isAdminContext = selectedRole === 'ADMIN';
-    const isSignupMode = modeParam === 'signup' && !isAdminContext;
+    const isSignupMode = modeParam === 'signup';
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [authError, setAuthError] = useState(null);
+    const [registrationNotice, setRegistrationNotice] = useState(null);
     const [fieldErrors, setFieldErrors] = useState({});
     const [retryAfter, setRetryAfter] = useState(0);
     const submitLock = useRef(false);
@@ -64,13 +66,33 @@ export default function LoginPage() {
     const contextLabel = isAdminContext ? 'Quản trị viên' : isHostContext ? 'Đối tác' : 'Khách hàng';
 
     const handleModeChange = (mode) => {
+        setPassword('');
+        setShowPassword(false);
+        setAuthError(null);
+        setFieldErrors({});
+        if (mode === 'signup') setRegistrationNotice(null);
         setSearchParams((prev) => {
             const next = new URLSearchParams(prev);
             if (mode === 'signup') {
                 next.set('mode', 'signup');
+                next.set('role', 'customer');
             } else {
                 next.delete('mode');
             }
+            return next;
+        }, { replace: true });
+    };
+
+    const handleRegistered = ({ email: registeredEmail, message }) => {
+        setEmail(registeredEmail);
+        setPassword('');
+        setAuthError(null);
+        setFieldErrors({});
+        setRegistrationNotice(message);
+        setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            next.delete('mode');
+            next.set('role', 'customer');
             return next;
         }, { replace: true });
     };
@@ -208,12 +230,13 @@ export default function LoginPage() {
                             <span>Về trang chủ</span>
                         </Link>
 
-                        {!isAdminContext && <div className="flex items-center gap-2 text-xs">
+                        {(!isAdminContext || isSignupMode) && <div className="flex items-center gap-2 text-xs">
                             <span className="hidden text-muted-foreground sm:inline">
                                 {isSignupMode ? 'Đã có tài khoản?' : 'Chưa có tài khoản?'}
                             </span>
                             <button
                                 type="button"
+                                disabled={submitting || authChecking}
                                 onClick={() => handleModeChange(isSignupMode ? 'login' : 'signup')}
                                 className="inline-flex items-center rounded-full border border-border/80 bg-surface/60 px-3.5 py-1.5 text-xs font-semibold text-ink transition-all hover:border-primary/40 hover:text-primary"
                             >
@@ -225,7 +248,7 @@ export default function LoginPage() {
                     {/* Form Container */}
                     <div className="mx-auto my-auto w-full max-w-[380px] py-6 text-left">
                         <h1 className="font-display text-3xl font-bold tracking-tight text-primary sm:text-4xl">
-                            {isSignupMode ? `Đăng ký ${contextLabel}` : `Đăng nhập ${contextLabel}`}
+                            {isSignupMode ? 'Đăng ký Khách hàng' : `Đăng nhập ${contextLabel}`}
                         </h1>
                         <p className="mt-1.5 text-xs text-muted-foreground">
                             {isSignupMode
@@ -235,25 +258,20 @@ export default function LoginPage() {
                                     : 'Dành cho khách hàng đặt phòng và theo dõi kỳ nghỉ.')}
                         </p>
 
-                        {/* Signup Notice Banner */}
-                        {isSignupMode && (
-                            <div className="mt-4 rounded-2xl border border-primary/25 bg-primary/5 p-3.5 text-xs leading-relaxed text-ink/85">
-                                <div className="flex items-center gap-2 font-semibold text-primary">
-                                    <Sparkles className="h-4 w-4 shrink-0" />
-                                    <span>Thông báo Đăng ký tài khoản</span>
-                                </div>
-                                <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-                                    Tính năng tự tạo tài khoản mới đang được hoàn thiện. Trong thời gian này, bạn có thể chuyển sang chế độ Đăng nhập để sử dụng các tài khoản có sẵn.
-                                </p>
-                                <button
-                                    type="button"
-                                    onClick={() => handleModeChange('login')}
-                                    className="mt-2.5 inline-flex items-center rounded-lg bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary hover:bg-primary/20 transition-colors"
-                                >
-                                    Chuyển sang Đăng nhập ngay
-                                </button>
+                        {registrationNotice && !isSignupMode && (
+                            <div role="status" className="mt-4 rounded-xl border border-primary/25 bg-primary/5 p-3 text-xs leading-relaxed text-primary">
+                                {registrationNotice}
                             </div>
                         )}
+                        {isSignupMode && (
+                            <RegisterForm onRegistered={handleRegistered} disabled={authChecking}
+                                onBackToLogin={(registrationEmail) => {
+                                    if (registrationEmail) setEmail(registrationEmail);
+                                    handleModeChange('login');
+                                }} />
+                        )}
+
+                        {!isSignupMode && <>
 
                         {/* Login context selector */}
                         <div className="mt-6 grid grid-cols-3 gap-1 rounded-2xl border border-border/70 bg-surface/60 p-1"
@@ -384,6 +402,7 @@ export default function LoginPage() {
                                 )}
                             </div>}
                         </form>
+                        </>}
                     </div>
 
                     {/* Footer text */}
