@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
     // Host Invoices
     Route::get('/host/invoices', [HostInvoiceController::class, 'index'])
         ->name('host.invoices.index');

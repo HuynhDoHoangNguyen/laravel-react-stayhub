@@ -1,6 +1,6 @@
 <?php
 
-use Illuminate\Http\Request;
+use App\Http\Controllers\Auth\AuthController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/test', function () {
@@ -10,11 +10,8 @@ Route::get('/test', function () {
     ]);
 });
 
-Route::get('/me', function (Request $request) {
-    return response()->json([
-        'user' => $request->user(),
-    ]);
-})->middleware('auth:sanctum');
+Route::get('/me', [AuthController::class, 'me'])
+    ->middleware(['auth:sanctum', 'account.active']);
 
 require __DIR__ . '/api/billing.php';
 require __DIR__ . '/api/reviews.php';
