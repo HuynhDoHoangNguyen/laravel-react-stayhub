@@ -283,13 +283,14 @@ class RegistrationTest extends TestCase
             'email_verified_at' => '2000-01-01', 'remember_token' => 'injected',
             'created_at' => '2000-01-01', 'updated_at' => '2000-01-01',
             'phone' => 'injected', 'address' => 'injected', 'avatar' => 'injected',
+            'gender' => 'MALE', 'date_of_birth' => '2000-01-01',
             'properties' => [['name' => 'Injected property']],
         ]))->assertCreated();
         $user = User::firstOrFail();
         $this->assertSame(UserRole::CUSTOMER, $user->role);
         $this->assertSame(UserStatus::ACTIVE, $user->status);
         $this->assertNotSame(99999, $user->id);
-        foreach (['email_verified_at', 'remember_token', 'phone', 'address', 'avatar'] as $field) {
+        foreach (['email_verified_at', 'remember_token', 'phone', 'address', 'avatar', 'gender', 'date_of_birth'] as $field) {
             $this->assertNull($user->$field);
         }
         $this->assertNotSame('2000-01-01', $user->created_at->toDateString());

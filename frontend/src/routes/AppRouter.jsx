@@ -29,6 +29,7 @@ import HostInvoiceCreationPage from '../pages/host/HostInvoiceCreationPage';
 import HostReviewsPage from '../pages/host/HostReviewsPage';
 
 import AdminDashboardPage from '../pages/admin/AdminDashboardPage';
+import ProfilePage from '../components/profile/ProfilePage';
 
 function AppRouter() {
     return (
@@ -64,6 +65,7 @@ function AppRouter() {
             <Route element={<ProtectedRoute allowedRoles={['HOST']} />}>
                 <Route path="/host" element={<HostLayout />}>
                     <Route index element={<HostDashboardPage />} />
+                    <Route path="profile" element={<ProfilePage />} />
                     <Route path="invoices" element={<HostInvoiceListPage />} />
                     <Route path="invoices/:invoiceId" element={<HostInvoiceDetailPage />} />
                     <Route path="bookings/:bookingId/create-invoice" element={<HostInvoiceCreationPage />} />
@@ -76,6 +78,7 @@ function AppRouter() {
             <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
                 <Route path="/admin" element={<AdminLayout />}>
                     <Route index element={<AdminDashboardPage />} />
+                    <Route path="profile" element={<ProfilePage />} />
                 </Route>
             </Route>
         </Routes>

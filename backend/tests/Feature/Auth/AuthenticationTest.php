@@ -116,7 +116,7 @@ class AuthenticationTest extends TestCase
         $keys = array_keys($response->json('user'));
         sort($keys);
         $expected = ['id', 'name', 'email', 'phone', 'address', 'avatar', 'role', 'status',
-            'email_verified_at', 'created_at', 'updated_at'];
+            'email_verified_at', 'created_at', 'updated_at', 'gender', 'date_of_birth'];
         sort($expected);
         $this->assertSame($expected, $keys);
     }
@@ -412,6 +412,6 @@ class AuthenticationTest extends TestCase
                 $this->assertNotContains('account.active', $middleware);
             }
         }
-        $this->assertSame(9, $protected);
+        $this->assertSame(14, $protected);
     }
 }

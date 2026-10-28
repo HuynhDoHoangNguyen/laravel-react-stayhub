@@ -1,9 +1,12 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { authService } from '../services/authService';
 import { AuthContext } from './auth-context-def';
+import { commitProfileUser } from '../services/authSession';
 
 export function AuthProvider({ children }) {
-    const [user, setUser] = useState(null);
+    const [user, setUserState] = useState(null);
+    const userRef = useRef(null);
+    const setUser = useCallback((nextUser) => { userRef.current = nextUser; setUserState(nextUser); }, []);
     const [loading, setLoading] = useState(true);
     const [authError, setAuthError] = useState(null);
     const [notice, setNotice] = useState(null);
@@ -33,7 +36,7 @@ export function AuthProvider({ children }) {
         } finally {
             if (version === versionRef.current) setLoading(false);
         }
-    }, []);
+    }, [setUser]);
 
     useEffect(() => {
         let active = true;
@@ -53,7 +56,7 @@ export function AuthProvider({ children }) {
             unsubscribe();
             invalidatePendingRequests();
         };
-    }, [restoreSession, invalidatePendingRequests]);
+    }, [restoreSession, invalidatePendingRequests, setUser]);
 
     const login = useCallback(async (credentials) => {
         if (loginPendingRef.current) return null;
@@ -73,7 +76,7 @@ export function AuthProvider({ children }) {
             loginPendingRef.current = false;
             if (version === versionRef.current) setLoading(false);
         }
-    }, []);
+    }, [setUser]);
 
     const logout = useCallback(() => {
         if (logoutPromiseRef.current) return logoutPromiseRef.current;
@@ -105,14 +108,29 @@ export function AuthProvider({ children }) {
         })();
         logoutPromiseRef.current = promise;
         return promise;
-    }, []);
+    }, [setUser]);
+
+    const captureProfileAuth = useCallback(() => ({ version: versionRef.current,
+        userId: logoutPromiseRef.current || loginPendingRef.current ? null : userRef.current?.id }), []);
+    const isProfileAuthCurrent = useCallback((snapshot) => !!snapshot.userId && !logoutPromiseRef.current && !loginPendingRef.current
+        && versionRef.current === snapshot.version && userRef.current?.id === snapshot.userId, []);
+    const updateProfileUser = useCallback((updatedUser, snapshot) => {
+        if (!isProfileAuthCurrent(snapshot)) return false;
+        if (!commitProfileUser(userRef, versionRef, updatedUser, snapshot)) return false;
+        setUserState(updatedUser);
+        setLoading(false);
+        setAuthError(null);
+        return true;
+    }, [isProfileAuthCurrent]);
 
     const dismissNotice = useCallback(() => setNotice(null), []);
     const value = useMemo(() => ({
         user, loading, authError, error: authError?.message || null, notice, isLoggingOut,
         isAuthenticated: !!user, role: user?.role || null,
         login, logout, retry: restoreSession, refreshUser: restoreSession, dismissNotice,
-    }), [user, loading, authError, notice, isLoggingOut, login, logout, restoreSession, dismissNotice]);
+        captureProfileAuth, isProfileAuthCurrent, updateProfileUser,
+    }), [user, loading, authError, notice, isLoggingOut, login, logout, restoreSession, dismissNotice,
+        captureProfileAuth, isProfileAuthCurrent, updateProfileUser]);
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

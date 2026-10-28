@@ -9,7 +9,6 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\ValidationException;
 
 class RegistrationService
 {
@@ -34,19 +33,7 @@ class RegistrationService
                 DB::afterCommit(fn () => Log::info('Đăng ký tài khoản khách hàng thành công.'));
             });
         } catch (UniqueConstraintViolationException $exception) {
-            $detail = (string) ($exception->errorInfo[2] ?? '');
-            $driverCode = (int) ($exception->errorInfo[1] ?? 0);
-            $emailConflict = ($driverCode === 1062
-                && preg_match("/for key ['`](?:[^'`]+\\.)?users_email_unique['`]/i", $detail) === 1)
-                || (in_array($driverCode, [19, 2067], true)
-                    && preg_match('/^UNIQUE constraint failed: users\.email$/i', $detail) === 1);
-
-            if (!$emailConflict) {
-                throw $exception;
-            }
-
-            // Protect the gap between HTTP unique validation and insertion.
-            throw ValidationException::withMessages(['email' => [self::DUPLICATE_EMAIL]]);
+            EmailUniqueConflict::rethrow($exception);
         }
     }
 }

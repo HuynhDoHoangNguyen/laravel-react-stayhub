@@ -9,6 +9,7 @@ Thư mục này lưu kết quả khảo sát và báo cáo triển khai của **
 | [00-PROJECT-AUDIT.md](00-PROJECT-AUDIT.md) | Audit ngày 28/10/2026: kiến trúc thực tế, 20 UC, API/UI, bảo mật, dependencies và roadmap | Đã khảo sát và kiểm chứng baseline; chưa triển khai UC |
 | [UC02-REPORT.md](UC02-REPORT.md) | UC2: Sanctum session, login/logout, account-status guard, rate limit và React auth flow | Code và automated tests hoàn thành; còn nghiệm thu trình duyệt |
 | [UC01-REPORT.md](UC01-REPORT.md) | UC1: đăng ký Customer, guest-only, validation, limiter và form đăng ký thật | Backend/frontend và automated tests hoàn thành; còn nghiệm thu browser/MySQL race |
+| [UC03-REPORT.md](UC03-REPORT.md) | UC3: hồ sơ cá nhân, cập nhật contact, đổi mật khẩu và đồng bộ auth state | Backend/frontend và automated tests hoàn thành; còn nghiệm thu trình duyệt |
 
 ## Quy ước
 

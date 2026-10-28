@@ -15,3 +15,4 @@ Route::get('/me', [AuthController::class, 'me'])
 
 require __DIR__ . '/api/billing.php';
 require __DIR__ . '/api/reviews.php';
+require __DIR__ . '/api/profile.php';

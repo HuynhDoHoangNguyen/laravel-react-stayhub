@@ -1,5 +1,14 @@
 const ACCOUNT_CODES = new Set(['ACCOUNT_BLOCKED', 'ACCOUNT_INACTIVE']);
 
+// Used by AuthContext and tested independently of React rendering.
+export function commitProfileUser(userRef, versionRef, updatedUser, snapshot) {
+    if (versionRef.current !== snapshot.version || !userRef.current
+        || snapshot.userId !== userRef.current.id || updatedUser?.id !== snapshot.userId) return false;
+    ++versionRef.current;
+    userRef.current = updatedUser;
+    return true;
+}
+
 export function isAccountFailure(error) {
     return error?.response?.status === 403 && ACCOUNT_CODES.has(error.response.data?.code);
 }
