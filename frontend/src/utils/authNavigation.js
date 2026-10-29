@@ -23,7 +23,7 @@ export function getAuthDestination(role, returnTo) {
         if (url.origin !== 'https://stayhub.invalid' || hasUnsafeCharacters(pathname)
             || pathname.includes('//') || pathname.includes('%')) return fallback;
 
-        const publicPath = /^(?:\/|\/search\/?|\/properties\/[1-9]\d*\/?)$/;
+        const publicPath = /^(?:\/|\/search\/?|\/properties(?:\/[1-9]\d*)?\/?)$/;
         return (PATHS_BY_ROLE[role]?.test(pathname) || publicPath.test(pathname))
             ? url.pathname + url.search + url.hash
             : fallback;

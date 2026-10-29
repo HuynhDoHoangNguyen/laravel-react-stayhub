@@ -15,7 +15,7 @@ export function PropertyCarousel({ properties }) {
       >
         {properties.map((p) => (
           <div key={p.id}>
-            <PropertyCard property={p} />
+            <PropertyCard property={p} carousel />
           </div>
         ))}
         <div className="w-2 shrink-0" aria-hidden />

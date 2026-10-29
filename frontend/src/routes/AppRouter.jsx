@@ -10,6 +10,7 @@ import HomePage from '../pages/public/HomePage';
 import LoginPage from '../pages/public/LoginPage';
 import SearchResultsPage from '../pages/public/SearchResultsPage';
 import PropertyDetailPage from '../pages/public/PropertyDetailPage';
+import PropertiesPage from '../pages/public/PropertiesPage';
 import ApiTestPage from '../pages/public/ApiTestPage';
 import LoginTestPage from '../pages/public/LoginTestPage';
 
@@ -38,6 +39,7 @@ function AppRouter() {
             <Route element={<PublicLayout />}>
                 <Route path="/" element={<HomePage />} />
                 <Route path="/search" element={<SearchResultsPage />} />
+                <Route path="/properties" element={<PropertiesPage />} />
                 <Route path="/properties/:propertyId" element={<PropertyDetailPage />} />
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/api-test" element={<ApiTestPage />} />
