@@ -7,7 +7,6 @@ use App\Http\Controllers\Api\Host\ServiceController as HostServiceController;
 use App\Http\Controllers\Api\Public\BookingPreviewController;
 use App\Http\Controllers\Api\Public\RoomAvailabilityController;
 use App\Http\Controllers\Api\Public\RoomSearchController;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -26,7 +25,7 @@ Route::prefix('public')->group(function () {
 });
 
 // Customer routes
-Route::prefix('customer')->middleware(['auth:sanctum', 'role:CUSTOMER'])->group(function () {
+Route::prefix('customer')->middleware(['auth:sanctum', 'account.active', 'role:CUSTOMER'])->group(function () {
     Route::post('/bookings', [CustomerBookingController::class, 'store']);
     Route::get('/bookings', [CustomerBookingController::class, 'index']);
     Route::get('/bookings/{booking}', [CustomerBookingController::class, 'show'])->whereNumber('booking');
@@ -35,20 +34,7 @@ Route::prefix('customer')->middleware(['auth:sanctum', 'role:CUSTOMER'])->group(
 });
 
 // Host routes
-Route::prefix('host')->middleware(['auth:sanctum', 'role:HOST'])->group(function () {
-    // TEMP-M1-STUB: Host Properties stub for Member 1
-    Route::get('/properties', function (Request $request) {
-        $properties = \App\Models\Property::query()
-            ->where('host_id', $request->user()->id)
-            ->orderBy('name')
-            ->get(['id', 'name']);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Danh sách cơ sở lưu trú của host.',
-            'data' => $properties,
-        ]);
-    });
+Route::prefix('host')->middleware(['auth:sanctum', 'account.active', 'role:HOST'])->group(function () {
     // Property Services
     Route::get('/services', [HostServiceController::class, 'index']);
     Route::post('/services', [HostServiceController::class, 'store']);

@@ -3,7 +3,6 @@
 
 namespace App\Http\Middleware;
 
-use App\Enums\UserStatus;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -25,15 +24,6 @@ class CheckRole
                 'message' => 'Unauthenticated',
                 'errors' => [],
             ], Response::HTTP_UNAUTHORIZED);
-        }
-
-        $userStatus = $user->status instanceof UserStatus ? $user->status->value : (string) $user->status;
-        if ($userStatus === UserStatus::BLOCKED->value) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Tài khoản của bạn đã bị khóa.',
-                'errors' => [],
-            ], Response::HTTP_FORBIDDEN);
         }
 
         if (empty($roles)) {

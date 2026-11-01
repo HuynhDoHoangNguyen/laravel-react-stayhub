@@ -3,9 +3,12 @@ Dự án StayHub (Laravel 12 + Sanctum SPA + MySQL; React 19 + Vite + React Rout
 Tài liệu (chỉ đọc mục liên quan khi cần): docs/stayhub-team-work-assignment.md mục 4; docs/stayhub-erd.md (services, bookings, booking_services, Business rules); docs/stayhub-usecase-system.md mục 4.4-4.6, 6-9; docs/stayhub-screen-mockups.md mục 2.2, 2.5-2.7, 4, 6, 7; docs/api/booking-module.md.
 
 ## Trạng thái hiện tại
-- **Backend B1 - B5**: Đã hoàn thành 100%.
-- **Kiểm thử Backend (lần xác minh lịch sử)**: 83 tests (435 assertions) đã pass ngày 13/10/2026 theo ghi nhận cuối file. Chưa xác nhận lại bằng lần chạy mới trong phiên cập nhật context này; chạy `php artisan test` để biết trạng thái hiện tại.
-- **Danh sách 22 endpoint (rút gọn)**:
+- **Đánh giá cập nhật 01/11/2026**: Chức năng Search, Availability, Booking, Booking Workflow và Services có backend/frontend và route tương ứng. Các vấn đề tương thích factory, account status và Host Properties phát hiện sau khi ghép `origin/dev` đã được xử lý trong nhánh hiện tại. Backend test hiện pass 490 tests (2.545 assertions).
+- **Kiểm thử lịch sử**: 83 tests (435 assertions) pass ngày 13/10/2026; kết quả này không đại diện cho trạng thái hiện tại sau khi ghép code TV1.
+- **Kiểm tra hiện tại 01/11/2026**: `php artisan route:list --path=api` liệt kê 39 route toàn ứng dụng; `GET /api/host/properties` được đăng ký qua `HostPropertyController`. `php artisan migrate:fresh --seed` chạy thành công trên MySQL cấu hình localhost. Frontend lint pass với 3 warning Fast Refresh; build pass với cảnh báo bundle JS vượt 500 kB.
+- **Tích hợp đã hoàn tất**: `account.active` chạy sau `auth:sanctum` và trước `role` trên route booking; `CheckRole` chỉ kiểm tra role; factory model/User tương thích với test TV2; Host Properties API dùng controller/query service/resource và chỉ trả Property của Host hiện tại.
+- **Còn lại**: Chưa xác nhận end-to-end trên browser. Chi tiết thay đổi và test: `docs/member-2-tv1-integration-adjustments.md`.
+- **Danh sách 22 endpoint TV2 (rút gọn)**; không tính `GET /api/host/properties`, API Property dùng chung được ghi ở tài liệu API module:
   - *Public (3)*:
     - `GET  /api/public/rooms/search`: Tìm kiếm phòng trống (lọc ngày, khách, tiện nghi, giá, từ khóa).
     - `GET  /api/public/rooms/{room}/availability`: Kiểm tra tình trạng phòng & các khoảng ngày bị chặn.
@@ -46,13 +49,13 @@ Tài liệu (chỉ đọc mục liên quan khi cần): docs/stayhub-team-work-as
   - Chi tiết trạng thái, số bản ghi và kịch bản: `docs/seed-data.md`.
 
 ## Trạng thái Frontend TV2
-- Các luồng giao diện TV2 đã được nối với domain service và API booking hiện có: tìm phòng, xem thông tin phòng/kiểm tra availability, preview và tạo booking, lịch sử/chi tiết/hủy booking phía Customer; danh sách/chi tiết và workflow confirm/reject/check-in/check-out phía Host; danh mục dịch vụ Host và dịch vụ phát sinh trong booking.
-- Route thực tế trong `frontend/src/routes/AppRouter.jsx`: `/search`, `/properties/:propertyId`, `/customer/checkout`, `/customer/bookings`, `/customer/bookings/:bookingId`, `/host/bookings`, `/host/bookings/:bookingId`, `/host/bookings/:bookingId/services`, `/host/services`, `/host/properties/:propertyId/services`.
-- Availability được dùng trong tìm kiếm và bước preview booking. `GET /api/public/rooms/{room}/availability` có trong API; cần kiểm tra lại UI hiện hành nếu yêu cầu một màn hình availability độc lập.
+- Các luồng giao diện TV2 đã có: tìm phòng; xem thông tin Property; preview/tạo booking; lịch sử, chi tiết và hủy booking Customer; danh sách/chi tiết và confirm/reject/check-in/check-out phía Host; quản lý danh mục dịch vụ và dịch vụ phát sinh trong booking.
+- Route thực tế trong `frontend/src/routes/AppRouter.jsx`: `/search`, `/properties/:propertyId`, `/customer/checkout`, `/customer/bookings`, `/customer/bookings/:bookingId`, `/host/bookings`, `/host/bookings/:bookingId`, `/host/bookings/:bookingId/services`, `/host/services`, `/host/properties/:propertyId/services`. `/host/services` là lối vào tương thích tạm thời, dùng endpoint `GET /api/host/properties` để chọn cơ sở đầu tiên.
+- `GET /api/public/rooms/{room}/availability` có trong backend API; không tìm thấy trang hoặc component `AvailabilityChecker` đang dùng endpoint trực tiếp. Tìm kiếm nhận tiêu chí ngày/khách và checkout hiển thị availability từ response preview.
 - Checkout lấy báo giá phòng từ API preview; frontend không tự tính tổng tiền chính thức. Backend không nhận số điện thoại riêng trong payload tạo booking, nên checkout không bắt nhập số điện thoại tùy ý.
 - Khi chạy UI với API thật, đặt `VITE_ENABLE_PROPERTY_MOCKS=false` và `VITE_ENABLE_BOOKING_MOCKS=false` trong `frontend/.env`; đặt `VITE_BACKEND_URL=http://localhost:8000`. `frontend/.env.example` đang bật hai mock flag, cần chú ý khi sao chép mẫu.
 - Trang đăng nhập nhanh development `/login-test` có preset Host 1, Host 2, Customer 1, Customer 2; mật khẩu seeder là `12345678`. Tài khoản chỉ đăng nhập được nếu seeder đã được chạy trên database tương ứng; customer4 đang BLOCKED, customer5 INACTIVE.
-- Frontend `npm run lint` và `npm run build` đã pass sau các cập nhật UI TV2 gần nhất; lint còn 3 cảnh báo Fast Refresh trong shared components và build có cảnh báo bundle lớn. Chưa chạy lại trong lần cập nhật tài liệu này.
+- Kết quả gần nhất sau tích hợp: `npm run lint` pass với 3 warning Fast Refresh; `npm run build` pass ngày 01/11/2026 với cảnh báo bundle lớn. Các cảnh báo hiện tại không làm fail lint/build.
 - Chưa xác nhận end-to-end trên browser với database của người dùng. Luồng kiểm tra đề xuất: Customer tạo booking → Host xác nhận → check-in → ghi nhận dịch vụ → check-out; đồng thời kiểm tra tìm kiếm, preview, lịch sử/chi tiết và hủy booking theo trạng thái.
 
 ---
@@ -60,6 +63,7 @@ Tài liệu (chỉ đọc mục liên quan khi cần): docs/stayhub-team-work-as
 ## Kiến trúc & Quy chuẩn
 - Luồng: Route -> Middleware -> Controller (mỏng) -> Form Request -> Service (nghiệp vụ, transaction) -> Eloquent -> API Resource.
 - Prefix: `/api/public`, `/api/customer`, `/api/host`. Customer/Host dùng `auth:sanctum` + role middleware (`CheckRole`) + kiểm tra ownership (`BookingPolicy` / Service check).
+- Xác thực SPA hiện dùng Sanctum session/cookie. Route booking dùng thứ tự `auth:sanctum`, `account.active`, rồi `role` để tách xác thực, trạng thái tài khoản và phân quyền vai trò.
 - Response: `{"success":true,"message":"","data":{}}`; danh sách có `"meta":{current_page,last_page,per_page,total}`; lỗi `{"success":false,"message":"","errors":{}}`. Mã: 200/201/204, 401, 403, 404 (IDOR trả 404 để giấu dữ liệu), 409 (phòng vừa bị đặt trùng), 422 (validation, chuyển trạng thái sai, không được hủy, dịch vụ sai trạng thái).
 
 ## Quy tắc nghiệp vụ
@@ -82,11 +86,11 @@ Tài liệu (chỉ đọc mục liên quan khi cần): docs/stayhub-team-work-as
 - **Mọi thay đổi database về sau bắt buộc phải tạo migration mới** (ví dụ `add_xxx_to_yyy_table`).
 - Tuyệt đối không tạo lại migration tạm hay rollback migration khởi tạo.
 
-## Các phần TEMP còn lại cần thay thế khi nhận code Thành viên 1
-Khi Thành viên 1 bàn giao code chính thức (Identity, Property, Room, Amenity, Maintenance), cần thay thế các file stub tạm sau:
+## Tình trạng tích hợp code Thành viên 1 (01/11/2026)
+Sau khi ghép `origin/dev`, các model Property Catalog (`Amenity`, `Maintenance`, `Property`, `PropertyImage`, `Room`, `RoomImage`, `RoomType`) được giữ theo phiên bản TV1 và bổ sung `HasFactory` tại các model có factory tương ứng để test/seeder dùng chung. `UserFactory` giữ dữ liệu mặc định cùng state role/status mà test các module đang dùng. Các phần tạm chưa có bản thay thế thực tế trên Dev vẫn giữ nguyên:
 1. **Middleware Role**:
-   - `app/Http/Middleware/CheckRole.php` (`TEMP-M1-STUB`): Thay bằng middleware chính thức của Thành viên 1.
-   - `bootstrap/app.php` (`TEMP-M2-WIRING`): Cập nhật alias role middleware theo đúng class của Thành viên 1 nếu có thay đổi.
+   - `app/Http/Middleware/CheckRole.php` còn marker `TEMP-M1-STUB`, nhưng hiện chỉ kiểm tra role; account status do `EnsureAccountIsActive` đảm nhiệm.
+   - `bootstrap/app.php` đăng ký alias `role` và `account.active`.
 2. **Enums tạm (6 file `app/Enums/*`)**:
    - `MaintenanceStatus.php`
    - `PropertyStatus.php`
@@ -94,30 +98,24 @@ Khi Thành viên 1 bàn giao code chính thức (Identity, Property, Room, Ameni
    - `RoomStatus.php`
    - `UserRole.php`
    - `UserStatus.php`
-3. **Models tạm (8 file `app/Models/*`)**:
-   - `Amenity.php`
-   - `Maintenance.php`
-   - `Property.php`
-   - `PropertyImage.php`
-   - `Room.php`
-   - `RoomImage.php`
-   - `RoomType.php`
-   - `User.php`
+3. **Models**: 7 model Property Catalog đã cập nhật từ Dev; `User.php` đã ghép `gender`, `date_of_birth` và giữ Sanctum/quan hệ cần cho các module hiện tại.
 4. **Trait ApiResponse tạm**:
-   - `app/Traits/ApiResponse.php` (`TEMP-M1-STUB`): Thay bằng base response helper/trait chung của nhóm nếu có.
-5. **Factories tạm (6 file `database/factories/*`)**:
-   - `AmenityFactory.php`
-   - `MaintenanceFactory.php`
-   - `PropertyFactory.php`
-   - `RoomFactory.php`
-   - `RoomTypeFactory.php`
-   - `UserFactory.php`
+   - `app/Traits/ApiResponse.php` vẫn có `TEMP-M1-STUB`; chưa có bản thay thế trên Dev.
+5. **Factories**:
+   - `UserFactory.php` bổ sung các state `host()`, `customer()`, `admin()` và `blocked()` cùng role/status mặc định.
+   - Các factory tạm còn lại:
+     - `AmenityFactory.php`
+     - `MaintenanceFactory.php`
+     - `PropertyFactory.php`
+     - `RoomFactory.php`
+     - `RoomTypeFactory.php`
 6. **Seeder demo & Wiring**:
-   - `database/seeders/Member1DataSeeder.php` (`TEMP-M1-STUB`): Thay dữ liệu Member 1 khi nhận code chính thức.
-   - `database/seeders/Member3DataSeeder.php` (`TEMP-M3-STUB`): Thay dữ liệu Member 3 khi nhận code chính thức.
-   - `database/seeders/DatabaseSeeder.php`: Đang gọi `Member1DataSeeder`, `Member2DataSeeder`, `Member3DataSeeder` theo thứ tự.
+   - `database/seeders/Member1DataSeeder.php` vẫn có `TEMP-M1-STUB`; seeder chạy thành công với dữ liệu hiện tại.
+   - `database/seeders/Member3DataSeeder.php` vẫn có `TEMP-M3-STUB`.
+   - `database/seeders/DatabaseSeeder.php` gọi `Member1DataSeeder`, `Member2DataSeeder`, `Member3DataSeeder` theo thứ tự.
 7. **Routes Wiring**:
-   - `routes/api.php` (`TEMP-M2-WIRING`): Giữ nguyên `require __DIR__ . '/api/booking.php';` hoặc tổ chức lại theo routing convention chung của nhóm.
+   - `routes/api.php` vẫn include `api/booking.php`, đồng thời include billing, reviews và profile.
+   - `GET /api/host/properties` đã được chuyển sang `routes/api/properties.php` và gọi `HostPropertyController`; query giới hạn theo Host, resource chỉ trả `id` và `name`. Contract frontend không đổi.
 
 ---
 

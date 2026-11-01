@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { User, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { User, ShieldCheck, ShieldAlert, Camera, Loader2 } from 'lucide-react';
 
 /**
  * Trích xuất chữ cái đầu viết tắt của tên người dùng theo quy chuẩn tiếng Việt.
@@ -18,8 +18,9 @@ function initialsOf(name) {
  * 2. Cột giữa: Avatar khổ lớn tròn (h-32 w-32 md:h-36 md:w-36), đổ bóng đa lớp sâu, fallback viết tắt an toàn.
  * 3. Cột phải: Họ tên, Email và các huy hiệu định danh thực tế (Role, Account Status).
  */
-export function ProfileHeader({ user }) {
-  const [avatarError, setAvatarError] = useState(false);
+export function ProfileHeader({ user, onAvatarSelected, avatarDisabled = false, avatarPending = false, avatarError }) {
+  const [failedAvatar, setFailedAvatar] = useState(null);
+  const fileInput = useRef(null);
 
   const roleLabel =
     user?.role === 'CUSTOMER'
@@ -60,11 +61,11 @@ export function ProfileHeader({ user }) {
       <div className="flex flex-col items-center">
         <div className="relative">
           <div className="grid h-32 w-32 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-primary via-primary-mid to-primary/80 text-primary-foreground shadow-[0_20px_50px_-20px_rgba(26,46,32,0.45)] ring-4 ring-background md:h-36 md:w-36">
-            {user?.avatar && !avatarError ? (
+            {user?.avatar && failedAvatar !== user.avatar ? (
               <img
                 src={user.avatar}
                 alt={user.name || 'Ảnh đại diện người dùng'}
-                onError={() => setAvatarError(true)}
+                onError={() => setFailedAvatar(user.avatar)}
                 className="h-full w-full object-cover"
               />
             ) : (
@@ -73,7 +74,18 @@ export function ProfileHeader({ user }) {
               </span>
             )}
           </div>
+          {onAvatarSelected && <>
+            <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" tabIndex={-1}
+              aria-label="Chọn ảnh đại diện từ máy" disabled={avatarDisabled}
+              onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) onAvatarSelected(file); }} />
+            <button type="button" title="Thay ảnh đại diện" aria-label="Thay ảnh đại diện" disabled={avatarDisabled}
+              onClick={() => fileInput.current?.click()}
+              className="absolute -bottom-1 -right-1 grid h-11 w-11 place-items-center rounded-full border-2 border-ink/70 bg-white text-ink shadow-md ring-2 ring-white transition hover:bg-surface focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/40 disabled:opacity-50">
+              {avatarPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5" />}
+            </button>
+          </>}
         </div>
+        {avatarError && <p role="alert" className="mt-2 max-w-56 text-center text-xs text-destructive">{avatarError}</p>}
       </div>
 
       {/* Cột phải: Tên người dùng & Huy hiệu trạng thái */}

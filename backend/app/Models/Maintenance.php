@@ -1,5 +1,4 @@
 <?php
-// TEMP-M1-STUB
 
 namespace App\Models;
 
@@ -12,8 +11,31 @@ class Maintenance extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['room_id', 'start_date', 'end_date', 'reason', 'status'];
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'maintenances';
 
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var list<string>
+     */
+    protected $fillable = [
+        'room_id',
+        'start_date',
+        'end_date',
+        'reason',
+        'status',
+    ];
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
     protected function casts(): array
     {
         return [
@@ -23,6 +45,9 @@ class Maintenance extends Model
         ];
     }
 
+    /**
+     * Get the room undergoing maintenance.
+     */
     public function room(): BelongsTo
     {
         return $this->belongsTo(Room::class, 'room_id');

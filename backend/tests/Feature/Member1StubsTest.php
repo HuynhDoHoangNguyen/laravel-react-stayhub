@@ -57,7 +57,7 @@ class Member1StubsTest extends TestCase
         $this->assertEquals($room->id, $maintenance->room->id);
     }
 
-    public function test_role_middleware_allows_authorized_role(): void
+    public function test_active_user_can_read_authenticated_profile(): void
     {
         $customer = User::factory()->customer()->create();
 
@@ -67,11 +67,11 @@ class Member1StubsTest extends TestCase
         $response->assertStatus(200);
     }
 
-    public function test_role_middleware_blocks_blocked_user(): void
+    public function test_account_active_middleware_blocks_blocked_user(): void
     {
         \Illuminate\Support\Facades\Route::get('/api/test-role', function () {
             return response()->json(['success' => true]);
-        })->middleware(['auth:sanctum', 'role:CUSTOMER']);
+        })->middleware(['auth:sanctum', 'account.active', 'role:CUSTOMER']);
 
         $blockedUser = User::factory()->customer()->blocked()->create();
 
@@ -80,8 +80,7 @@ class Member1StubsTest extends TestCase
 
         $response->assertStatus(403)
             ->assertJson([
-                'success' => false,
-                'message' => 'Tài khoản của bạn đã bị khóa.',
+                'code' => 'ACCOUNT_BLOCKED',
             ]);
     }
 

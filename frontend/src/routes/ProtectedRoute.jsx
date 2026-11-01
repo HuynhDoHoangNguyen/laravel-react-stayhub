@@ -10,11 +10,11 @@ import logoMark from '@/assets/logo-mark.png';
  * @param {string[]} [props.allowedRoles] Danh sách role được phép truy cập (ví dụ: ['CUSTOMER'], ['HOST'], ['ADMIN'])
  */
 export default function ProtectedRoute({ allowedRoles }) {
-    const { user, loading, isAuthenticated, logout, isLoggingOut } = useAuth();
+    const { user, loading, isAuthenticated, logout, isLoggingOut, authError, retry } = useAuth();
     const location = useLocation();
 
     // 1. Khi đang xác minh session Sanctum: hiển thị màn hình chờ Quiet Luxury, không vội redirect
-    if (loading) {
+    if (loading || isLoggingOut) {
         return (
             <div className="flex min-h-[60vh] flex-col items-center justify-center bg-background px-4 text-center">
                 <div className="relative mb-4">
@@ -23,6 +23,25 @@ export default function ProtectedRoute({ allowedRoles }) {
                 </div>
                 <p className="font-display text-lg font-semibold text-primary">StayHub</p>
                 <p className="mt-1 text-xs text-muted-foreground">Đang xác thực phiên làm việc an toàn...</p>
+            </div>
+        );
+    }
+
+    if (authError) {
+        return (
+            <div className="mx-auto max-w-lg px-4 py-20 text-center">
+                <ShieldAlert className="mx-auto h-10 w-10 text-primary" />
+                <h1 className="mt-4 font-display text-2xl text-primary">Chưa thể xác nhận phiên làm việc</h1>
+                <p className="mt-3 text-sm text-muted-foreground">{authError.message}</p>
+                <button type="button" onClick={authError.operation === 'logout' ? logout : retry}
+                    className="mt-6 rounded-xl bg-primary px-5 py-3 text-sm text-primary-foreground">
+                    {authError.operation === 'logout' ? 'Thử đăng xuất lại' : 'Thử kết nối lại'}
+                </button>
+                {authError.operation === 'logout' && (
+                    <button type="button" onClick={retry} className="ml-3 text-sm font-semibold text-primary">
+                        Kiểm tra lại phiên
+                    </button>
+                )}
             </div>
         );
     }

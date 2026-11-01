@@ -1,5 +1,4 @@
 <?php
-// TEMP-M1-STUB
 
 namespace Database\Factories;
 
@@ -31,7 +30,7 @@ class UserFactory extends Factory
             'name' => fake()->name(),
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
-            'password' => static::$password ??= Hash::make('12345678'),
+            'password' => static::$password ??= Hash::make('password'),
             'phone' => fake()->phoneNumber(),
             'address' => fake()->address(),
             'avatar' => null,
@@ -41,9 +40,6 @@ class UserFactory extends Factory
         ];
     }
 
-    /**
-     * Indicate that the user is a customer.
-     */
     public function customer(): static
     {
         return $this->state(fn (array $attributes) => [
@@ -51,9 +47,6 @@ class UserFactory extends Factory
         ]);
     }
 
-    /**
-     * Indicate that the user is a host.
-     */
     public function host(): static
     {
         return $this->state(fn (array $attributes) => [
@@ -61,9 +54,6 @@ class UserFactory extends Factory
         ]);
     }
 
-    /**
-     * Indicate that the user is an admin.
-     */
     public function admin(): static
     {
         return $this->state(fn (array $attributes) => [
@@ -71,9 +61,6 @@ class UserFactory extends Factory
         ]);
     }
 
-    /**
-     * Indicate that the user is blocked.
-     */
     public function blocked(): static
     {
         return $this->state(fn (array $attributes) => [

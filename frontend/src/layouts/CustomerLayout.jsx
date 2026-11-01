@@ -40,7 +40,7 @@ const NAV_LINKS = [
 ];
 
 export default function CustomerLayout() {
-    const { user, loading, error, refreshUser, logout } = useAuth();
+    const { user, loading, error, refreshUser, logout, isLoggingOut } = useAuth();
     const [mobileOpen, setMobileOpen] = useState(false);
 
     return (
@@ -193,6 +193,7 @@ export default function CustomerLayout() {
                                         <div className="mt-auto border-t border-border/60 pt-4">
                                             <button
                                                 type="button"
+                                                disabled={isLoggingOut}
                                                 onClick={() => {
                                                     setMobileOpen(false);
                                                     logout();

@@ -1,37 +1,12 @@
 <?php
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use App\Http\Controllers\Auth\AuthController;
+use App\Http\Middleware\EnsureRegistrationGuest;
+use App\Http\Middleware\ThrottleRegistration;
 use Illuminate\Support\Facades\Route;
-use Illuminate\Validation\ValidationException;
 
-Route::post('/login', function (Request $request) {
-    $credentials = $request->validate([
-        'email' => ['required', 'email'],
-        'password' => ['required'],
-    ]);
-
-    if (! Auth::attempt($credentials)) {
-        throw ValidationException::withMessages([
-            'email' => ['Email hoặc mật khẩu không chính xác.'],
-        ]);
-    }
-
-    $request->session()->regenerate();
-
-    return response()->json([
-        'message' => 'Đăng nhập thành công.',
-        'user' => $request->user(),
-    ]);
-});
-
-Route::post('/logout', function (Request $request) {
-    Auth::guard('web')->logout();
-
-    $request->session()->invalidate();
-    $request->session()->regenerateToken();
-
-    return response()->json([
-        'message' => 'Đăng xuất thành công.',
-    ]);
-});
+Route::post('/login', [AuthController::class, 'login']);
+Route::post('/register', [AuthController::class, 'register'])
+    ->middleware([ThrottleRegistration::class, EnsureRegistrationGuest::class]);
+// Remains available to guests and non-ACTIVE sessions so they can clear cookies.
+Route::post('/logout', [AuthController::class, 'logout']);

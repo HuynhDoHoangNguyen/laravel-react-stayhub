@@ -7,7 +7,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-class HostPropertiesStubTest extends TestCase
+class HostPropertiesTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -26,7 +26,7 @@ class HostPropertiesStubTest extends TestCase
             ->assertJson(['message' => 'Bạn không có quyền truy cập.']);
     }
 
-    public function test_host_properties_returns_only_own_properties(): void
+    public function test_host_only_receives_id_and_name_for_owned_properties(): void
     {
         $host1 = User::factory()->host()->create();
         $host2 = User::factory()->host()->create();
@@ -50,6 +50,8 @@ class HostPropertiesStubTest extends TestCase
             ])
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.id', $prop1->id)
-            ->assertJsonPath('data.0.name', 'Khách sạn Host 1');
+            ->assertJsonPath('data.0.name', 'Khách sạn Host 1')
+            ->assertJsonMissingPath('data.0.host_id')
+            ->assertJsonMissingPath('data.0.address');
     }
 }

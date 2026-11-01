@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import api from '../../api/axios';
+import { useAuth } from '../../hooks/useAuth';
 
 function LoginTestPage() {
     const [email, setEmail] = useState('host1@stayhub.com');
     const [password, setPassword] = useState('12345678');
     const [message, setMessage] = useState('');
-    const [user, setUser] = useState(null);
+    const { user, login, logout } = useAuth();
     const [loading, setLoading] = useState(false);
 
     const handleLogin = async (customEmail, customPass) => {
@@ -16,19 +16,13 @@ function LoginTestPage() {
         setLoading(true);
         setMessage('');
         try {
-            await api.get('/sanctum/csrf-cookie');
-
-            await api.post('/login', {
+            const authenticatedUser = await login({
                 email: loginEmail,
                 password: loginPass,
             });
-
-            const response = await api.get('/api/me');
-            setUser(response.data.user);
-            setMessage(`Đăng nhập thành công với vai trò: ${response.data.user.role}`);
+            if (authenticatedUser) setMessage(`Đăng nhập thành công với vai trò: ${authenticatedUser.role}`);
         } catch (error) {
-            console.error(error);
-            setMessage(error.response?.data?.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.');
+            setMessage(error.message);
         } finally {
             setLoading(false);
         }
@@ -37,12 +31,10 @@ function LoginTestPage() {
     const handleLogout = async () => {
         setLoading(true);
         try {
-            await api.post('/logout');
-            setUser(null);
-            setMessage('Đã đăng xuất thành công.');
+            const confirmed = await logout();
+            setMessage(confirmed ? 'Phiên đăng nhập đã kết thúc.' : 'Chưa xác nhận được đăng xuất. Vui lòng thử lại.');
         } catch (error) {
-            console.error(error);
-            setMessage('Đăng xuất thất bại.');
+            setMessage(error.message);
         } finally {
             setLoading(false);
         }

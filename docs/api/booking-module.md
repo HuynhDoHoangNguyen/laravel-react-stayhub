@@ -8,9 +8,10 @@ Tài liệu đặc tả toàn bộ API của Module Booking (B1 - B5) do **Thàn
 
 ### 1.1 Prefix & Authentication
 - **Public**: `/api/public/*` - Không yêu cầu đăng nhập.
-- **Customer**: `/api/customer/*` - Middleware: `auth:sanctum`, `role:CUSTOMER`.
-- **Host**: `/api/host/*` - Middleware: `auth:sanctum`, `role:HOST`.
-- Header xác thực: `Authorization: Bearer {token}` kèm `Accept: application/json`.
+- **Customer**: `/api/customer/*` - Middleware theo thứ tự: `auth:sanctum`, `account.active`, `role:CUSTOMER`.
+- **Host**: `/api/host/*` - Middleware theo thứ tự: `auth:sanctum`, `account.active`, `role:HOST`.
+- Frontend StayHub dùng **Sanctum SPA session/cookie**, không dùng Bearer token: lấy CSRF cookie từ `/sanctum/csrf-cookie`, đăng nhập qua session và gửi request với credentials/XSRF (`withCredentials`, `withXSRFToken`). Khi chạy local, dùng thống nhất `http://localhost:5173` cho frontend và `http://localhost:8000` cho backend; không trộn `127.0.0.1` với `localhost`.
+- `account.active` kiểm tra trạng thái tài khoản; `role` chỉ kiểm tra vai trò. Route booking và Host Properties hiện theo thứ tự middleware trên.
 
 ### 1.2 Nguyên tắc tài chính & Dữ liệu
 - Toàn bộ giá trị tiền tệ (`price_per_night`, `room_total`, `unit_price`, `amount`, `services_total`) và số lượng (`quantity`, `number_of_nights`) được backend tính toán và chuẩn hóa định dạng chuỗi thập phân 2 chữ số (ví dụ `"500000.00"`).
@@ -27,7 +28,7 @@ Tài liệu đặc tả toàn bộ API của Module Booking (B1 - B5) do **Thàn
 
 ### 1.3 Cấu trúc phản hồi lỗi chuẩn
 - **401 Unauthorized**:
-  - Khi chưa gửi Sanctum token hoặc token không hợp lệ (Laravel framework mặc định):
+  - Khi chưa có session đăng nhập hợp lệ (Laravel framework mặc định):
     ```json
     {
       "message": "Unauthenticated."
@@ -41,7 +42,8 @@ Tài liệu đặc tả toàn bộ API của Module Booking (B1 - B5) do **Thàn
       "errors": []
     }
     ```
-- **403 Forbidden** (Sai vai trò hoặc tài khoản bị khóa):
+- **403 Forbidden**:
+  - Sai vai trò (`CheckRole`):
   ```json
   {
     "success": false,
@@ -49,7 +51,14 @@ Tài liệu đặc tả toàn bộ API của Module Booking (B1 - B5) do **Thàn
     "errors": []
   }
   ```
-  *(Trường hợp tài khoản bị khóa: `"message": "Tài khoản của bạn đã bị khóa."`)*
+  - Tài khoản bị khóa hoặc chưa kích hoạt (`EnsureAccountIsActive`):
+  ```json
+  {
+    "message": "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.",
+    "code": "ACCOUNT_BLOCKED"
+  }
+  ```
+  Tài khoản chưa kích hoạt trả `code: ACCOUNT_INACTIVE` cùng thông báo tương ứng.
 - **404 Not Found** (Phòng ngừa IDOR / Dữ liệu không tồn tại):
   - Khi Customer truy cập booking của khách khác hoặc Host truy cập booking không thuộc cơ sở mình quản lý (`BookingPolicy`):
     ```json
@@ -400,10 +409,11 @@ Tài liệu đặc tả toàn bộ API của Module Booking (B1 - B5) do **Thàn
 
 ---
 
-### 2.3 Host APIs - Cơ sở lưu trú (Host Properties - Stub)
+### 2.3 Host APIs - Cơ sở lưu trú (Host Properties)
 
-#### 9. Danh sách cơ sở lưu trú của Host (Host Properties Stub)
-- **Ghi chú**: Endpoint tạm (`TEMP-M1-STUB`) hỗ trợ Host chọn cơ sở lưu trú khi tạo dịch vụ và lọc booking, sẽ do Thành viên 1 thay thế hoàn chỉnh.
+#### 9. Danh sách cơ sở lưu trú của Host
+- **Implementation**: `routes/api/properties.php` → `HostPropertyController` → `HostPropertyQueryService` → `HostPropertyResource`.
+- **Phạm vi dữ liệu**: Chỉ trả Property thuộc Host hiện tại; response chỉ có `id` và `name`. Frontend `/host/services` tiếp tục gọi endpoint này để chọn cơ sở đầu tiên.
 - **Method**: `GET`
 - **URL**: `/api/host/properties`
 - **Role**: HOST (`auth:sanctum`, `role:HOST`)
@@ -661,19 +671,29 @@ Frontend dùng các route giao diện dưới đây; các API tương ứng vẫ
 
 | Route giao diện | Trang | Service/API chính |
 |---|---|---|
-| `/search` | `pages/public/SearchResultPage.jsx` | `searchService.js` |
-| `/booking/checkout` | `pages/customer/BookingCheckoutPage.jsx` | `bookingService.js` (`previewBooking`, `createBooking`) |
-| `/customer/bookings` | `pages/customer/MyBookingsPage.jsx` | `bookingService.js` (`getCustomerBookings`) |
-| `/customer/bookings/:bookingId` | `pages/customer/BookingDetailPage.jsx` | `bookingService.js` (`getCustomerBookingDetail`, `cancelBooking`) |
-| `/host/bookings` | `pages/host/HostBookingListPage.jsx` | `hostBookingService.js`, `propertyServiceCatalogService.js` |
+| `/search` | `pages/public/SearchResultsPage.jsx` | `propertyService.js` |
+| `/properties/:propertyId` | `pages/public/PropertyDetailPage.jsx` | `propertyService.js` |
+| `/customer/checkout` | `pages/customer/CustomerCheckoutPage.jsx` | `bookingService.js` (`previewBooking`, `createBooking`) |
+| `/customer/bookings` | `pages/customer/CustomerBookingsPage.jsx` | `bookingService.js` (`getMyBookings`) |
+| `/customer/bookings/:bookingId` | `pages/customer/CustomerBookingDetailPage.jsx` | `bookingService.js` (detail, services, cancel) |
+| `/host/bookings` | `pages/host/HostBookingsPage.jsx` | `hostBookingService.js` |
 | `/host/bookings/:bookingId` | `pages/host/HostBookingDetailPage.jsx` | `hostBookingService.js` |
-| `/host/bookings/:bookingId/services` | `pages/host/HostBookingServicesPage.jsx` | `bookingServiceUsageService.js`, `hostBookingService.js`, `propertyServiceCatalogService.js` |
+| `/host/bookings/:bookingId/services` | `pages/host/HostBookingServicesPage.jsx` | `hostBookingService.js`, `propertyServiceCatalogService.js` |
+| `/host/services` | `pages/host/HostServicesEntryPage.jsx` | `propertyServiceCatalogService.js` |
 | `/host/properties/:propertyId/services` | `pages/host/HostServiceListPage.jsx` | `propertyServiceCatalogService.js` |
 
-`/host/services` là lối vào tương thích tạm thời: gọi `GET /api/host/properties`, rồi chuyển đến trang dịch vụ của cơ sở đầu tiên. Route này có comment `TEMP-M2-WIRING`; route chuẩn là route có `:propertyId` ở bảng trên.
+`/host/services` là lối vào tương thích: gọi `GET /api/host/properties`, rồi chuyển đến trang dịch vụ của cơ sở đầu tiên. Route này có comment `TEMP-M2-WIRING`; route chuẩn để mở dịch vụ của một cơ sở cụ thể là route có `:propertyId` ở bảng trên.
 
-`AvailabilityChecker.jsx` là component kiểm tra khả dụng dùng `availabilityService.js` khi được gắn vào trang phòng.
-
-Hiện router chưa có trang chi tiết phòng nên `AvailabilityChecker` chưa được mount vào luồng giao diện. Luồng này cần nối khi có route/trang phòng được bàn giao.
+`GET /api/public/rooms/{room}/availability` có trong backend API. Tại lần rà soát 01/11/2026 không tìm thấy component `AvailabilityChecker` hoặc frontend service gọi trực tiếp endpoint này. Trang tìm kiếm gửi tiêu chí ngày/khách đến API tìm phòng; checkout hiển thị khả dụng từ response preview. Chưa có màn hình Availability độc lập.
 
 Frontend hiển thị giá bằng VND, coi dữ liệu giá/tổng tiền từ backend là nguồn quyết định, và khóa nút mutation trong lúc gửi. Backend trả lỗi 401/403/404/409/422 theo các contract tại mục 1 và 2; trang booking dịch các mã lý do 409 sang tiếng Việt.
+
+## 4. Trạng thái kiểm tra tích hợp (01/11/2026)
+
+- `php artisan route:list --path=api`: thành công, liệt kê 39 route toàn ứng dụng; các route Search, Availability, Customer Booking, Host Workflow và Services của module này đã được đăng ký.
+- `php artisan migrate:fresh --seed`: thành công trên MySQL cấu hình localhost; migration gốc `2026_10_08_000000_create_stayhub_schema.php` không bị sửa.
+- `php artisan test`: **490 passed (2.545 assertions)** sau khi bổ sung tương thích factory, áp dụng `account.active` cho route booking và thay endpoint Host Properties inline bằng controller/query service/resource.
+- Frontend `npm install`: hoàn tất; npm báo 9 vulnerabilities (6 moderate, 3 high).
+- Frontend `npm run lint`: thành công với 3 warning Fast Refresh trong `badge.jsx`, `button.jsx` và `sidebar.jsx`.
+- Frontend `npm run build`: thành công; Vite cảnh báo bundle JavaScript lớn hơn 500 kB.
+- Chưa xác nhận toàn bộ luồng bằng thao tác browser end-to-end.

@@ -1,9 +1,9 @@
 <?php
-// TEMP-M1-STUB
 
 namespace App\Models;
 
 use App\Enums\UserRole;
+use App\Enums\Gender;
 use App\Enums\UserStatus;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -18,7 +18,16 @@ class User extends Authenticatable
     use HasApiTokens, HasFactory, Notifiable;
 
     protected $fillable = [
-        'name', 'email', 'password', 'phone', 'address', 'avatar', 'role', 'status',
+        'name',
+        'email',
+        'password',
+        'phone',
+        'address',
+        'avatar',
+        'gender',
+        'date_of_birth',
+        'role',
+        'status',
     ];
 
     protected $hidden = ['password', 'remember_token'];
@@ -27,6 +36,8 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'gender' => Gender::class,
+            'date_of_birth' => 'date:Y-m-d',
             'password' => 'hashed',
             'role' => UserRole::class,
             'status' => UserStatus::class,
