@@ -1,0 +1,4 @@
+interface:
+  display_name: "Stayhub Laravel"
+  short_description: "Help with Stayhub Laravel tasks"
+  default_prompt: "Use $stayhub-laravel for this StayHub task and report scope and results on chat."
