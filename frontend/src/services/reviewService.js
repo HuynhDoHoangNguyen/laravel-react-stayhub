@@ -1,4 +1,9 @@
-import api from '@/api/axios';
+import api from '../api/axios';
+import { createReviewApi } from '../api/reviewApi.js';
+import { requireApiId } from '../api/apiId.js';
+import { normalizeApiError, localValidationError } from '../api/apiError.js';
+
+const reviewApi = createReviewApi(api);
 
 /**
  * Domain Service cho module Đánh giá & Xếp hạng (Review & Rating - TV3)
@@ -22,13 +27,7 @@ export async function getPublicPropertyReviews(
   { page = 1, perPage = 10, rating = null, sortBy = 'latest' } = {},
   options = {}
 ) {
-  if (!propertyId || isNaN(Number(propertyId)) || Number(propertyId) <= 0) {
-    const error = new Error('Mã cơ sở lưu trú không hợp lệ.');
-    error.status = 400;
-    throw error;
-  }
-
-  const numericId = parseInt(propertyId, 10);
+  const numericId = requireApiId(propertyId, 'Mã cơ sở lưu trú');
   const queryParams = {
     page: Math.max(1, parseInt(page, 10) || 1),
     per_page: Math.min(50, Math.max(1, parseInt(perPage, 10) || 10)),
@@ -45,12 +44,7 @@ export async function getPublicPropertyReviews(
     queryParams.sort_by = sortBy;
   }
 
-  const response = await api.get(`/api/public/properties/${numericId}/reviews`, {
-    params: queryParams,
-    signal: options.signal,
-  });
-
-  return response.data;
+  return reviewApi.getPublicPropertyReviews(numericId, queryParams, options);
 }
 
 /**
@@ -62,25 +56,16 @@ export async function getPublicPropertyReviews(
  * @returns {Promise<Object>} Response chứa { data: ReviewResource }
  */
 export async function createBookingReview(bookingId, payload, options = {}) {
-  if (!bookingId || isNaN(Number(bookingId)) || Number(bookingId) <= 0) {
-    const err = new Error('Mã đơn đặt phòng không hợp lệ.');
-    err.status = 400;
-    throw err;
-  }
-  const numericId = parseInt(bookingId, 10);
+  const numericId = requireApiId(bookingId, 'Mã đơn đặt phòng');
 
   const rating = Number(payload?.rating);
   if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
-    const err = new Error('Điểm đánh giá phải là số nguyên từ 1 đến 5 sao.');
-    err.status = 422;
-    throw err;
+    throw localValidationError('Điểm đánh giá phải là số nguyên từ 1 đến 5 sao.', { rating: ['Điểm phải từ 1 đến 5.'] });
   }
 
   const comment = typeof payload?.comment === 'string' ? payload.comment.trim() : '';
   if (comment.length < 5 || comment.length > 1000) {
-    const err = new Error('Nội dung đánh giá phải có từ 5 đến 1000 ký tự.');
-    err.status = 422;
-    throw err;
+    throw localValidationError('Nội dung đánh giá phải có từ 5 đến 1000 ký tự.', { comment: ['Nhận xét phải từ 5 đến 1000 ký tự.'] });
   }
 
   const cleanPayload = {
@@ -88,11 +73,7 @@ export async function createBookingReview(bookingId, payload, options = {}) {
     comment,
   };
 
-  const response = await api.post(`/api/customer/bookings/${numericId}/review`, cleanPayload, {
-    signal: options.signal,
-  });
-
-  return response.data;
+  return reviewApi.createBookingReview(numericId, cleanPayload, options);
 }
 
 /**
@@ -103,11 +84,7 @@ export async function createBookingReview(bookingId, payload, options = {}) {
  * @returns {Promise<Object>}
  */
 export async function getCustomerReviews({ page = 1, perPage = 10 } = {}, options = {}) {
-  const response = await api.get('/api/customer/reviews', {
-    params: { page, per_page: perPage },
-    signal: options.signal,
-  });
-  return response.data;
+  return reviewApi.getCustomerReviews({ page, per_page: perPage }, options);
 }
 
 /**
@@ -125,22 +102,18 @@ export async function getCustomerReviews({ page = 1, perPage = 10 } = {}, option
  * @returns {Promise<{ status: 'reviewed'|'not_reviewed'|'unknown'|'error', review: Object|null, error?: Object, reason?: string }>}
  */
 export async function getCustomerReviewForBooking(bookingId, options = {}) {
-  if (!bookingId || isNaN(Number(bookingId)) || Number(bookingId) <= 0) {
+  let numericId;
+  try {
+    numericId = requireApiId(bookingId, 'Mã đơn đặt phòng');
+  } catch {
     return { status: 'unknown', review: null };
   }
-
-  const numericId = parseInt(bookingId, 10);
   const maxPages = options.maxPages || 5;
   let page = 1;
 
   try {
     while (page <= maxPages) {
-      const response = await api.get('/api/customer/reviews', {
-        params: { page, per_page: 50 },
-        signal: options.signal,
-      });
-
-      const resData = response.data;
+      const resData = await reviewApi.getCustomerReviews({ page, per_page: 50 }, options);
       const list = resData?.data || (Array.isArray(resData) ? resData : []);
       const meta = resData?.meta;
 
@@ -196,8 +169,8 @@ export async function getHostReviews(
     per_page: Math.min(50, Math.max(1, parseInt(perPage, 10) || 10)),
   };
 
-  if (propertyId && !isNaN(Number(propertyId)) && Number(propertyId) > 0) {
-    params.property_id = parseInt(propertyId, 10);
+  if (propertyId !== null && propertyId !== undefined && propertyId !== '') {
+    params.property_id = requireApiId(propertyId, 'Mã cơ sở lưu trú');
   }
 
   if (rating !== null && rating !== undefined && rating !== '') {
@@ -211,11 +184,7 @@ export async function getHostReviews(
     params.search = search.trim().slice(0, 255);
   }
 
-  const response = await api.get('/api/host/reviews', {
-    params,
-    signal: options.signal,
-  });
-  return response.data;
+  return reviewApi.getHostReviews(params, options);
 }
 
 /**
@@ -225,77 +194,7 @@ export async function getHostReviews(
  * @returns {{ status: number, message: string, isNetworkError: boolean, isNotFound: boolean, isConflict: boolean, isValidation: boolean }}
  */
 export function parseReviewError(error) {
-  if (!error.response) {
-    return {
-      status: 0,
-      message: error.message || 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại mạng.',
-      isNetworkError: true,
-      isNotFound: false,
-      isConflict: false,
-      isValidation: false,
-    };
-  }
-
-  const status = error.response.status;
-  const serverMessage = error.response.data?.message;
-
-  switch (status) {
-    case 401:
-      return {
-        status,
-        message: 'Phiên làm việc đã hết hạn hoặc chưa đăng nhập. Vui lòng đăng nhập lại.',
-        isNetworkError: false,
-        isNotFound: false,
-        isConflict: false,
-        isValidation: false,
-      };
-    case 403:
-      return {
-        status,
-        message: serverMessage || 'Bạn không có quyền thực hiện chức năng này.',
-        isNetworkError: false,
-        isNotFound: false,
-        isConflict: false,
-        isValidation: false,
-      };
-    case 404:
-      return {
-        status,
-        message: serverMessage || 'Không tìm thấy thông tin đơn đặt phòng hoặc cơ sở lưu trú.',
-        isNetworkError: false,
-        isNotFound: true,
-        isConflict: false,
-        isValidation: false,
-      };
-    case 409:
-      return {
-        status,
-        message: serverMessage || 'Đơn đặt phòng này đã có đánh giá trong hệ thống.',
-        isNetworkError: false,
-        isNotFound: false,
-        isConflict: true,
-        isValidation: false,
-      };
-    case 422:
-      return {
-        status,
-        message: serverMessage || 'Dữ liệu đánh giá không hợp lệ (Điểm từ 1-5 sao, nhận xét từ 5-1000 ký tự).',
-        isNetworkError: false,
-        isNotFound: false,
-        isConflict: false,
-        isValidation: true,
-      };
-    case 500:
-    default:
-      return {
-        status,
-        message: serverMessage || 'Đã xảy ra lỗi hệ thống khi xử lý đánh giá. Vui lòng thử lại sau.',
-        isNetworkError: false,
-        isNotFound: false,
-        isConflict: false,
-        isValidation: false,
-      };
-  }
+  return normalizeApiError(error);
 }
 
 export const reviewService = {

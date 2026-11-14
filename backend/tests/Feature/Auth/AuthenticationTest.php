@@ -296,7 +296,7 @@ class AuthenticationTest extends TestCase
     public function test_role_denial_keeps_the_session_and_public_routes_remain_public(): void
     {
         $this->login($this->user())->assertOk();
-        $this->browser('GET', '/api/host/invoices')->assertForbidden()->assertJsonMissingPath('code');
+        $this->browser('GET', '/api/host/invoices')->assertForbidden()->assertJsonPath('code', 'INVOICE_READ_FORBIDDEN');
         $this->browser('GET', '/api/me')->assertOk();
         $this->browser('GET', '/api/test')->assertOk();
         $this->browser('GET', '/api/public/properties/999999/reviews')->assertNotFound();

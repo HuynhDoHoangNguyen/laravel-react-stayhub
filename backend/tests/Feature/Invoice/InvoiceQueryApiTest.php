@@ -528,4 +528,209 @@ class InvoiceQueryApiTest extends TestCase
         $this->assertSame('1000000.00', $item['unit_price']);
         $this->assertSame('2000000.00', $item['amount']);
     }
+
+    public function test_malformed_query_shapes_return_field_errors_for_both_roles(): void
+    {
+        foreach ([[$this->host, '/api/host/invoices'], [$this->customer, '/api/customer/invoices']] as [$actor, $url]) {
+            foreach (['search', 'status', 'page', 'per_page'] as $field) {
+                $this->actingAs($actor)->getJson($url.'?'.http_build_query([$field => ['bad']]))
+                    ->assertUnprocessable()->assertJsonValidationErrors($field);
+            }
+        }
+    }
+
+    public function test_role_authorization_precedes_malformed_filters_and_id_lookup(): void
+    {
+        $this->actingAs($this->customer)->getJson('/api/host/invoices?search[]=bad')
+            ->assertForbidden()->assertJson(['code' => 'INVOICE_READ_FORBIDDEN']);
+        $this->actingAs($this->host)->getJson('/api/customer/invoices/invalid')
+            ->assertForbidden()->assertJson(['code' => 'INVOICE_READ_FORBIDDEN']);
+    }
+
+    public function test_detail_privacy_errors_have_identical_public_message_and_code(): void
+    {
+        foreach ([[$this->host, '/api/host/invoices/', $this->invoiceOtherHost->id], [$this->otherCustomer, '/api/customer/invoices/', $this->invoiceHost->id]] as [$actor, $url, $foreignId]) {
+            foreach ([$foreignId, 999999, 'invalid', '01', '1.5', '1e2'] as $id) {
+                $this->actingAs($actor)->getJson($url.$id)->assertNotFound()->assertExactJson([
+                    'message' => 'Không tìm thấy hóa đơn.', 'code' => 'INVOICE_NOT_FOUND',
+                ]);
+            }
+        }
+    }
+
+    public function test_legacy_scalar_filter_defaults_and_clamps_remain_compatible(): void
+    {
+        $this->invoiceHost->update(['invoice_code' => 'INV-ABC']);
+        $this->invoicePaidHost->update(['invoice_code' => 'INV-DEF']);
+        foreach (['?status=UNSUPPORTED', '?search=0', '?search=%20%20', '?page=invalid', '?page=0', '?page=1.5'] as $query) {
+            $response = $this->actingAs($this->host)->getJson('/api/host/invoices'.$query)->assertOk();
+            $this->assertSame(2, $response->json('meta.total'));
+            $this->assertSame(1, $response->json('meta.current_page'));
+        }
+        foreach (['invalid' => 10, '0' => 1, '-2' => 1, '1.5' => 1, '1e2' => 50, '999' => 50] as $input => $size) {
+            $this->actingAs($this->host)->getJson('/api/host/invoices?per_page='.$input)
+                ->assertOk()->assertJsonPath('meta.per_page', $size);
+        }
+        $page = $this->actingAs($this->host)->getJson('/api/host/invoices?per_page=1&page=2')->assertOk();
+        $page->assertJsonPath('meta.current_page', 2)->assertJsonPath('meta.total', 2)->assertJsonCount(1, 'data');
+    }
+
+    public function test_read_serialization_preserves_the_public_contract_for_list_and_detail(): void
+    {
+        foreach ([[$this->host, '/api/host/invoices'], [$this->customer, '/api/customer/invoices']] as [$actor, $url]) {
+            $detail = $this->invoiceHost->fresh()->load('items');
+            $expectedDetail = ['data' => $this->expectedInvoicePayload($detail, true)];
+            $this->actingAs($actor)->getJson($url.'/'.$detail->id)->assertOk()->assertExactJson($expectedDetail);
+            $rows = $this->actingAs($actor)->getJson($url)->assertOk()->json('data');
+            foreach ($rows as $row) {
+                $model = Invoice::findOrFail($row['id']);
+                $expected = $this->expectedInvoicePayload($model);
+                $this->assertSame($expected, $row);
+                $this->assertArrayNotHasKey('items', $row);
+            }
+        }
+        InvoiceItem::where('invoice_id', $this->invoiceHost->id)->delete();
+        $this->actingAs($this->host)->getJson('/api/host/invoices/'.$this->invoiceHost->id)->assertOk()->assertJsonPath('data.items', []);
+        $this->actingAs($this->host)->getJson('/api/host/invoices?search=does-not-exist')->assertOk()->assertJsonPath('data', [])->assertJsonPath('meta.total', 0);
+    }
+
+    public function test_query_service_returns_dto_paginator_and_dto_serialization_never_queries(): void
+    {
+        $service = app(\App\Services\Invoice\InvoiceQueryService::class);
+        $filters = new \App\DTOs\Invoice\Requests\InvoiceFilterRequest(perPage: 1);
+        $page = $service->getHostInvoices($this->host, $filters);
+        $detail = $service->getCustomerInvoiceDetail($this->invoiceHost->id, $this->customer);
+        $this->assertInstanceOf(\App\DTOs\Invoice\Responses\InvoiceResponse::class, $page->items()[0]);
+        $this->assertInstanceOf(\App\DTOs\Invoice\Responses\InvoiceResponse::class, $detail);
+        $this->assertSame(2, $page->total());
+        \Illuminate\Support\Facades\DB::flushQueryLog();
+        \Illuminate\Support\Facades\DB::enableQueryLog();
+        try {
+            \App\Common\ApiResponse::page($page);
+            \App\Common\ApiResponse::success($detail);
+            $this->assertSame([], \Illuminate\Support\Facades\DB::getQueryLog());
+        } finally {
+            \Illuminate\Support\Facades\DB::disableQueryLog();
+        }
+    }
+
+    public function test_service_checks_role_before_repository_queries_outside_http(): void
+    {
+        $repository = $this->app->make(\App\Repositories\Invoice\InvoiceRepository::class);
+        $service = new \App\Services\Invoice\InvoiceQueryService($repository, new \App\Mappers\Invoice\InvoiceMapper);
+        $filters = new \App\DTOs\Invoice\Requests\InvoiceFilterRequest;
+        \Illuminate\Support\Facades\DB::flushQueryLog();
+        \Illuminate\Support\Facades\DB::enableQueryLog();
+        try {
+            foreach ([fn () => $service->getHostInvoices($this->customer, $filters), fn () => $service->getHostInvoiceDetail(999, $this->customer),
+                fn () => $service->getCustomerInvoices($this->host, $filters), fn () => $service->getCustomerInvoiceDetail(999, $this->host)] as $operation) {
+                try {
+                    $operation();
+                    $this->fail('Wrong role was accepted.');
+                } catch (\App\Exceptions\AppException $error) {
+                    $this->assertSame(403, $error->status);
+                    $this->assertSame('INVOICE_READ_FORBIDDEN', $error->errorCode);
+                }
+            }
+            $this->assertSame([], \Illuminate\Support\Facades\DB::getQueryLog());
+        } finally {
+            \Illuminate\Support\Facades\DB::disableQueryLog();
+        }
+    }
+
+    public function test_read_endpoints_do_not_change_invoices_items_or_payment_status(): void
+    {
+        $beforeInvoices = Invoice::orderBy('id')->get()->toArray();
+        $beforeItems = InvoiceItem::orderBy('id')->get()->toArray();
+        foreach ([[$this->host, '/api/host/invoices'], [$this->customer, '/api/customer/invoices']] as [$actor, $url]) {
+            $this->actingAs($actor)->getJson($url)->assertOk();
+            $this->actingAs($actor)->getJson($url.'/'.$this->invoiceHost->id)->assertOk();
+        }
+        $this->assertSame($beforeInvoices, Invoice::orderBy('id')->get()->toArray());
+        $this->assertSame($beforeItems, InvoiceItem::orderBy('id')->get()->toArray());
+    }
+
+
+    public function test_get_body_cannot_override_query_filters_or_trigger_query_validation(): void
+    {
+        foreach ([[$this->host, '/api/host/invoices'], [$this->customer, '/api/customer/invoices']] as [$actor, $url]) {
+            $expected = $this->actingAs($actor)->getJson($url.'?per_page=1&page=1')->assertOk()->json();
+            $actual = $this->actingAs($actor)->json('GET', $url.'?per_page=1&page=1', [
+                'search' => ['bad'], 'status' => ['bad'], 'page' => ['bad'], 'per_page' => ['bad'],
+            ])->assertOk()->json();
+            $this->assertSame($expected, $actual);
+            $this->actingAs($actor)->json('GET', $url.'?search[]=bad', ['search' => 'valid'])
+                ->assertUnprocessable()->assertJsonValidationErrors('search');
+        }
+    }
+
+    public function test_read_validator_keeps_exact_validation_errors_and_does_not_query(): void
+    {
+        $validator = app(\App\Validators\Invoice\InvoiceValidator::class);
+        \Illuminate\Support\Facades\DB::flushQueryLog();
+        \Illuminate\Support\Facades\DB::enableQueryLog();
+        try {
+            $this->assertSame(['status' => null, 'search' => null, 'page' => 'bad', 'per_page' => -2],
+                $validator->validateQuery(['status' => null, 'search' => null, 'page' => 'bad', 'per_page' => -2, 'ignored' => 'value']));
+            try {
+                $validator->validateQuery(['status' => [], 'search' => [], 'page' => [], 'per_page' => []]);
+                $this->fail('Malformed fields were accepted.');
+            } catch (\Illuminate\Validation\ValidationException $error) {
+                $this->assertSame([
+                    'status' => [__('validation.string', ['attribute' => 'status'])],
+                    'search' => [__('validation.string', ['attribute' => 'search'])],
+                    'page' => ['Tham số page không hợp lệ.'],
+                    'per_page' => ['Tham số per_page không hợp lệ.'],
+                ], $error->errors());
+            }
+            foreach ([null, $this->customer] as $actor) {
+                try {
+                    $validator->authorize($actor, \App\Enums\UserRole::HOST);
+                    $this->fail('Wrong role was accepted.');
+                } catch (\App\Exceptions\AppException $error) {
+                    $this->assertSame(403, $error->status);
+                    $this->assertSame('INVOICE_READ_FORBIDDEN', $error->errorCode);
+                }
+            }
+            $validator->authorize($this->host, \App\Enums\UserRole::HOST);
+            $validator->authorize($this->customer, \App\Enums\UserRole::CUSTOMER);
+            $this->assertSame([], \Illuminate\Support\Facades\DB::getQueryLog());
+        } finally {
+            \Illuminate\Support\Facades\DB::disableQueryLog();
+        }
+    }
+
+
+    /** Public contract retained from before migration; never calls production Mapper/DTO. */
+    private function expectedInvoicePayload(Invoice $invoice, bool $detail = false): array
+    {
+        $expected = [
+            'id' => (int) $invoice->id,
+            'invoice_code' => (string) $invoice->invoice_code,
+            'booking_id' => (int) $invoice->booking_id,
+            'customer_name' => (string) $invoice->customer_name,
+            'customer_email' => (string) $invoice->customer_email,
+            'customer_phone' => (string) $invoice->customer_phone,
+            'property_name' => (string) $invoice->property_name,
+            'room_name' => (string) $invoice->room_name,
+            'subtotal' => bcadd((string) $invoice->subtotal, '0', 2),
+            'discount_amount' => bcadd((string) $invoice->discount_amount, '0', 2),
+            'extra_fee' => bcadd((string) $invoice->extra_fee, '0', 2),
+            'total_amount' => bcadd((string) $invoice->total_amount, '0', 2),
+            'payment_status' => (string) $invoice->payment_status,
+            'paid_at' => $invoice->paid_at?->toISOString(),
+            'created_at' => $invoice->created_at?->toISOString(),
+        ];
+        if ($detail) {
+            $expected['items'] = $invoice->getRelation('items')->map(static fn (InvoiceItem $item) => [
+                'id' => (int) $item->id, 'invoice_id' => (int) $item->invoice_id,
+                'item_type' => (string) $item->item_type, 'item_name' => (string) $item->item_name,
+                'description' => $item->description !== null ? (string) $item->description : null,
+                'quantity' => bcadd((string) $item->quantity, '0', 2),
+                'unit_price' => bcadd((string) $item->unit_price, '0', 2),
+                'amount' => bcadd((string) $item->amount, '0', 2),
+            ])->values()->all();
+        }
+        return $expected;
+    }
 }

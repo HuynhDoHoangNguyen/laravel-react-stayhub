@@ -9,19 +9,19 @@ use App\Models\BookingService;
 use App\Models\Property;
 use App\Models\Room;
 use App\Models\User;
-use App\Validators\Invoice\InvoiceCreationValidator;
+use App\Validators\Invoice\InvoiceValidator;
 use Illuminate\Auth\Access\AuthorizationException;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 
-class InvoiceCreationValidatorTest extends TestCase
+class InvoiceValidatorTest extends TestCase
 {
-    protected InvoiceCreationValidator $validator;
+    protected InvoiceValidator $validator;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->validator = new InvoiceCreationValidator();
+        $this->validator = new InvoiceValidator(new \App\Validators\AttributeValidator(\Symfony\Component\Validator\Validation::createValidatorBuilder()->enableAttributeMapping()->getValidator()), new \App\Services\Invoice\InvoiceCalculationService());
     }
 
     /**
@@ -212,5 +212,80 @@ class InvoiceCreationValidatorTest extends TestCase
         $this->expectExceptionMessage('Số đêm lưu trú của Booking phải lớn hơn 0 (nhận được: 0).');
 
         $this->validator->validateFinancialIntegrity($booking);
+    }
+
+    public function test_duplicate_validation_uses_only_the_supplied_fact_without_a_database(): void
+    {
+        $this->validator->validateInvoiceNotExists(100, false);
+        $this->expectException(\App\Exceptions\Invoice\DuplicateInvoiceException::class);
+        $this->expectExceptionMessage('Đơn đặt phòng #100 đã có hóa đơn. Không thể tạo hóa đơn thứ hai.');
+        $this->validator->validateInvoiceNotExists(100, true);
+    }
+
+    public function test_unloaded_relation_is_rejected_without_attempting_a_query(): void
+    {
+        $host = (new User)->forceFill(['id' => 1, 'role' => UserRole::HOST]);
+        $booking = $this->createMockBooking()->unsetRelation('room');
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('requires eager-loaded relation: room');
+        $this->validator->validateCreationEligibility($booking, $host);
+    }
+
+    public function test_wrong_role_is_rejected_before_inspecting_unloaded_relations(): void
+    {
+        $admin = (new User)->forceFill(['id' => 1, 'role' => UserRole::ADMIN]);
+        $booking = (new Booking)->forceFill(['id' => 100]);
+        $this->expectException(AuthorizationException::class);
+        $this->expectExceptionMessage('Chỉ tài khoản đối tác (HOST)');
+        $this->validator->validateCreationEligibility($booking, $admin);
+    }
+
+    public function test_loaded_null_relation_preserves_the_existing_business_error(): void
+    {
+        $booking = $this->createMockBooking()->setRelation('customer', null);
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Đơn đặt phòng không tìm thấy thông tin khách hàng (customer) liên kết.');
+        $this->validator->validateCreationSnapshots($booking);
+    }
+
+    public function test_creation_validation_succeeds_with_loaded_snapshots_without_a_database(): void
+    {
+        $host = (new User)->forceFill(['id' => 1, 'role' => UserRole::HOST]);
+        $booking = $this->createMockBooking();
+        $this->validator->validateCreationEligibility($booking, $host);
+        $this->validator->validateInvoiceNotExists(100, false);
+        $this->validator->validateCreationSnapshots($booking);
+        $this->assertSame('2000000.00', $booking->room_total);
+    }
+
+    public function test_model_validation_accepts_valid_candidates_without_mutation_or_database(): void
+    {
+        $invoice = (new \App\Models\Invoice)->fill(['invoice_code' => ' INV-CANDIDATE ', 'total_amount' => '123.45']);
+        $item = (new \App\Models\InvoiceItem)->fill(['item_type' => 'ROOM', 'item_name' => ' Room snapshot ', 'amount' => '123.45']);
+        $before = [$invoice->getAttributes(), $invoice->getDirty(), $item->getAttributes(), $item->getDirty()];
+        $this->validator->validateInvoiceModel($invoice);
+        $this->validator->validateRoomItemModel($item);
+        $this->assertSame($before, [$invoice->getAttributes(), $invoice->getDirty(), $item->getAttributes(), $item->getDirty()]);
+        $this->assertFalse($invoice->exists);
+        $this->assertFalse($item->exists);
+    }
+
+    public function test_model_validation_rejects_blank_values_with_safe_domain_messages(): void
+    {
+        foreach (['', '   ', null] as $blank) {
+            foreach ([
+                [new \App\Models\Invoice(['invoice_code' => $blank]), 'validateInvoiceModel', 'Dữ liệu hóa đơn không hợp lệ.'],
+                [new \App\Models\InvoiceItem(['item_type' => 'ROOM', 'item_name' => $blank]), 'validateRoomItemModel', 'Dữ liệu dòng hóa đơn không hợp lệ.'],
+            ] as [$model, $method, $message]) {
+                $before = $model->getAttributes();
+                try {
+                    $this->validator->$method($model);
+                    $this->fail('Expected an actual attribute constraint violation.');
+                } catch (InvalidArgumentException $error) {
+                    $this->assertSame($message, $error->getMessage());
+                    $this->assertSame($before, $model->getAttributes());
+                }
+            }
+        }
     }
 }

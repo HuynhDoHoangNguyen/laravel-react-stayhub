@@ -2,136 +2,68 @@
 
 namespace App\Services\Invoice;
 
+use App\DTOs\Invoice\Requests\InvoiceFilterRequest;
+use App\DTOs\Invoice\Responses\InvoiceResponse;
+use App\Enums\UserRole;
+use App\Exceptions\AppException;
+use App\Exceptions\ErrorCode;
+use App\Mappers\Invoice\InvoiceMapper;
 use App\Models\Invoice;
 use App\Models\User;
+use App\Repositories\Invoice\InvoiceRepository;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class InvoiceQueryService
 {
-    /**
-     * Lấy danh sách hóa đơn phân trang thuộc các cơ sở lưu trú do Host sở hữu.
-     *
-     * @param User $host
-     * @param array{status?: ?string, search?: ?string} $filters
-     * @param int $perPage
-     * @return LengthAwarePaginator
-     */
-    public function getHostInvoices(User $host, array $filters = [], int $perPage = 10): LengthAwarePaginator
+    public function __construct(
+        private readonly InvoiceRepository $repository,
+        private readonly InvoiceMapper $mapper,
+    ) {}
+
+    /** @return LengthAwarePaginator<int, InvoiceResponse> */
+    public function getHostInvoices(User $host, InvoiceFilterRequest $filters): LengthAwarePaginator
     {
-        $clampedPerPage = max(1, min(50, $perPage));
-
-        $query = Invoice::query()
-            ->whereHas('booking.room.property', function ($q) use ($host) {
-                $q->where('host_id', $host->id);
-            });
-
-        // Lọc theo trạng thái thanh toán hợp lệ: UNPAID, PAID, REFUNDED
-        if (!empty($filters['status']) && in_array($filters['status'], ['UNPAID', 'PAID', 'REFUNDED'], true)) {
-            $query->where('payment_status', $filters['status']);
-        }
-
-        // Tìm kiếm ưu tiên invoice_code và customer_name
-        if (!empty($filters['search'])) {
-            $search = trim($filters['search']);
-            if ($search !== '') {
-                $query->where(function ($q) use ($search) {
-                    $q->where('invoice_code', 'like', "%{$search}%")
-                      ->orWhere('customer_name', 'like', "%{$search}%");
-                });
-            }
-        }
-
-        return $query->orderByDesc('created_at')
-            ->orderByDesc('id')
-            ->paginate($clampedPerPage);
+        $this->authorizeRole($host, UserRole::HOST);
+        return $this->mapPage($this->repository->paginateForHost($host->id, $filters));
     }
 
-    /**
-     * Lấy chi tiết một hóa đơn của Host có eager load các dòng chi tiết items.
-     *
-     * @param int $invoiceId
-     * @param User $host
-     * @return Invoice
-     *
-     * @throws ModelNotFoundException
-     */
-    public function getHostInvoiceDetail(int $invoiceId, User $host): Invoice
+    public function getHostInvoiceDetail(int $invoiceId, User $host): InvoiceResponse
     {
-        $invoice = Invoice::with('items')
-            ->where('id', $invoiceId)
-            ->whereHas('booking.room.property', function ($q) use ($host) {
-                $q->where('host_id', $host->id);
-            })
-            ->first();
-
-        if (!$invoice) {
-            throw new ModelNotFoundException("Không tìm thấy hóa đơn hoặc bạn không có quyền truy cập.");
-        }
-
-        return $invoice;
+        $this->authorizeRole($host, UserRole::HOST);
+        return $this->mapDetail($this->repository->findForHost($invoiceId, $host->id));
     }
 
-    /**
-     * Lấy danh sách hóa đơn phân trang phát sinh từ các đơn đặt phòng của Customer.
-     *
-     * @param User $customer
-     * @param array{status?: ?string, search?: ?string} $filters
-     * @param int $perPage
-     * @return LengthAwarePaginator
-     */
-    public function getCustomerInvoices(User $customer, array $filters = [], int $perPage = 10): LengthAwarePaginator
+    /** @return LengthAwarePaginator<int, InvoiceResponse> */
+    public function getCustomerInvoices(User $customer, InvoiceFilterRequest $filters): LengthAwarePaginator
     {
-        $clampedPerPage = max(1, min(50, $perPage));
-
-        $query = Invoice::query()
-            ->whereHas('booking', function ($q) use ($customer) {
-                $q->where('customer_id', $customer->id);
-            });
-
-        // Lọc theo trạng thái thanh toán hợp lệ: UNPAID, PAID, REFUNDED
-        if (!empty($filters['status']) && in_array($filters['status'], ['UNPAID', 'PAID', 'REFUNDED'], true)) {
-            $query->where('payment_status', $filters['status']);
-        }
-
-        // Tìm kiếm ưu tiên invoice_code và property_name
-        if (!empty($filters['search'])) {
-            $search = trim($filters['search']);
-            if ($search !== '') {
-                $query->where(function ($q) use ($search) {
-                    $q->where('invoice_code', 'like', "%{$search}%")
-                      ->orWhere('property_name', 'like', "%{$search}%");
-                });
-            }
-        }
-
-        return $query->orderByDesc('created_at')
-            ->orderByDesc('id')
-            ->paginate($clampedPerPage);
+        $this->authorizeRole($customer, UserRole::CUSTOMER);
+        return $this->mapPage($this->repository->paginateForCustomer($customer->id, $filters));
     }
 
-    /**
-     * Lấy chi tiết một hóa đơn của Customer có eager load các dòng chi tiết items.
-     *
-     * @param int $invoiceId
-     * @param User $customer
-     * @return Invoice
-     *
-     * @throws ModelNotFoundException
-     */
-    public function getCustomerInvoiceDetail(int $invoiceId, User $customer): Invoice
+    public function getCustomerInvoiceDetail(int $invoiceId, User $customer): InvoiceResponse
     {
-        $invoice = Invoice::with('items')
-            ->where('id', $invoiceId)
-            ->whereHas('booking', function ($q) use ($customer) {
-                $q->where('customer_id', $customer->id);
-            })
-            ->first();
+        $this->authorizeRole($customer, UserRole::CUSTOMER);
+        return $this->mapDetail($this->repository->findForCustomer($invoiceId, $customer->id));
+    }
 
-        if (!$invoice) {
-            throw new ModelNotFoundException("Không tìm thấy hóa đơn hoặc bạn không có quyền truy cập.");
+    private function authorizeRole(User $actor, UserRole $expected): void
+    {
+        if ($actor->role !== $expected) {
+            throw new AppException(ErrorCode::INVOICE_READ_FORBIDDEN, 'Bạn không có quyền truy cập chức năng này.', 403);
         }
+    }
 
-        return $invoice;
+    private function mapPage(LengthAwarePaginator $page): LengthAwarePaginator
+    {
+        $page->setCollection($page->getCollection()->map(fn (Invoice $invoice) => $this->mapper->toResponse($invoice)));
+        return $page;
+    }
+
+    private function mapDetail(?Invoice $invoice): InvoiceResponse
+    {
+        if ($invoice === null) {
+            throw new AppException(ErrorCode::INVOICE_NOT_FOUND, 'Không tìm thấy hóa đơn.', 404);
+        }
+        return $this->mapper->toResponse($invoice, true);
     }
 }
