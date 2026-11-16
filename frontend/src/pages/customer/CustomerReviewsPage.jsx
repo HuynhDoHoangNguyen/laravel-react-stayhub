@@ -52,31 +52,22 @@ export default function CustomerReviewsPage() {
       setError(null);
 
       try {
-        const res = await reviewService.getCustomerReviews(
+        const { data, pagination } = await reviewService.getCustomerReviews(
           { page, perPage: 6 },
           { signal: controller.signal }
         );
         if (!isMounted) return;
 
-        const list = res?.data || (Array.isArray(res) ? res : []);
-        const meta = res?.meta || {};
-        const total = Number(meta.total) || 0;
-        const lastPage = Number(meta.last_page) || 1;
-        const currentPage = Number(meta.current_page) || page;
+        const { currentPage, lastPage } = pagination;
 
         // Xử lý an toàn: Nếu do dữ liệu thay đổi mà page hiện tại vượt lastPage
-        if (currentPage > lastPage && lastPage >= 1) {
+        if (currentPage > lastPage) {
           setPage(lastPage);
           return;
         }
 
-        setReviews(list);
-        setPaginationMeta({
-          currentPage,
-          lastPage,
-          total,
-          perPage: Number(meta.per_page) || 6,
-        });
+        setReviews(data);
+        setPaginationMeta(pagination);
       } catch (err) {
         if (!isMounted) return;
         if (

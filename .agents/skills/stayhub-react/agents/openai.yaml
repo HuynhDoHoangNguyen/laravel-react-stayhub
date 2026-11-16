@@ -1,0 +1,4 @@
+interface:
+  display_name: "Stayhub React"
+  short_description: "Help with Stayhub React tasks"
+  default_prompt: "Use $stayhub-react for this StayHub task and report scope and results on chat."

@@ -70,7 +70,7 @@ export default function HostReviewsPage() {
       setError(null);
 
       try {
-        const res = await reviewService.getHostReviews(
+        const { data, pagination, summary: reviewSummary } = await reviewService.getHostReviews(
           {
             page,
             perPage: 10,
@@ -82,30 +82,17 @@ export default function HostReviewsPage() {
 
         if (!isMounted) return;
 
-        const list = res?.data || (Array.isArray(res) ? res : []);
-        const meta = res?.meta || {};
-        const sum = res?.summary || null;
-
-        const total = Number(meta.total) || 0;
-        const lastPage = Number(meta.last_page) || 1;
-        const currentPage = Number(meta.current_page) || page;
+        const { currentPage, lastPage } = pagination;
 
         // Xử lý an toàn: nếu do thay đổi dữ liệu mà page hiện tại vượt lastPage
-        if (currentPage > lastPage && lastPage >= 1) {
+        if (currentPage > lastPage) {
           setPage(lastPage);
           return;
         }
 
-        setReviews(list);
-        if (sum) {
-          setSummary(sum);
-        }
-        setPaginationMeta({
-          currentPage,
-          lastPage,
-          total,
-          perPage: Number(meta.per_page) || 10,
-        });
+        setReviews(data);
+        setSummary(reviewSummary);
+        setPaginationMeta(pagination);
       } catch (err) {
         if (!isMounted) return;
         if (

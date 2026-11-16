@@ -2,29 +2,26 @@
 
 namespace App\Services\Review;
 
-use App\Models\Booking;
+use App\DTOs\Review\Requests\CreateReviewRequest;
 use App\Models\Review;
 use App\Models\User;
 use App\Validators\Review\ReviewCreationValidator;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Facade;
-use Illuminate\Support\Facades\Log;
 use Psr\Log\LoggerInterface;
+use App\Repositories\Review\ReviewRepository;
+use App\Mappers\Review\ReviewMapper;
+use LogicException;
 
 class ReviewService
 {
-    protected ReviewCreationValidator $validator;
-    protected ?LoggerInterface $logger;
-
     public function __construct(
-        ?ReviewCreationValidator $validator = null,
-        ?LoggerInterface $logger = null
-    ) {
-        $this->validator = $validator ?? new ReviewCreationValidator();
-        $this->logger = $logger;
-    }
+        protected readonly ReviewRepository $repository,
+        protected readonly ReviewCreationValidator $validator,
+        protected readonly ReviewMapper $mapper,
+        protected readonly LoggerInterface $logger,
+    ) {}
 
     /**
      * Lấy đối tượng Validator đang sử dụng.
@@ -51,38 +48,46 @@ class ReviewService
      */
     public function createReview(int $bookingId, User $customerActor, array $data): Review
     {
+        return $this->persistReview($bookingId, $customerActor, $data);
+    }
+
+    public function createReviewFromRequest(CreateReviewRequest $request, User $customerActor): Review
+    {
+        return $this->persistReview($request->bookingId, $customerActor, [
+            'rating' => $request->rating,
+            'comment' => $request->comment,
+        ]);
+    }
+
+    private function persistReview(int $bookingId, User $customerActor, array $data): Review
+    {
         return DB::transaction(function () use ($bookingId, $customerActor, $data) {
             // 1. Khóa bản ghi Booking bằng lockForUpdate() chống concurrent requests
-            $booking = Booking::with(['room.property', 'review'])
-                ->where('id', $bookingId)
-                ->lockForUpdate()
-                ->first();
+            $booking = $this->repository->findBookingForReviewWithLock($bookingId);
 
             if (!$booking) {
                 throw new ModelNotFoundException("Không tìm thấy đơn đặt phòng với ID: {$bookingId}");
             }
 
-            /** @var Booking $booking */
             // 2. Xác thực toàn bộ điều kiện nghiệp vụ và trích xuất property_id an toàn
-            $propertyId = $this->validator->validateForCreation($booking, $customerActor, $data);
+            $this->validator->validateCreationEligibility($booking, $customerActor);
+            if (!$booking->relationLoaded('review')) {
+                throw new LogicException('Review creation requires an eager-loaded review relation.');
+            }
+            $duplicateExists = $booking->getRelation('review') !== null
+                || ($booking->exists && $this->repository->reviewExistsForBooking($bookingId));
+            $propertyId = $this->validator->validateCreationDetails($booking, $data, $duplicateExists);
 
             // 3. Kiểm tra lại sự tồn tại của Review ngay trong phạm vi transaction được khóa
-            if (Review::where('booking_id', $bookingId)->exists()) {
+            if ($this->repository->reviewExistsForBooking($bookingId)) {
                 throw new DuplicateReviewException("Đơn đặt phòng #{$bookingId} đã có đánh giá.");
             }
 
             // 4. Lưu bản ghi Review vào cơ sở dữ liệu
-            $rating = (int) $data['rating'];
-            $comment = trim((string) $data['comment']);
+            $attributes = $this->mapper->toCreationAttributes($booking, $customerActor, $propertyId, $data);
 
             try {
-                $review = Review::create([
-                    'booking_id' => $booking->id,
-                    'customer_id' => $customerActor->id,
-                    'property_id' => $propertyId,
-                    'rating' => $rating,
-                    'comment' => $comment,
-                ]);
+                $review = $this->repository->createReview($attributes);
             } catch (QueryException $e) {
                 $this->handleQueryException($e, $booking->id);
             }
@@ -97,7 +102,7 @@ class ReviewService
                 ]);
             });
 
-            return $review->load(['booking', 'property', 'customer']);
+            return $this->repository->loadReviewRelations($review);
         });
     }
 
@@ -142,13 +147,6 @@ class ReviewService
      */
     protected function logInfo(string $message, array $context = []): void
     {
-        if ($this->logger !== null) {
-            $this->logger->info($message, $context);
-            return;
-        }
-
-        if (class_exists(Log::class) && Facade::getFacadeApplication() !== null) {
-            Log::info($message, $context);
-        }
+        $this->logger->info($message, $context);
     }
 }

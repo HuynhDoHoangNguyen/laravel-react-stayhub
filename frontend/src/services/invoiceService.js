@@ -1,4 +1,37 @@
-import api from '../api/axios';
+import api from '../api/axios.js';
+import { createInvoiceApi } from '../api/invoiceApi.js';
+import { normalizeApiError } from '../api/apiError.js';
+import { mapInvoiceListResponse, mapInvoiceDetailResponse } from '../mappers/invoiceMapper.js';
+
+/** Invoice domain boundary; injected API preserves the production Axios/Auth pipeline. */
+export function createInvoiceService(invoiceApi) {
+  function listParams({ page = 1, perPage = 10, status = '', search = '' } = {}) {
+    const params = { page, per_page: perPage };
+    if (status && status !== 'ALL') params.status = status;
+    if (search && search.trim() !== '') params.search = search.trim();
+    return params;
+  }
+
+  return {
+    async createHostInvoice(id, options = {}) {
+      return mapInvoiceDetailResponse(await invoiceApi.createHostInvoice(id, options));
+    },
+    async getHostInvoices(params = {}, options = {}) {
+      return mapInvoiceListResponse(await invoiceApi.getHostInvoices(listParams(params), options));
+    },
+    async getCustomerInvoices(params = {}, options = {}) {
+      return mapInvoiceListResponse(await invoiceApi.getCustomerInvoices(listParams(params), options));
+    },
+    async getHostInvoiceDetail(id, options = {}) {
+      return mapInvoiceDetailResponse(await invoiceApi.getHostInvoiceDetail(id, options));
+    },
+    async getCustomerInvoiceDetail(id, options = {}) {
+      return mapInvoiceDetailResponse(await invoiceApi.getCustomerInvoiceDetail(id, options));
+    },
+  };
+}
+
+const invoiceService = createInvoiceService(createInvoiceApi(api));
 
 /**
  * Service quản lý các yêu cầu API liên quan đến Hóa đơn (Invoice / Billing)
@@ -10,14 +43,8 @@ import api from '../api/axios';
  * @param {number|string} bookingId ID của Booking cần lập hóa đơn
  * @returns {Promise<Object>} Dữ liệu Invoice trả về từ backend (chứa data: { id, invoice_code, items, ... })
  */
-export async function createHostInvoice(bookingId) {
-    if (!bookingId || isNaN(Number(bookingId)) || Number(bookingId) <= 0) {
-        throw new Error('Mã đơn đặt phòng không hợp lệ.');
-    }
-
-    const numericId = parseInt(bookingId, 10);
-    const response = await api.post(`/api/host/bookings/${numericId}/invoice`);
-    return response.data;
+export async function createHostInvoice(bookingId, options = {}) {
+    return invoiceService.createHostInvoice(bookingId, options);
 }
 
 /**
@@ -30,17 +57,8 @@ export async function createHostInvoice(bookingId) {
  * @param {string} [params.search='']
  * @returns {Promise<Object>} Object gồm { data: Invoice[], meta: Object, links: Object }
  */
-export async function getHostInvoices({ page = 1, perPage = 10, status = '', search = '' } = {}) {
-    const params = { page, per_page: perPage };
-    if (status && status !== 'ALL') {
-        params.status = status;
-    }
-    if (search && search.trim() !== '') {
-        params.search = search.trim();
-    }
-
-    const response = await api.get('/api/host/invoices', { params });
-    return response.data;
+export async function getHostInvoices({ page = 1, perPage = 10, status = '', search = '' } = {}, options = {}) {
+    return invoiceService.getHostInvoices({ page, perPage, status, search }, options);
 }
 
 /**
@@ -49,14 +67,8 @@ export async function getHostInvoices({ page = 1, perPage = 10, status = '', sea
  * @param {number|string} invoiceId
  * @returns {Promise<Object>} Object gồm { data: Invoice }
  */
-export async function getHostInvoiceDetail(invoiceId) {
-    if (!invoiceId || isNaN(Number(invoiceId)) || Number(invoiceId) <= 0) {
-        throw new Error('Mã hóa đơn không hợp lệ.');
-    }
-
-    const numericId = parseInt(invoiceId, 10);
-    const response = await api.get(`/api/host/invoices/${numericId}`);
-    return response.data;
+export async function getHostInvoiceDetail(invoiceId, options = {}) {
+    return invoiceService.getHostInvoiceDetail(invoiceId, options);
 }
 
 /**
@@ -69,17 +81,8 @@ export async function getHostInvoiceDetail(invoiceId) {
  * @param {string} [params.search='']
  * @returns {Promise<Object>} Object gồm { data: Invoice[], meta: Object, links: Object }
  */
-export async function getCustomerInvoices({ page = 1, perPage = 10, status = '', search = '' } = {}) {
-    const params = { page, per_page: perPage };
-    if (status && status !== 'ALL') {
-        params.status = status;
-    }
-    if (search && search.trim() !== '') {
-        params.search = search.trim();
-    }
-
-    const response = await api.get('/api/customer/invoices', { params });
-    return response.data;
+export async function getCustomerInvoices({ page = 1, perPage = 10, status = '', search = '' } = {}, options = {}) {
+    return invoiceService.getCustomerInvoices({ page, perPage, status, search }, options);
 }
 
 /**
@@ -88,14 +91,8 @@ export async function getCustomerInvoices({ page = 1, perPage = 10, status = '',
  * @param {number|string} invoiceId
  * @returns {Promise<Object>} Object gồm { data: Invoice }
  */
-export async function getCustomerInvoiceDetail(invoiceId) {
-    if (!invoiceId || isNaN(Number(invoiceId)) || Number(invoiceId) <= 0) {
-        throw new Error('Mã hóa đơn không hợp lệ.');
-    }
-
-    const numericId = parseInt(invoiceId, 10);
-    const response = await api.get(`/api/customer/invoices/${numericId}`);
-    return response.data;
+export async function getCustomerInvoiceDetail(invoiceId, options = {}) {
+    return invoiceService.getCustomerInvoiceDetail(invoiceId, options);
 }
 
 /**
@@ -129,47 +126,5 @@ export function formatVnd(amount) {
  * @returns {{ status: number, message: string }}
  */
 export function parseInvoiceError(error) {
-    if (!error.response) {
-        return {
-            status: 0,
-            message: error.message || 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại mạng.',
-        };
-    }
-
-    const status = error.response.status;
-    const serverMessage = error.response.data?.message;
-
-    switch (status) {
-        case 401:
-            return {
-                status,
-                message: 'Phiên làm việc đã hết hạn hoặc chưa đăng nhập. Vui lòng đăng nhập lại.',
-            };
-        case 403:
-            return {
-                status,
-                message: serverMessage || 'Bạn không có quyền lập hóa đơn cho đơn đặt phòng này.',
-            };
-        case 404:
-            return {
-                status,
-                message: serverMessage || 'Không tìm thấy thông tin đơn đặt phòng.',
-            };
-        case 409:
-            return {
-                status,
-                message: serverMessage || 'Đơn đặt phòng này đã có hóa đơn trong hệ thống.',
-            };
-        case 422:
-            return {
-                status,
-                message: serverMessage || 'Dữ liệu đơn đặt phòng chưa đủ điều kiện lập hóa đơn.',
-            };
-        case 500:
-        default:
-            return {
-                status,
-                message: serverMessage || 'Đã xảy ra lỗi hệ thống khi lập hóa đơn. Vui lòng thử lại sau.',
-            };
-    }
+    return normalizeApiError(error);
 }

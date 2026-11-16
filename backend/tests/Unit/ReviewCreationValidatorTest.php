@@ -60,6 +60,41 @@ class ReviewCreationValidatorTest extends TestCase
         return $booking;
     }
 
+    public function test_duplicate_fact_precedes_missing_property_and_bad_payload(): void
+    {
+        $booking = $this->createMockBooking();
+        $booking->setRelation('room', null);
+        $this->expectException(DuplicateReviewException::class);
+        $this->validator->validateForCreation($booking, $this->createMockCustomer(), ['rating' => 6, 'comment' => 'x'], true);
+    }
+
+    public function test_unloaded_relations_fail_without_attempting_lazy_loading(): void
+    {
+        $booking = new Booking();
+        $booking->exists = true;
+        $booking->room_id = 999;
+        try {
+            $this->validator->validatePropertyAssociation($booking);
+            $this->fail('Expected unloaded room guard.');
+        } catch (\LogicException $error) {
+            $this->assertStringContainsString('eager-loaded room', $error->getMessage());
+        }
+        $room = new Room(['property_id' => 42]);
+        $booking->setRelation('room', $room);
+        $this->expectException(\LogicException::class);
+        $this->validator->validatePropertyAssociation($booking);
+    }
+
+    public function test_loaded_null_property_keeps_room_property_id_fallback_without_mutation(): void
+    {
+        $booking = $this->createMockBooking(propertyId: 42);
+        $booking->getRelation('room')->setRelation('property', null);
+        $before = serialize($booking);
+        $this->assertSame(42, $this->validator->validateForCreation($booking, $this->createMockCustomer(),
+            ['rating' => '5', 'comment' => '  Valid text  '], false));
+        $this->assertSame($before, serialize($booking));
+    }
+
     protected function createMockCustomer(int $customerId = 1, UserRole $role = UserRole::CUSTOMER): User
     {
         $user = new User();
@@ -186,7 +221,7 @@ class ReviewCreationValidatorTest extends TestCase
         $this->expectException(DuplicateReviewException::class);
         $this->expectExceptionMessage('Đơn đặt phòng #500 đã có đánh giá. Mỗi đơn đặt phòng chỉ được đánh giá một lần.');
 
-        $this->validator->validateReviewNotExists($booking);
+        $this->validator->validateReviewNotExists($booking, false);
     }
 
     // ==========================================
@@ -316,7 +351,7 @@ class ReviewCreationValidatorTest extends TestCase
         $propertyId = $this->validator->validateForCreation($booking, $customer, [
             'rating' => 5,
             'comment' => 'Phòng ốc sạch đẹp, phục vụ tận tâm!',
-        ]);
+        ], false);
 
         $this->assertSame(88, $propertyId);
     }

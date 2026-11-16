@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Review;
 
+use App\DTOs\Review\Requests\CreateReviewRequest;
 use App\Enums\BookingStatus;
 use App\Enums\PropertyStatus;
 use App\Enums\PropertyType;
@@ -14,6 +15,7 @@ use App\Models\Review;
 use App\Models\Room;
 use App\Models\RoomType;
 use App\Models\User;
+use App\Services\Review\ReviewService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\TestCase;
@@ -492,6 +494,146 @@ class CustomerReviewApiTest extends TestCase
     // =========================================================================
     // 7. Xem danh sách Review của chính mình (GET /api/customer/reviews)
     // =========================================================================
+
+    public function test_create_validation_route_role_and_privacy_precedence_remain_unchanged(): void
+    {
+        $valid = ['rating' => 5, 'comment' => 'Precedence contract review.'];
+        $this->actingAs($this->host)->postJson('/api/customer/bookings/bad-id/review', ['rating' => 6, 'comment' => 'x'])
+            ->assertStatus(422)->assertJsonValidationErrors(['rating', 'comment']);
+        $this->postJson('/api/customer/bookings/bad-id/review', $valid)->assertNotFound()
+            ->assertExactJson(['message' => 'Không tìm thấy đơn đặt phòng.']);
+        $this->postJson('/api/customer/bookings/999999/review', $valid)->assertForbidden()
+            ->assertExactJson(['message' => 'Bạn không có quyền thực hiện chức năng này.']);
+        $this->actingAs($this->customer)->postJson('/api/customer/bookings/'.$this->otherCustomerBooking->id.'/review', $valid)
+            ->assertNotFound()->assertExactJson(['message' => 'Không tìm thấy đơn đặt phòng.']);
+    }
+
+    public function test_create_status_precedes_duplicate_but_http_validation_precedes_both(): void
+    {
+        Review::create(['booking_id' => $this->completedBooking->id, 'customer_id' => $this->customer->id,
+            'property_id' => $this->property->id, 'rating' => 5, 'comment' => 'Existing review fixture.']);
+        $this->completedBooking->update(['status' => BookingStatus::PENDING]);
+        $url = '/api/customer/bookings/'.$this->completedBooking->id.'/review';
+        $this->actingAs($this->customer)->postJson($url, ['rating' => 6, 'comment' => 'x'])
+            ->assertStatus(422)->assertJsonValidationErrors(['rating', 'comment']);
+        $this->postJson($url, ['rating' => 4, 'comment' => 'Valid duplicate attempt.'])->assertStatus(422)
+            ->assertExactJson(['message' => "Chỉ có thể đánh giá đơn đặt phòng đã hoàn tất (COMPLETED). Trạng thái hiện tại: 'PENDING'."]);
+        $this->completedBooking->update(['status' => BookingStatus::COMPLETED]);
+        $this->postJson($url, ['rating' => 4, 'comment' => 'Valid duplicate attempt.'])->assertStatus(409)
+            ->assertExactJson(['message' => 'Đơn đặt phòng #'.$this->completedBooking->id.' đã có đánh giá. Mỗi đơn đặt phòng chỉ được đánh giá một lần.']);
+    }
+
+    public function test_create_preserves_validation_content_negotiation_and_raw_rating(): void
+    {
+        $url = '/api/customer/bookings/'.$this->completedBooking->id.'/review';
+        $previous = '/customer/bookings/'.$this->completedBooking->id;
+        $this->actingAs($this->customer);
+        $this->from($previous)->post($url, ['rating' => 6, 'comment' => 'x'])
+            ->assertRedirect($previous)
+            ->assertSessionHasErrors(['rating', 'comment']);
+        $this->postJson($url, ['rating' => 6, 'comment' => 'x'])->assertUnprocessable()->assertExactJson([
+            'message' => 'Điểm đánh giá phải nằm trong khoảng từ 1 đến 5 sao. (and 1 more error)',
+            'errors' => [
+                'rating' => ['Điểm đánh giá phải nằm trong khoảng từ 1 đến 5 sao.'],
+                'comment' => ['Nội dung đánh giá phải có tối thiểu 5 ký tự.'],
+            ],
+        ]);
+        $this->postJson($url, ['rating' => true, 'comment' => 'A valid comment.'])
+            ->assertUnprocessable()->assertExactJson(['message' => 'Điểm đánh giá phải là số nguyên.']);
+        $this->assertDatabaseMissing('reviews', ['booking_id' => $this->completedBooking->id]);
+    }
+
+    public function test_customer_pagination_keeps_permissive_query_and_page_fallbacks(): void
+    {
+        $this->actingAs($this->customer);
+        foreach (['0' => 1, '-2' => 1, '100' => 50, '2.9' => 2, '1e2' => 50,
+            '%2B2' => 2, '01' => 1, '' => 10, 'bad' => 10, '%20' => 10] as $value => $expected) {
+            $this->getJson('/api/customer/reviews?per_page='.$value)->assertOk()->assertJsonPath('meta.per_page', $expected);
+        }
+        $this->getJson('/api/customer/reviews?per_page[]=2')->assertOk()->assertJsonPath('meta.per_page', 10);
+        foreach (['bad', '0', '-1', '01', '1e0', '2.9', ''] as $value) {
+            $this->getJson('/api/customer/reviews?page='.$value)->assertOk()->assertJsonPath('meta.current_page', 1);
+        }
+        $this->getJson('/api/customer/reviews?page[]=2')->assertOk()->assertJsonPath('meta.current_page', 1);
+        $this->getJson('/api/customer/reviews?page=%2B2')->assertOk()->assertJsonPath('meta.current_page', 2);
+    }
+
+    public function test_customer_get_body_does_not_override_query_per_page_but_controls_page(): void
+    {
+        $this->actingAs($this->customer);
+        $this->json('GET', '/api/customer/reviews', ['page' => 2, 'per_page' => 50])->assertOk()
+            ->assertJsonPath('meta.current_page', 2)->assertJsonPath('meta.per_page', 10);
+        $this->json('GET', '/api/customer/reviews?page=1&per_page=2', ['page' => 2, 'per_page' => 50])->assertOk()
+            ->assertJsonPath('meta.current_page', 2)->assertJsonPath('meta.per_page', 2);
+        $this->json('GET', '/api/customer/reviews?per_page=bad', ['per_page' => 2])->assertOk()->assertJsonPath('meta.per_page', 10);
+        $this->json('GET', '/api/customer/reviews', ['page' => ['bad'], 'per_page' => ['bad']])->assertOk()
+            ->assertJsonPath('meta.current_page', 1)->assertJsonPath('meta.per_page', 10);
+        $this->actingAs($this->host)->json('GET', '/api/customer/reviews', ['page' => [], 'per_page' => []])
+            ->assertForbidden()->assertExactJson(['message' => 'Bạn không có quyền thực hiện chức năng này.']);
+    }
+
+    public function test_customer_create_and_list_keep_exact_projection_and_no_summary(): void
+    {
+        $workflow = app(ReviewService::class);
+        $service = $this->createMock(ReviewService::class);
+        $service->expects($this->never())->method('createReview');
+        $service->expects($this->once())->method('createReviewFromRequest')
+            ->willReturnCallback(function (CreateReviewRequest $command, User $actor) use ($workflow): Review {
+                $this->assertSame($this->completedBooking->id, $command->bookingId);
+                $this->assertSame(4, $command->rating);
+                $this->assertSame('Contract creation regression.', $command->comment);
+                $this->assertTrue($actor->is($this->customer));
+
+                return $workflow->createReviewFromRequest($command, $actor);
+            });
+        $this->app->instance(ReviewService::class, $service);
+        Carbon::setTestNow(Carbon::parse('2026-01-02 03:04:05', 'UTC'));
+        try {
+            $response = $this->actingAs($this->customer)->postJson('/api/customer/bookings/'.$this->completedBooking->id.'/review',
+                ['rating' => '+4', 'comment' => '  Contract creation regression.  ', 'customer_id' => $this->otherCustomer->id])
+                ->assertCreated()->assertHeader('Content-Type', 'application/json');
+            $id = $response->json('data.id');
+            $expected = ['id' => $id, 'booking_id' => $this->completedBooking->id, 'booking_code' => $this->completedBooking->booking_code,
+                'property_id' => $this->property->id, 'property_name' => $this->property->name, 'room_name' => $this->room->name,
+                'rating' => 4, 'comment' => 'Contract creation regression.', 'created_at' => '2026-01-02T03:04:05.000000Z',
+                'updated_at' => '2026-01-02T03:04:05.000000Z'];
+            $response->assertExactJson(['data' => $expected]);
+            $list = $this->getJson('/api/customer/reviews?per_page=1')->assertOk();
+            $this->assertSame([$expected], $list->json('data'));
+            $this->assertSame(['data', 'links', 'meta'], array_keys($list->json()));
+            $this->assertSame(['current_page', 'from', 'last_page', 'links', 'path', 'per_page', 'to', 'total'], array_keys($list->json('meta')));
+            $list->assertJsonPath('meta.links.1.page', 1)->assertJsonPath('links.next', null);
+            $this->getJson('/api/customer/reviews?page=9&per_page=1')->assertOk()->assertJsonCount(0, 'data')
+                ->assertJsonPath('meta.from', null)->assertJsonPath('meta.to', null)->assertJsonPath('meta.total', 1);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_customer_list_clamping_projection_and_role_precedence(): void
+    {
+        $this->getJson('/api/customer/reviews?per_page=bad')->assertUnauthorized();
+        $this->actingAs($this->host)->getJson('/api/customer/reviews?per_page=bad')->assertForbidden();
+        $review = Review::create([
+            'booking_id' => $this->completedBooking->id,
+            'customer_id' => $this->customer->id, 'property_id' => $this->property->id,
+            'rating' => 4, 'comment' => 'Contract regression review.',
+        ]);
+        $this->actingAs($this->customer);
+        foreach (['0' => 1, '100' => 50, 'bad' => 10, '' => 10, '2.9' => 2] as $value => $expected) {
+            $response = $this->getJson('/api/customer/reviews?per_page='.$value)->assertOk();
+            $response->assertJsonPath('meta.per_page', $expected);
+            $this->assertSame([
+                'id' => $review->id, 'booking_id' => $this->completedBooking->id,
+                'booking_code' => $this->completedBooking->booking_code,
+                'property_id' => $this->property->id, 'property_name' => $this->property->name,
+                'room_name' => $this->room->name, 'rating' => 4,
+                'comment' => 'Contract regression review.',
+                'created_at' => $review->created_at->toISOString(),
+                'updated_at' => $review->updated_at->toISOString(),
+            ], $response->json('data.0'));
+        }
+    }
 
     public function test_customer_only_sees_their_own_reviews(): void
     {

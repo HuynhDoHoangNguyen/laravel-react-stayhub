@@ -5,12 +5,12 @@ namespace App\Validators\Review;
 use App\Enums\BookingStatus;
 use App\Enums\UserRole;
 use App\Models\Booking;
-use App\Models\Review;
 use App\Models\User;
 use App\Services\Review\DuplicateReviewException;
 use App\Services\Review\InvalidReviewConditionException;
 use Illuminate\Auth\Access\AuthorizationException;
 use InvalidArgumentException;
+use LogicException;
 
 class ReviewCreationValidator
 {
@@ -27,11 +27,22 @@ class ReviewCreationValidator
      * @throws DuplicateReviewException Nếu Booking đã có đánh giá
      * @throws InvalidArgumentException Nếu rating hoặc comment không thỏa mãn ràng buộc
      */
-    public function validateForCreation(Booking $booking, User $customerActor, array $data): int
+    public function validateForCreation(Booking $booking, User $customerActor, array $data, bool $duplicateExists): int
+    {
+        $this->validateCreationEligibility($booking, $customerActor);
+
+        return $this->validateCreationDetails($booking, $data, $duplicateExists);
+    }
+
+    public function validateCreationEligibility(Booking $booking, User $customerActor): void
     {
         $this->validateCustomerAuthorization($booking, $customerActor);
         $this->validateBookingStatus($booking);
-        $this->validateReviewNotExists($booking);
+    }
+
+    public function validateCreationDetails(Booking $booking, array $data, bool $duplicateExists): int
+    {
+        $this->validateReviewNotExists($booking, $duplicateExists);
         $propertyId = $this->validatePropertyAssociation($booking);
         $this->validateRating($data['rating'] ?? null);
         $this->validateComment($data['comment'] ?? null);
@@ -86,13 +97,9 @@ class ReviewCreationValidator
      *
      * @throws DuplicateReviewException
      */
-    public function validateReviewNotExists(Booking $booking): void
+    public function validateReviewNotExists(Booking $booking, bool $duplicateExists): void
     {
-        if ($booking->relationLoaded('review') && $booking->review !== null) {
-            throw new DuplicateReviewException("Đơn đặt phòng #{$booking->id} đã có đánh giá. Mỗi đơn đặt phòng chỉ được đánh giá một lần.");
-        }
-
-        if ($booking->exists && Review::where('booking_id', $booking->id)->exists()) {
+        if (($booking->relationLoaded('review') && $booking->getRelation('review') !== null) || $duplicateExists) {
             throw new DuplicateReviewException("Đơn đặt phòng #{$booking->id} đã có đánh giá. Mỗi đơn đặt phòng chỉ được đánh giá một lần.");
         }
     }
@@ -106,8 +113,14 @@ class ReviewCreationValidator
      */
     public function validatePropertyAssociation(Booking $booking): int
     {
-        $room = $booking->relationLoaded('room') ? $booking->getRelation('room') : $booking->room;
-        $property = $room?->relationLoaded('property') ? $room->getRelation('property') : $room?->property;
+        if (!$booking->relationLoaded('room')) {
+            throw new LogicException('Review creation validation requires an eager-loaded room relation.');
+        }
+        $room = $booking->getRelation('room');
+        if ($room !== null && !$room->relationLoaded('property')) {
+            throw new LogicException('Review creation validation requires an eager-loaded room.property relation.');
+        }
+        $property = $room?->getRelation('property');
         $propertyId = $room?->property_id ?? $property?->id;
 
         if (!$propertyId || (int) $propertyId <= 0) {

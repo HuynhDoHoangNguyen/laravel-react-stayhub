@@ -10,6 +10,7 @@ import HomePage from '../pages/public/HomePage';
 import LoginPage from '../pages/public/LoginPage';
 import SearchResultsPage from '../pages/public/SearchResultsPage';
 import PropertyDetailPage from '../pages/public/PropertyDetailPage';
+import PropertiesPage from '../pages/public/PropertiesPage';
 import ApiTestPage from '../pages/public/ApiTestPage';
 import LoginTestPage from '../pages/public/LoginTestPage';
 
@@ -23,6 +24,11 @@ import CustomerInvoiceDetailPage from '../pages/customer/CustomerInvoiceDetailPa
 import CustomerReviewsPage from '../pages/customer/CustomerReviewsPage';
 
 import HostDashboardPage from '../pages/host/HostDashboardPage';
+import HostPropertiesPage from '../pages/host/HostPropertiesPage';
+import HostPropertyDetailPage from '../pages/host/HostPropertyDetailPage';
+import HostPropertyCreatePage from '../pages/host/HostPropertyCreatePage';
+import HostPropertyEditPage from '../pages/host/HostPropertyEditPage';
+import HostRoomDetailPage from '../pages/host/HostRoomDetailPage';
 import HostInvoiceListPage from '../pages/host/HostInvoiceListPage';
 import HostInvoiceDetailPage from '../pages/host/HostInvoiceDetailPage';
 import HostInvoiceCreationPage from '../pages/host/HostInvoiceCreationPage';
@@ -38,6 +44,7 @@ function AppRouter() {
             <Route element={<PublicLayout />}>
                 <Route path="/" element={<HomePage />} />
                 <Route path="/search" element={<SearchResultsPage />} />
+                <Route path="/properties" element={<PropertiesPage />} />
                 <Route path="/properties/:propertyId" element={<PropertyDetailPage />} />
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/api-test" element={<ApiTestPage />} />
@@ -66,6 +73,11 @@ function AppRouter() {
                 <Route path="/host" element={<HostLayout />}>
                     <Route index element={<HostDashboardPage />} />
                     <Route path="profile" element={<ProfilePage />} />
+                    <Route path="properties" element={<HostPropertiesPage />} />
+                    <Route path="properties/create" element={<HostPropertyCreatePage />} />
+                    <Route path="properties/:propertyId" element={<HostPropertyDetailPage />} />
+                    <Route path="properties/:propertyId/edit" element={<HostPropertyEditPage />} />
+                    <Route path="rooms/:roomId" element={<HostRoomDetailPage />} />
                     <Route path="invoices" element={<HostInvoiceListPage />} />
                     <Route path="invoices/:invoiceId" element={<HostInvoiceDetailPage />} />
                     <Route path="bookings/:bookingId/create-invoice" element={<HostInvoiceCreationPage />} />

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Symfony\Component\Validator\Constraints as Assert;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class InvoiceItem extends Model
@@ -49,5 +50,12 @@ class InvoiceItem extends Model
     public function invoice(): BelongsTo
     {
         return $this->belongsTo(Invoice::class, 'invoice_id');
+    }
+
+    /** Explicit pilot/create groups; ordinary Eloquent saves do not trigger validation. */
+    #[Assert\NotBlank(message: 'Dữ liệu hóa đơn không hợp lệ.', normalizer: 'trim', groups: ['invoice-pilot', 'invoice-create-room'])]
+    public function getItemNameValidationValue(): string
+    {
+        return (string) $this->getAttribute('item_name');
     }
 }

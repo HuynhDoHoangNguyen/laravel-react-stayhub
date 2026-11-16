@@ -238,6 +238,94 @@ class HostReviewApiTest extends TestCase
     // 1. Phân quyền & Xác thực (401 Unauthorized, 403 Forbidden)
     // =========================================================================
 
+    public function test_host_raw_query_acceptance_search_bounds_and_messages(): void
+    {
+        $this->actingAs($this->host);
+        foreach (['page', 'per_page', 'rating', 'property_id'] as $field) {
+            foreach ([null, '', [], ['1'], '01', '1.0', '1e0', false, 0, -1] as $value) {
+                $this->json('GET', '/api/host/reviews', [$field => $value])->assertStatus(422)->assertJsonValidationErrors([$field]);
+            }
+            foreach ([1, '1', '+1', true, 1.0] as $value) {
+                $this->json('GET', '/api/host/reviews', [$field => $value])->assertOk();
+            }
+        }
+        foreach ([null, '', '   ', str_repeat('á', 255)] as $search) {
+            $this->json('GET', '/api/host/reviews', ['search' => $search])->assertOk();
+        }
+        $this->json('GET', '/api/host/reviews', ['search' => str_repeat('á', 256)])
+            ->assertStatus(422)->assertExactJson([
+                'message' => 'Từ khóa tìm kiếm không được vượt quá 255 ký tự.',
+                'errors' => ['search' => ['Từ khóa tìm kiếm không được vượt quá 255 ký tự.']],
+            ]);
+        $this->json('GET', '/api/host/reviews', ['search' => ['bad']])->assertStatus(422)->assertJsonValidationErrors(['search']);
+        $this->json('GET', '/api/host/reviews', ['ignored' => ['anything']])->assertOk();
+        $this->getJson('/api/host/reviews?search=%25')->assertOk()->assertJsonCount(2, 'data');
+    }
+
+    public function test_host_body_pagination_and_exact_projection_contract(): void
+    {
+        Review::where('property_id', $this->propertyHost1->id)->update(['created_at' => '2026-01-02 03:04:05']);
+        Review::where('property_id', $this->propertyHost2->id)->update(['created_at' => '2026-01-02 03:04:05']);
+        $row = Review::where('property_id', $this->propertyHost1->id)->firstOrFail();
+        $path = url('/api/host/reviews');
+        $response = $this->actingAs($this->host)->json('GET', $path, ['page' => 2, 'per_page' => 1])->assertOk();
+        $this->assertSame([[
+            'id' => $row->id, 'booking_id' => $row->booking_id, 'booking_code' => 'BK-HOST-001',
+            'property_id' => $this->propertyHost1->id, 'property_name' => $this->propertyHost1->name,
+            'room_name' => $this->roomHost1->name, 'customer_name' => 'Trần Thị Thu Thảo',
+            'rating' => 5, 'comment' => 'Khách sạn rất tuyệt, sạch sẽ và nhân viên nhiệt tình chu đáo.',
+            'created_at' => '2026-01-02T03:04:05.000000Z',
+        ]], $response->json('data'));
+        $this->assertSame(['data', 'links', 'meta', 'summary'], array_keys($response->json()));
+        $response->assertJsonPath('meta.current_page', 2)->assertJsonPath('meta.per_page', 1)
+            ->assertJsonPath('meta.from', 2)->assertJsonPath('meta.to', 2)->assertJsonPath('meta.total', 2)
+            ->assertJsonPath('links.prev', $path.'?page=1')->assertJsonPath('links.next', null)
+            ->assertJsonPath('meta.links.0.page', 1)->assertJsonPath('meta.links.2.active', true)
+            ->assertJsonPath('summary.total_reviews', 2)->assertJsonPath('summary.average_rating', 4.5);
+        $this->getJson($path.'?page=9&per_page=1')->assertOk()->assertJsonCount(0, 'data')
+            ->assertJsonPath('meta.from', null)->assertJsonPath('meta.to', null)->assertJsonPath('summary.total_reviews', 2);
+    }
+
+    public function test_host_empty_summary_and_valid_nullable_search_are_preserved(): void
+    {
+        $this->actingAs($this->otherHost)->getJson('/api/host/reviews?search=not-found')->assertOk()
+            ->assertJsonCount(0, 'data')->assertJsonPath('summary.total_reviews', 1);
+        Review::where('property_id', $this->propertyOtherHost->id)->delete();
+        $response = $this->getJson('/api/host/reviews')->assertOk()->assertJsonCount(0, 'data');
+        $this->assertSame([
+            'total_reviews' => 0, 'average_rating' => null,
+            'rating_breakdown' => [5 => 0, 4 => 0, 3 => 0, 2 => 0, 1 => 0],
+        ], $response->json('summary'));
+    }
+
+    public function test_validation_role_and_ownership_error_precedence(): void
+    {
+        $url = '/api/host/reviews?property_id='.$this->propertyOtherHost->id;
+        $this->getJson($url.'&rating=6')->assertUnauthorized();
+        $this->actingAs($this->customer1)->getJson($url.'&rating=6')
+            ->assertStatus(422)->assertJsonValidationErrors(['rating']);
+        $this->getJson($url)->assertForbidden();
+        $this->actingAs($this->host)->getJson($url.'&rating=6')
+            ->assertStatus(422)->assertJsonValidationErrors(['rating']);
+        $this->getJson($url)->assertNotFound()
+            ->assertExactJson(['message' => 'Không tìm thấy cơ sở lưu trú.']);
+    }
+
+    public function test_host_projection_and_summary_remain_independent_of_list_filters(): void
+    {
+        $response = $this->actingAs($this->host)
+            ->getJson('/api/host/reviews?rating=5&search=khách&per_page=1')->assertOk();
+        $response->assertJsonCount(1, 'data')->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('summary.total_reviews', 2)->assertJsonPath('summary.average_rating', 4.5);
+        $this->assertEqualsCanonicalizing([
+            'id', 'booking_id', 'booking_code', 'property_id', 'property_name',
+            'room_name', 'customer_name', 'rating', 'comment', 'created_at',
+        ], array_keys($response->json('data.0')));
+        $scoped = $this->getJson('/api/host/reviews?property_id='.$this->propertyHost2->id.'&rating=5')->assertOk();
+        $scoped->assertJsonCount(0, 'data')->assertJsonPath('summary.total_reviews', 1)
+            ->assertJsonPath('summary.average_rating', 4);
+    }
+
     public function test_guest_cannot_access_host_reviews(): void
     {
         $this->getJson('/api/host/reviews')->assertStatus(401);

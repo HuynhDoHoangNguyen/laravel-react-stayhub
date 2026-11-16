@@ -1,7 +1,7 @@
 const HOME_BY_ROLE = { CUSTOMER: '/customer', HOST: '/host', ADMIN: '/admin' };
 const PATHS_BY_ROLE = {
     CUSTOMER: /^\/customer(?:\/(?:bookings(?:\/[1-9]\d*)?|checkout|profile|invoices(?:\/[1-9]\d*)?|reviews))?\/?$/,
-    HOST: /^\/host(?:\/(?:profile|invoices(?:\/(?:create|[1-9]\d*))?|bookings\/[1-9]\d*\/create-invoice|reviews))?\/?$/,
+    HOST: /^\/host(?:\/(?:profile|properties(?:\/(?:create|[1-9]\d*(?:\/edit)?))?|invoices(?:\/(?:create|[1-9]\d*))?|bookings\/[1-9]\d*\/create-invoice|reviews))?\/?$/,
     ADMIN: /^\/admin(?:\/profile)?\/?$/,
 };
 
@@ -23,7 +23,7 @@ export function getAuthDestination(role, returnTo) {
         if (url.origin !== 'https://stayhub.invalid' || hasUnsafeCharacters(pathname)
             || pathname.includes('//') || pathname.includes('%')) return fallback;
 
-        const publicPath = /^(?:\/|\/search\/?|\/properties\/[1-9]\d*\/?)$/;
+        const publicPath = /^(?:\/|\/search\/?|\/properties(?:\/[1-9]\d*)?\/?)$/;
         return (PATHS_BY_ROLE[role]?.test(pathname) || publicPath.test(pathname))
             ? url.pathname + url.search + url.hash
             : fallback;

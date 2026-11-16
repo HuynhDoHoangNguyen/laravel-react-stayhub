@@ -24,7 +24,16 @@ test('returnTo never grants a different role or a route that is not implemented'
     assert.equal(getAuthDestination('CUSTOMER', '/host/invoices'), '/customer');
     assert.equal(getAuthDestination('HOST', '/admin'), '/host');
     assert.equal(getAuthDestination('ADMIN', '/customer'), '/admin');
-    assert.equal(getAuthDestination('HOST', '/host/properties'), '/host');
+    assert.equal(getAuthDestination('HOST', '/host/properties?view=list#top'), '/host/properties?view=list#top');
+    assert.equal(getAuthDestination('CUSTOMER', '/host/properties'), '/customer');
+    assert.equal(getAuthDestination('ADMIN', '/host/properties'), '/admin');
+    assert.equal(getAuthDestination('HOST', '/host/properties/12?view=detail#top'), '/host/properties/12?view=detail#top');
+    assert.equal(getAuthDestination('HOST', '/host/properties/01'), '/host');
+    assert.equal(getAuthDestination('CUSTOMER', '/host/properties/12'), '/customer');
+    assert.equal(getAuthDestination('ADMIN', '/host/properties/12'), '/admin');
+    assert.equal(getAuthDestination('HOST', '/host/properties/create'), '/host/properties/create');
+    assert.equal(getAuthDestination('CUSTOMER', '/host/properties/create'), '/customer');
+    assert.equal(getAuthDestination('ADMIN', '/host/properties/create'), '/admin');
     assert.equal(getAuthDestination('CUSTOMER', '/customer/../admin'), '/customer');
     assert.equal(getAuthDestination('UNKNOWN', '/admin'), '/');
 });
@@ -137,4 +146,12 @@ test('mount cleanup removes both interceptors and remounting does not duplicate 
     assert.equal(count, 1);
     assert.equal(client.interceptors.request.handlers.filter(Boolean).length, 0);
     assert.equal(client.interceptors.response.handlers.filter(Boolean).length, 0);
+});
+
+test('property edit return URLs respect role and canonical ids', () => {
+    assert.equal(getAuthDestination('HOST', '/host/properties/12/edit'), '/host/properties/12/edit');
+    assert.equal(getAuthDestination('CUSTOMER', '/host/properties/12/edit'), '/customer');
+    assert.equal(getAuthDestination('ADMIN', '/host/properties/12/edit'), '/admin');
+    assert.equal(getAuthDestination('HOST', '/host/properties/01/edit'), '/host');
+    assert.equal(getAuthDestination('HOST', '/host/properties/create/edit'), '/host');
 });

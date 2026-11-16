@@ -228,6 +228,101 @@ class PublicReviewApiTest extends TestCase
     // 1. Quyền truy cập Public (Guest, Customer, Host, Admin)
     // =========================================================================
 
+    public function test_public_input_edge_cases_keep_existing_acceptance_and_messages(): void
+    {
+        $url = '/api/public/properties/'.$this->propertyWithReviews->id.'/reviews';
+        foreach (['page', 'per_page', 'rating'] as $field) {
+            foreach ([null, '', [], ['1'], '01', '1.0', '1e0', 'bad', 0, -1] as $value) {
+                $this->json('GET', $url, [$field => $value])->assertStatus(422)
+                    ->assertJsonValidationErrors([$field]);
+            }
+            foreach ([1, '1', '+1', true, 1.0] as $value) {
+                $this->json('GET', $url, [$field => $value])->assertOk();
+            }
+        }
+        foreach ([null, '', [], ['latest'], 1, 'LATEST', 'other'] as $value) {
+            $this->json('GET', $url, ['sort_by' => $value])->assertStatus(422)->assertJsonValidationErrors(['sort_by']);
+        }
+        $this->getJson($url.'?per_page=51')->assertExactJson([
+            'message' => 'Số phần tử trên mỗi trang (per_page) tối đa là 50.',
+            'errors' => ['per_page' => ['Số phần tử trên mỗi trang (per_page) tối đa là 50.']],
+        ]);
+        $this->json('GET', $url, ['ignored' => ['anything']])->assertOk();
+    }
+
+    public function test_body_input_page_two_and_out_of_range_pagination_contract(): void
+    {
+        $path = url('/api/public/properties/'.$this->propertyWithReviews->id.'/reviews');
+        $response = $this->json('GET', $path, ['page' => 2, 'per_page' => 2])->assertOk();
+        $response->assertJsonCount(2, 'data')->assertJsonPath('meta.current_page', 2)
+            ->assertJsonPath('meta.from', 3)->assertJsonPath('meta.to', 4)
+            ->assertJsonPath('meta.total', 4)->assertJsonPath('meta.last_page', 2)
+            ->assertJsonPath('links.next', null)->assertJsonPath('links.prev', $path.'?page=1');
+        $this->assertSame(['current_page', 'from', 'last_page', 'links', 'path', 'per_page', 'to', 'total'], array_keys($response->json('meta')));
+        $this->assertSame([
+            ['url' => $path.'?page=1', 'label' => '&laquo; Previous', 'page' => 1, 'active' => false],
+            ['url' => $path.'?page=1', 'label' => '1', 'page' => 1, 'active' => false],
+            ['url' => $path.'?page=2', 'label' => '2', 'page' => 2, 'active' => true],
+            ['url' => null, 'label' => 'Next &raquo;', 'page' => null, 'active' => false],
+        ], $response->json('meta.links'));
+        $this->getJson($path.'?page=9&per_page=2')->assertOk()->assertJsonCount(0, 'data')
+            ->assertJsonPath('meta.current_page', 9)->assertJsonPath('meta.from', null)
+            ->assertJsonPath('meta.to', null)->assertJsonPath('summary.review_count', 4);
+    }
+
+    public function test_filtered_public_row_has_exact_projection_timestamp_and_literal_comment(): void
+    {
+        $review = Review::where('property_id', $this->propertyWithReviews->id)->where('rating', 2)->firstOrFail();
+        $review->forceFill(['created_at' => '2026-01-02 03:04:05'])->save();
+        $response = $this->getJson('/api/public/properties/'.$this->propertyWithReviews->id.'/reviews?rating=2')->assertOk();
+        $this->assertSame([[
+            'id' => $review->id,
+            'rating' => 2,
+            'comment' => 'Điều hòa hơi ồn và cách âm chưa được tốt lắm.',
+            'author' => 'Trần T.',
+            'created_at' => '2026-01-02T03:04:05.000000Z',
+        ]], $response->json('data'));
+        $response->assertJsonPath('summary.review_count', 4)->assertJsonPath('summary.average_rating', 4);
+    }
+
+    public function test_public_property_id_predicate_and_inactive_visibility_remain_unchanged(): void
+    {
+        $this->propertyWithReviews->update(['status' => PropertyStatus::INACTIVE]);
+        $this->getJson('/api/public/properties/'.$this->propertyWithReviews->id.'/reviews')->assertOk();
+        foreach (['0', '-1', '01', '1.0', '1e0', '+1', '9999999999999999999999999'] as $id) {
+            $this->getJson('/api/public/properties/'.$id.'/reviews')->assertNotFound()
+                ->assertExactJson(['message' => 'Không tìm thấy cơ sở lưu trú.']);
+        }
+    }
+
+    public function test_query_validation_precedes_malformed_or_missing_property_lookup(): void
+    {
+        foreach (['bad-id', '999999'] as $id) {
+            $this->getJson("/api/public/properties/{$id}/reviews?rating=6")
+                ->assertStatus(422)->assertJsonValidationErrors(['rating']);
+        }
+    }
+
+    public function test_public_projection_and_pagination_contract(): void
+    {
+        $path = url("/api/public/properties/{$this->propertyWithReviews->id}/reviews");
+        $response = $this->getJson($path.'?per_page=2&page=1')->assertOk();
+        $this->assertEqualsCanonicalizing(['data', 'links', 'meta', 'summary'], array_keys($response->json()));
+        $this->assertEqualsCanonicalizing(['id', 'rating', 'comment', 'author', 'created_at'], array_keys($response->json('data.0')));
+        $response->assertJsonPath('links.first', $path.'?page=1')
+            ->assertJsonPath('links.last', $path.'?page=2')
+            ->assertJsonPath('links.prev', null)
+            ->assertJsonPath('links.next', $path.'?page=2')
+            ->assertJsonPath('meta.path', $path)
+            ->assertJsonPath('meta.from', 1)->assertJsonPath('meta.to', 2)
+            ->assertJsonPath('meta.last_page', 2)->assertJsonPath('meta.total', 4);
+        $this->assertSame([
+            'average_rating' => 4, 'review_count' => 4,
+            'rating_breakdown' => ['5' => 2, '4' => 1, '3' => 0, '2' => 1, '1' => 0],
+        ], $response->json('summary'));
+        $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}T.*Z$/', $response->json('data.0.created_at'));
+    }
+
     public function test_guest_can_view_property_reviews(): void
     {
         $response = $this->getJson("/api/public/properties/{$this->propertyWithReviews->id}/reviews");
