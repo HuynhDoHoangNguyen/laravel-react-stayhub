@@ -1,7 +1,8 @@
-import api from '../api/axios';
+import api from '../api/axios.js';
 import { createReviewApi } from '../api/reviewApi.js';
 import { requireApiId } from '../api/apiId.js';
 import { normalizeApiError, localValidationError } from '../api/apiError.js';
+import { mapCreatedReview, mapReviewPage } from '../mappers/reviewMapper.js';
 
 const reviewApi = createReviewApi(api);
 
@@ -44,7 +45,8 @@ export async function getPublicPropertyReviews(
     queryParams.sort_by = sortBy;
   }
 
-  return reviewApi.getPublicPropertyReviews(numericId, queryParams, options);
+  const response = await reviewApi.getPublicPropertyReviews(numericId, queryParams, options);
+  return mapReviewPage(response, 'public');
 }
 
 /**
@@ -53,7 +55,7 @@ export async function getPublicPropertyReviews(
  * @param {number|string} bookingId ID của đơn đặt phòng
  * @param {Object} payload { rating: number, comment: string }
  * @param {Object} [options]
- * @returns {Promise<Object>} Response chứa { data: ReviewResource }
+ * @returns {Promise<Object>} Response chứa { data: Review }
  */
 export async function createBookingReview(bookingId, payload, options = {}) {
   const numericId = requireApiId(bookingId, 'Mã đơn đặt phòng');
@@ -73,7 +75,8 @@ export async function createBookingReview(bookingId, payload, options = {}) {
     comment,
   };
 
-  return reviewApi.createBookingReview(numericId, cleanPayload, options);
+  const response = await reviewApi.createBookingReview(numericId, cleanPayload, options);
+  return mapCreatedReview(response);
 }
 
 /**
@@ -84,7 +87,8 @@ export async function createBookingReview(bookingId, payload, options = {}) {
  * @returns {Promise<Object>}
  */
 export async function getCustomerReviews({ page = 1, perPage = 10 } = {}, options = {}) {
-  return reviewApi.getCustomerReviews({ page, per_page: perPage }, options);
+  const response = await reviewApi.getCustomerReviews({ page, per_page: perPage }, options);
+  return mapReviewPage(response, 'customer');
 }
 
 /**
@@ -113,17 +117,13 @@ export async function getCustomerReviewForBooking(bookingId, options = {}) {
 
   try {
     while (page <= maxPages) {
-      const resData = await reviewApi.getCustomerReviews({ page, per_page: 50 }, options);
-      const list = resData?.data || (Array.isArray(resData) ? resData : []);
-      const meta = resData?.meta;
-
-      const match = list.find((item) => Number(item.booking_id) === numericId);
+      const { data, pagination } = await getCustomerReviews({ page, perPage: 50 }, options);
+      const match = data.find((item) => item.booking_id === numericId);
       if (match) {
         return { status: 'reviewed', review: match };
       }
 
-      const lastPage = meta?.last_page || 1;
-      if (page >= lastPage || list.length === 0) {
+      if (page >= pagination.lastPage || data.length === 0) {
         return { status: 'not_reviewed', review: null };
       }
 
@@ -184,7 +184,8 @@ export async function getHostReviews(
     params.search = search.trim().slice(0, 255);
   }
 
-  return reviewApi.getHostReviews(params, options);
+  const response = await reviewApi.getHostReviews(params, options);
+  return mapReviewPage(response, 'host');
 }
 
 /**
@@ -194,6 +195,9 @@ export async function getHostReviews(
  * @returns {{ status: number, message: string, isNetworkError: boolean, isNotFound: boolean, isConflict: boolean, isValidation: boolean }}
  */
 export function parseReviewError(error) {
+  if (error?.code === 'INVALID_REVIEW_RESPONSE') {
+    return { ...normalizeApiError(error), code: error.code, message: error.message };
+  }
   return normalizeApiError(error);
 }
 

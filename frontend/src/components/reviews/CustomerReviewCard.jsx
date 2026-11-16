@@ -1,19 +1,5 @@
 import { Star, CheckCircle2, Calendar, BedDouble, Tag } from 'lucide-react';
-
-function formatReviewDate(isoStr) {
-  if (!isoStr) return '';
-  try {
-    const d = new Date(isoStr);
-    if (isNaN(d.getTime())) return isoStr;
-    return d.toLocaleDateString('vi-VN', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    });
-  } catch {
-    return isoStr;
-  }
-}
+import { mapReviewCard } from '@/mappers/reviewMapper';
 
 /**
  * CustomerReviewCard Component — StayNest Quiet Luxury
@@ -30,17 +16,8 @@ function formatReviewDate(isoStr) {
 export function CustomerReviewCard({ review }) {
   if (!review) return null;
 
-  const ratingStars = Math.min(5, Math.max(1, Number(review.rating) || 5));
-  const propertyName = review.property_name || 'Chỗ nghỉ chưa có thông tin tên';
+  const { ratingStars, propertyName, dateLabel, bookingReference } = mapReviewCard(review);
   const roomName = review.room_name;
-
-  // Xử lý tham chiếu đặt phòng chuẩn xác theo quy tắc
-  let bookingReference = null;
-  if (review.booking_code && String(review.booking_code).trim() !== '') {
-    bookingReference = `Mã đơn: ${review.booking_code}`;
-  } else if (review.booking_id) {
-    bookingReference = `Tham chiếu đặt phòng #${review.booking_id}`;
-  }
 
   return (
     <article className="flex flex-col justify-between rounded-3xl border border-border/70 bg-card p-6 shadow-xs transition-all hover:border-primary/20 hover:shadow-md">
@@ -94,7 +71,7 @@ export function CustomerReviewCard({ review }) {
           {review.created_at && (
             <span className="inline-flex items-center gap-1.5">
               <Calendar className="h-3.5 w-3.5 shrink-0" />
-              <span>{formatReviewDate(review.created_at)}</span>
+              <span>{dateLabel}</span>
             </span>
           )}
 

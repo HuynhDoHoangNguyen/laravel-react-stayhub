@@ -1,1250 +1,1204 @@
 # StayHub TV3 — checklist triển khai và nghiệm thu
 
-Baseline kiểm tra ngày 2026-11-14 (Asia/Bangkok), HEAD `951f62efc70127a3719c840ae529f8d311842a49`; nhánh thiết lập `feature/stayhub-agent-workflow`. Trạng thái dưới đây là inventory code và kết quả lịch sử được ghi nguồn, không phải xác nhận tất cả UC đã nghiệm thu.
+Phạm vi gồm 18 use case của TV3, FAQ Management, Chat History và các checkpoint refactor được giao, gồm công việc liên module Auth/Profile và Catalog.
+Đối chiếu ngày 2026-11-16 (Asia/Bangkok) trên nhánh refactor/stayhub-layered-architecture, HEAD 7dac999 và working tree sau PROFILE-ARCH-FIX-01, chốt PROFILE-ARCH-AUDIT, nghiệm thu CAT-ROOM-05B và nghiệm thu CAT-ROOM-FIX-01 và tái kiểm CAT-ROOM-AUDIT đã nghiệm thu; CAT-ROOM-IMG-00 mới lập Mini Plan, chờ duyệt.
+Nghiệm thu checkpoint được ghi theo xác nhận trên chat. Các UC thuộc TV1/TV2 trong phần refactor liên module không cộng vào số đếm 18 UC chức năng của TV3.
+Nguồn phạm vi là [phân công TV3](../stayhub-team-work-assignment.md) và [đặc tả use case](../stayhub-usecase-system.md).
+Quy chuẩn kỹ thuật nằm ở [ARCHITECTURE.md](../../ARCHITECTURE.md).
 
-## Hiện trạng refactor — INV-ARCH-02 đã đóng; VAL-STRUCT-01 chờ nghiệm thu
+## Chốt đợt refactor và bàn giao — 2026-11-16
 
-- INV-ARCH-01 A/B/C/parent, SIMPLIFY-01 A/B/C, INV-ARCH-02A, 02B.1, 02B.2A, 02B.2B và 02B.3: ACCEPTED theo owner. 02C.1/02C.2/02C.3 ACCEPTED. INV-ARCH-02-AUDIT ACCEPTED; parent INV-ARCH-02 CLOSED / ACCEPTED theo owner trong phạm vi refactor Invoice read/create. Không suy nghiệm thu UC/browser/MySQL hoặc đủ CRUD.
-- Invoice read: [InvoiceRepository](../../backend/app/Repositories/Invoice/InvoiceRepository.php) concrete một file, constructor DI, không interface/binding; [InvoiceValidator](../../backend/app/Validators/Invoice/InvoiceValidator.php) gom read/create; InvoiceMapper gom request/response và raw input dùng DTO attributes; [InvoiceResponse](../../backend/app/DTOs/Invoice/Responses/InvoiceResponse.php)/InvoiceItemResponse JsonSerializable thay Resources read/create. Common giữ chuẩn API và nhánh Resource legacy.
-- Frontend invoiceMapper và invoiceService.js đã gom create/list/detail ở 02C.2; invoiceReadService.js đã xóa, không thêm invoiceCreateService.js. Invoice create queries đã qua Repository; Validator không query/lazy-load; typed create workflow, persistence Mapper và required workflow DI hoàn tất ở 02B.2B. Model validation đã active trước insert Invoice/ROOM với explicit groups ở 02B.3, giữ SERVICE semantics; HTTP create đã nối raw Validator/typed command/Response DTO/Common ở 02C.1; Invoice Resources đã xóa. Kiến trúc/local rules/5 skills đã đồng bộ theo code tại 02C.3 và được owner nghiệm thu. Review và QA gates còn mở. Dashboard/payment/FAQ/chat backlog không được đóng bởi refactor.
-- Sections bên dưới lưu lịch sử theo task; PENDING/TODO/đường dẫn cũ trong snapshot được thay bằng trạng thái hiện hành này và owner acceptance sau đó. Không sửa số test/lệnh lịch sử thành bằng chứng mới.
+**Đã hoàn thành và nghiệm thu phạm vi refactor các luồng đã triển khai được giao trong đợt này.** Xác nhận theo chuỗi nghiệm thu trên chat và yêu cầu chốt/bàn giao hiện tại. Phạm vi gồm Invoice read/create, Review Backend/Frontend, Auth/Profile, Public Catalog UC04–UC05, Host UC18/UC19 và năm luồng UC20. Các checkpoint/bằng chứng E1–E16 bên dưới được giữ nguyên.
 
-- VAL-STRUCT-01: đã gom infrastructure/domain validation vào một root app/Validators; 3 namespace-only moves và 17 file sửa, TECHNICAL PASS / owner acceptance PENDING. Symfony attributes/API/Auth/nghiệp vụ giữ nguyên; INV-ARCH-02 vẫn CLOSED / ACCEPTED.
+Kết luận này áp dụng cho chuẩn hóa cấu trúc của code hiện hữu trong phạm vi được giao. Không tính UC chưa triển khai hoặc phần mở rộng của TV1/TV2 là công việc refactor còn nợ của đợt này. Không đồng nghĩa toàn dự án đã chuẩn hóa hoặc từng UC chức năng đã qua đầy đủ nghiệm thu end-to-end.
 
-### Tiến độ refactor hiện hành
+### 10 UC TV3 đã có luồng chính và đã tích hợp cấu trúc mới
 
-| Đóng | Phần | Implementation / Verification / Acceptance |
-|---|---|---|
-| [x] | 02A | IMPLEMENTED / PASS / ACCEPTED |
-| [x] | 02B.1 | IMPLEMENTED / PASS / ACCEPTED |
-| [x] | 02B.2A | IMPLEMENTED / PASS / ACCEPTED |
-| [x] | 02B.2B | IMPLEMENTED / PASS / ACCEPTED |
-| [x] | 02B.3 | IMPLEMENTED / PASS / ACCEPTED |
-| [x] | 02C.1 Backend HTTP | IMPLEMENTED / PASS / ACCEPTED |
-| [x] | 02C.2 Frontend | IMPLEMENTED / PASS / ACCEPTED |
-| [x] | 02C.3 docs/skills | IMPLEMENTED / PASS / ACCEPTED |
-| [x] | INV-ARCH-02-AUDIT | VERIFIED / PASS / ACCEPTED |
-| [x] | Parent INV-ARCH-02 / 02B / 02C | IMPLEMENTED / PASS / ACCEPTED — CLOSED theo owner, phạm vi refactor Invoice read/create |
-| [ ] | VAL-STRUCT-01 — unified Validators root | IMPLEMENTED / PASS / OWNER ACCEPTANCE PENDING |
-| [ ] | Browser/MySQL gates | NOT VERIFIED; không suy từ SQLite/Node/lint/build |
+| UC | Luồng đã triển khai | Tích hợp/refactor | Việc chức năng/QA còn mở |
+| --- | --- | --- | --- |
+| UC15 | Customer xem danh sách/chi tiết hóa đơn | ACCEPTED — Invoice read Backend và React API/service/mapper | QA Invoice trên XAMPP/trình duyệt và nghiệm thu chức năng |
+| UC16 | Customer tạo Review qua API/modal | ACCEPTED — Review Validator/DTO/Repository/Mapper và Frontend | Booking detail thật của TV2 và QA tích hợp |
+| UC34 | Host tạo Invoice từ Booking | ACCEPTED — Invoice create, transaction/snapshot và luồng UI gọi service | QA từ Booking production, không chỉ fixture |
+| UC35 | Host xem chi tiết Invoice | ACCEPTED — read projection header/items và Frontend | QA trình duyệt và nghiệm thu chức năng |
+| UC37 | Host danh sách/lọc/tìm kiếm/phân trang Invoice | ACCEPTED — read query và Frontend | QA chức năng; payment UC36 là luồng riêng chưa triển khai |
+| UC38 | Host xem danh sách/tổng hợp Review | ACCEPTED — Review query/DTO/mapper và React | Nghiệm thu chức năng theo REV-03, giữ bằng chứng E4 |
+| UC56 | Tạo InvoiceItem ROOM/SERVICE cùng Invoice | ACCEPTED — nằm trong create transaction và mapping items | QA cùng luồng UC34, không yêu cầu UI riêng cho kỹ thuật nội bộ |
+| UC57 | Tính subtotal | ACCEPTED — calculator/validation tích hợp create | Đối chiếu AC chức năng với snapshot từ Booking thật |
+| UC58 | Tính total_amount | ACCEPTED — calculator/validation tích hợp create | QA discount/extra_fee theo contract đã chốt; workflow hiện dùng0 |
+| UC60 | Kiểm tra điều kiện tạo Review | ACCEPTED — điều kiện COMPLETED/ownership/one-review trong create workflow | Gate concurrency XAMPP và workflow Booking thật |
 
-Các bảng task/UC ở phần dưới lưu snapshot theo thời điểm triển khai; bảng hiện hành và owner acceptance sections thay trạng thái cũ, không thay số test/lệnh lịch sử. Nghiệm thu refactor không tự đóng use case UI hoặc backlog nghiệp vụ.
+Tổng: **7 UC Invoice (15,34,35,37,56,57,58) + 3 UC Review (16,38,60) = 10 UC có luồng chính. Cả10 đã tích hợp cấu trúc mới trong phạm vi code đã triển khai.** UC kỹ thuật56/57/58/60 nằm trong workflow cha, không cần tạo API/UI riêng chỉ để đủ số lớp. Bằng chứng refactor E1–E4 và các checkpoint đã nghiệm thu; không gọi đây là10UC đã nghiệm thu chức năng end-to-end. Ma trận18UC bên dưới tiếp tục giữ PARTIAL/PENDING cho các gate chức năng còn mở.
 
-## Quy ước
+### Phần bàn giao TV1/TV2 và việc phối hợp
 
-- Implementation: TODO / IN PROGRESS / IMPLEMENTED. VERIFIED không thay cho IMPLEMENTED.
-- Verification: NOT VERIFIED / PARTIAL / PASS / FAIL. BLOCKED là cờ dependency riêng, không xóa phần đã làm được.
-- Acceptance: PENDING / ACCEPTED. `[x]` chỉ khi mọi AC bắt buộc PASS và owner đã nghiệm thu; mọi ô đóng task dưới đây ban đầu giữ `[ ]`.
-- Duyệt Mini Plan không phải nghiệm thu. Không suy ra toàn bộ UC PASS từ test service hoặc tên trang.
-- Mỗi task con dự kiến 30–90 phút; nếu Mini Plan thực tế vượt phạm vi phải chia thêm ID con trước triển khai. Mục tiêu UI vẫn cần Backend + Frontend đầy đủ, task nền tảng ghi rõ giới hạn.
-- Plan và Task Result chi tiết gửi trên chat, không tạo file. Sau mỗi task cập nhật dòng tương ứng: code mới, AC, lệnh/kết quả, evidence, blocker, next action; giữ lịch sử có ý nghĩa, không chép log vào đây.
-- Evidence runtime nếu cần đặt `.agent-workspace/tv3/<task-id>/<run-id>/`. Không tạo đường dẫn evidence giả; đường dẫn chỉ được ghi khi artifact tồn tại.
+| Owner | Phạm vi nhận tiếp | Trạng thái bàn giao |
+| --- | --- | --- |
+| TV1 | Duy trì Auth/Profile, Public UC04–UC05, UC18/UC19 và5luồng UC20 đã chuẩn hóa | Nhận baseline đã nghiệm thu, giữ contract/quyền/transaction và regression khi tích hợp |
+| TV1 | UC21 ảnh phòng, UC22 tiện nghi, UC23 bảo trì; luồng Public Room/filter và Admin thuộc phân công TV1 chưa được chốt trong đợt này | TV1 tự kiểm kê/triển khai/chuẩn hóa theo ARCHITECTURE; không tính là refactor còn nợ của đợt đã hoàn thành |
+| TV1 | DELETE Room ngoài5luồng đã giao; uniqueness(property_id,room_number) ở DB | Chưa triển khai/chưa đổi schema trong đợt này; owner chốt task và quy tắc riêng |
+| TV2 | Availability/Search, Booking lifecycle, check-in/check-out, service/pricing và các UC theo phân công TV2 | TV2 chuẩn hóa code module của mình; nhánh hiện tại chưa đăng ký API Booking trong api.php, không kết luận code nhánh khác chưa có |
+| TV1 + TV2 | Booking/Maintenance writers với Room status | Phối hợp lock/recheck;14race harness không thay thế kiểm chứng workflow production |
+| TV2 + TV3 | Điểm vào Invoice/Review từ Booking thật, snapshot và trạng thái COMPLETED | TV2 bàn giao contract/workflow; TV3 phối hợp QA Invoice/Review. Không chuyển trách nhiệm QA/chức năng TV3 hoàn toàn sang TV2 |
 
-## Nguồn hiện trạng
+**UC21 chưa triển khai.** CAT-ROOM-IMG-00 chỉ có Mini Plan chờ duyệt; không tự thực hiện kiểm kê/runtime, tạo inventory hoặc API/UI ảnh phòng. Kế hoạch P1 giữ làm tài liệu tham khảo khi owner nhận tiếp.
 
-| ID | Bằng chứng / giới hạn |
-|---|---|
-| S1 | [Phân công](../stayhub-team-work-assignment.md), [Use cases](../stayhub-usecase-system.md): 18 UC TV3; FAQ/Chat History là deliverable bổ sung |
-| S2 | [billing routes](../../backend/routes/api/billing.php), [Invoice services](../../backend/app/Services/Invoice), [invoice UI](../../frontend/src/pages/host/HostInvoiceCreationPage.jsx), [React routes](../../frontend/src/routes/AppRouter.jsx): tạo/xem/list có; payment update chưa có |
-| S3 | [review routes](../../backend/routes/api/reviews.php), [Review services](../../backend/app/Services/Review), [Customer booking detail](../../frontend/src/pages/customer/CustomerBookingDetailPage.jsx), [Host reviews](../../frontend/src/pages/host/HostReviewsPage.jsx): API/UI có; luồng tạo phụ thuộc booking detail |
-| S4 | [API entry](../../backend/routes/api.php), [booking service](../../frontend/src/services/bookingService.js), [property service](../../frontend/src/services/propertyService.js): chưa tích hợp GET booking detail/public property detail mà UI cần; phải kiểm tra lại khi TV1/TV2 bàn giao |
-| S5 | [Host dashboard](../../frontend/src/pages/host/HostDashboardPage.jsx) là điều hướng; [Admin dashboard](../../frontend/src/pages/admin/AdminDashboardPage.jsx) là placeholder; chưa có service/route reporting |
-| S6 | [Schema migration](../../backend/database/migrations/2026_10_08_000000_create_stayhub_schema.php), [models](../../backend/app/Models), [TV3 seeder](../../backend/database/seeders/Member3DataSeeder.php): có nền dữ liệu; không chứng minh DB hiện tại đã áp dụng hay chức năng đã chạy |
-| H1 | Lượt audit trước trong cùng chat ngày 2026-11-14: `php artisan test` 407 passed, 2066 assertions; lint exit 0, 3 warnings; build exit 0, cảnh báo chunk >500 kB. Nguồn là tool output lịch sử trong chat, chưa có artifact log riêng; không chạy lại trong task tài liệu này |
-| H2 | Cùng lượt audit: `php artisan route:list --path=api` có 16 route. Inventory được đọc lại trong SETUP-01; route output lịch sử không thay cho runtime tương lai |
+### UC TV3 chưa triển khai và công việc tiếp theo của TV3
+
+- 8 UC TODO: UC17 Chatbot; UC36 cập nhật thanh toán; UC39 Host Dashboard; UC44 Admin Booking; UC45 Admin Invoice; UC47 Admin Dashboard; UC48 Statistics; UC61 context nội bộ cho chatbot.
+- Ngoài mã UC: FAQ Management và Chat History còn TODO.
+- QA/nghiệm thu chức năng10UC hiện hữu và tích hợp TV2 là backlog riêng; không mở lại các checkpoint refactor đã được nghiệm thu chỉ vì các gate này chưa đóng.
+- Audit toàn project sau khi team tích hợp là task riêng, chưa được thực hiện trong đợt refactor này.
+- Hồ sơ lịch sử SETUP-01/VAL-STRUCT-01/MAP-01 còn mục xác nhận/bằng chứng riêng cần đối chiếu. Giữ trạng thái gốc, không tự báo gate MAP-01 PASS hoặc xóa lịch sử; tách việc hoàn thiện hồ sơ khỏi kết luận nghiệm thu các luồng đã chốt.
+- Code bàn giao hiện ở working tree nhánh refactor/stayhub-layered-architecture, HEAD7dac999; thay đổi chưa commit. Cần thống nhất cách đóng gói/chuyển code để team nhận đủ; không tự commit/push/merge trong task tài liệu này.
+
+Lượt chốt checklist chỉ cập nhật tài liệu, đối chiếu source wiring và bằng chứng lịch sử; không chạy lại suite runtime, không sửa source hoặc thay đổi quyết định nghiệp vụ.
+
+## Tiến độ hiện tại
+
+| Phạm vi | Đã làm và nghiệm thu | Việc còn lại |
+| --- | --- | --- |
+| Invoice | Refactor 5 API đọc/tạo, header/items, validation, transaction và React API/service/mapper | Nghiệm thu chức năng, QA theo luồng, quyết định và triển khai UC36 |
+| Review | Refactor 4 API đã qua REV-ARCH-AUDIT. REV-FE-01 đã nghiệm thu mapper/service và UI | Điểm vào từ Booking thật của TV2 và gate Review concurrency trên XAMPP |
+| Auth/Profile liên module | Auth 01A–01D, audit và Profile 01A–01C, FIX-01, audit đã nghiệm thu | F01/F02 đã đóng qua lượt tái kiểm. Tiến độ chức năng TV1 được quản lý theo phạm vi UC03 riêng |
+| Catalog liên module | Public UC04–UC05, Host quản lý cơ sở UC18, loại phòng UC19, kiểm kê CAT-ROOM-00 và Room list/detail/create/update CAT-ROOM-01–04 đã nghiệm thu | CAT-ROOM-05A đặc tả/kiểm chứng đã nghiệm thu E12. CAT-ROOM-05B đã nghiệm thu E13; CAT-ROOM-FIX-01 đã nghiệm thu E15; F01 CLOSED qua tái kiểm E16. CAT-ROOM-AUDIT đã nghiệm thu E16; dependencies Booking/Maintenance và DELETE Room giữ mở. CAT-ROOM-IMG-00 kiểm kê UC21 mới PLANNED, chưa thực hiện |
+| Reporting | Các trang Host/Admin có khung UI | Chốt KPI, thời gian, refund và triển khai API/UI |
+| FAQ và Chat | Migrations và model nền | Chốt contract, làm API/UI và kiểm chứng provider/context |
+
+**Số đếm chức năng:** 10 UC đã có luồng chính, đã refactor/tích hợp cấu trúc mới trong phạm vi hiện hữu và còn gate QA/nghiệm thu chức năng; 8 UC TODO. Chốt refactor không tự chuyển nghiệm thu từng UC chức năng sang CLOSED.
+IMPLEMENTED là có luồng chính. PARTIAL là đã có bằng chứng cho một phần tiêu chí. NOT VERIFIED là chưa có bằng chứng cho cổng đang nói tới. ACCEPTED là có xác nhận nghiệm thu cho phạm vi cụ thể. Dùng [x] khi các tiêu chí bắt buộc đạt và đã được nghiệm thu.
 
 ## Ma trận 18 use case
 
-| Đóng | UC | Implementation | Verification | Acceptance | Đã có / còn thiếu | Task tiếp tục |
-|---|---|---|---|---|---|---|
-| [ ] | UC15 Customer invoice | IMPLEMENTED | PARTIAL | PENDING | API/list/detail UI (S2,H1); browser/MySQL và nghiệm thu còn thiếu | INV-01, QA-02 |
-| [ ] | UC16 Tạo review | IMPLEMENTED | PARTIAL | PENDING | API/form/test (S3,H1); BLOCKED tích hợp booking thật TV2 | REV-01, QA-03 |
-| [ ] | UC17 Chatbot | TODO | NOT VERIFIED | PENDING | Chưa có luồng chat thật | CHAT-01..05 |
-| [ ] | UC34 Tạo invoice | IMPLEMENTED | PARTIAL | PENDING | Service/transaction/UI nhập ID (S2); cần gate thực tế | INV-01, QA-02 |
-| [ ] | UC35 Invoice detail Host | IMPLEMENTED | PARTIAL | PENDING | API/UI (S2,H1); browser còn thiếu | INV-01, QA-02 |
-| [ ] | UC36 Payment status | TODO | NOT VERIFIED | PENDING | Thiếu workflow đã chốt, API và UI | INV-02, INV-03 |
-| [ ] | UC37 Invoice management | IMPLEMENTED | PARTIAL | PENDING | List/search/filter/pagination (S2); không coi UC36 đã có | INV-01, QA-02 |
-| [ ] | UC38 Host reviews | IMPLEMENTED | PARTIAL | PENDING | List/filter/summary API/UI (S3,H1); browser còn thiếu | REV-03 |
-| [ ] | UC39 Host dashboard | TODO | NOT VERIFIED | PENDING | Chỉ khung điều hướng (S5) | RPT-01, HOST-01, HOST-02 |
-| [ ] | UC44 Admin bookings | TODO | NOT VERIFIED | PENDING | Chưa có API/UI | ADM-02 |
-| [ ] | UC45 Admin invoices | TODO | NOT VERIFIED | PENDING | Chưa có API/UI | ADM-01 |
-| [ ] | UC47 Admin dashboard | TODO | NOT VERIFIED | PENDING | Placeholder (S5) | RPT-01, ADM-03, ADM-04 |
-| [ ] | UC48 System statistics | TODO | NOT VERIFIED | PENDING | Chưa có API/UI | RPT-01, ADM-05, ADM-06 |
-| [ ] | UC56 Invoice items | IMPLEMENTED | PARTIAL | PENDING | Atomic room/service items (S2,H1); xác minh AC cụ thể | INV-01, QA-02 |
-| [ ] | UC57 Subtotal | IMPLEMENTED | PARTIAL | PENDING | BCMath + tests (S2,H1); chưa đối chiếu AC mới | INV-01 |
-| [ ] | UC58 Total payment | IMPLEMENTED | PARTIAL | PENDING | Hàm có discount/extra_fee; create dùng 0, không suy ra có UI chỉnh phí | INV-01 |
-| [ ] | UC60 Review conditions | IMPLEMENTED | PARTIAL | PENDING | Validator/test (S3,H1); chưa đóng nghiệm thu | REV-01, QA-03 |
-| [ ] | UC61 Chat context | TODO | NOT VERIFIED | PENDING | Chưa có retrieval service | CHAT-01, CHAT-02 |
-
-Tổng inventory: 10 UC có implementation chính (kể cả UC16 bị chặn tích hợp), 8 UC TODO. **0 UC được đánh dấu ACCEPTED trong checklist mới**; điều này không xóa code đã làm. H1 là suite tổng, không đủ để tự đóng từng AC hoặc khẳng định MySQL/browser PASS.
-
-## Backlog task con
-
-Các ID đầy đủ có tiền tố `TV3-`, ví dụ `TV3-INV-02`. Acceptance của tất cả task đang PENDING. Cột verify chỉ phản ánh scope task, không phản ánh cả module.
-
-| Đóng | Task | Kết quả cần đạt / AC chính | Dependency | Impl / Verify |
-|---|---|---|---|---|
-| [ ] | SETUP-01 | Local rules, checklist, 5 skills chung; AGENTS.md nguyên vẹn; plan/result trên chat | Plan đã duyệt; delivery chờ owner nghiệm thu | IMPLEMENTED / PASS |
-| [ ] | INV-01 | Đối chiếu UC15/34/35/37/56/57/58 theo code/test; lập AC còn thiếu, kiểm tra snapshot, uniqueness, atomicity, decimal và API docs hiện có; sửa lỗi chỉ sau scope cụ thể | S2,H1 | TODO / NOT VERIFIED |
-| [ ] | INV-02 | Chốt transition payment, role/ownership, paid_at, refund, retry/conflict và mã lỗi trên chat; cập nhật quyết định đã chốt vào checklist | Quyết định owner, không tự suy từ enum | TODO / NOT VERIFIED |
-| [ ] | INV-03 | Vertical slice UC36: API cập nhật + Host UI + validation/ownership/transition tests; chặn submit trùng | INV-02; file chung phải được phép | TODO / NOT VERIFIED |
-| [ ] | REV-01 | Kiểm tra UC16/60 với booking detail API thật; form → API → DB → UI, conflict/ownership; xác định sửa TV3 hoặc handoff | BLOCKED TV2: GET customer booking detail chưa tích hợp | TODO / NOT VERIFIED |
-| [ ] | REV-02 | Public reviews nối property thật; phân trang/empty/privacy và không gọi API bằng ID mock | BLOCKED TV1: property detail thật | TODO / NOT VERIFIED |
-| [ ] | REV-03 | Nghiệm thu Host/customer review lists: filters, summary scope, ownership, lỗi và responsive; sửa gap theo scope | S3; runtime QA phù hợp | TODO / NOT VERIFIED |
-| [ ] | RPT-01 | Chốt invoice status/date/timezone/refund và định nghĩa từng KPI; bộ lọc thời gian; dùng cho Host/Admin | INV-02; owner xác nhận nghiệp vụ | TODO / NOT VERIFIED |
-| [ ] | HOST-01 | Query service Host + test totals/empty/date/ownership theo RPT-01; task nền tảng, chưa đóng UC39 | RPT-01 | TODO / NOT VERIFIED |
-| [ ] | HOST-02 | UC39 API/resource + React dashboard + filter/states + kiểm chứng; không chỉ thẻ điều hướng | HOST-01; route integration được phép | TODO / NOT VERIFIED |
-| [ ] | ADM-01 | UC45 read-only Admin invoice list, API/UI/filter/pagination/role tests | S2; quyền Admin | TODO / NOT VERIFIED |
-| [ ] | ADM-02 | UC44 read-only Admin booking list, API/UI/filter/pagination/role tests; không vận hành thay Host | Contract Booking TV2 | TODO / NOT VERIFIED |
-| [ ] | ADM-03 | Query nền tảng dashboard Admin, KPI có fixture độc lập và date/refund tests | RPT-01 | TODO / NOT VERIFIED |
-| [ ] | ADM-04 | UC47 API + dashboard UI + states/responsive/role checks | ADM-03 | TODO / NOT VERIFIED |
-| [ ] | ADM-05 | Query thống kê theo kỳ và chiều phân tích được chốt; không tự thêm export/phân tích ngoài scope | RPT-01; metric scope | TODO / NOT VERIFIED |
-| [ ] | ADM-06 | UC48 API + trang thống kê + filters/charts/states, kiểm chứng số với API thật | ADM-05 | TODO / NOT VERIFIED |
-| [ ] | FAQ-01 | Chốt contract; vertical slice Admin list/create FAQ + validation/authorization/UI/test | S6; shared routes được phép | TODO / NOT VERIFIED |
-| [ ] | FAQ-02 | Admin edit/delete FAQ + confirm/conflict/error UI và test quyền; không tự thay schema | FAQ-01 | TODO / NOT VERIFIED |
-| [ ] | CHAT-01 | Chốt V1 context allowlist, provider, timeout/error, retention/ownership; xác định secrets/config scope | Owner; catalog/FAQ contracts | TODO / NOT VERIFIED |
-| [ ] | CHAT-02 | UC61 context service: property/room/amenity/service/FAQ được phép; tests privacy/access | CHAT-01, FAQ-01 | TODO / NOT VERIFIED |
-| [ ] | CHAT-03 | Session/history API + UI danh sách/đọc lịch sử; ownership, pagination, empty/error tests | CHAT-01, S6 | TODO / NOT VERIFIED |
-| [ ] | CHAT-04 | Provider adapter nền tảng, timeout/error và tests bằng provider double được ghi rõ; chưa coi chat live PASS | CHAT-01, CHAT-02 | TODO / NOT VERIFIED |
-| [ ] | CHAT-05 | UC17 gửi message → provider → lưu → UI; chống submit trùng, privacy, timeout; live-provider verification ghi riêng | CHAT-03, CHAT-04 | TODO / NOT VERIFIED |
-| [ ] | QA-01 | Khảo sát/chốt browser harness: actual React build/Laravel/Sanctum, DB/storage cô lập và quyền chạy; đề xuất task con nếu cần xây runner | Runtime/tool availability; scope riêng | TODO / NOT VERIFIED |
-| [ ] | QA-02 | Gate invoice thật: create/read/payment, quyền, duplicate, decimal và viewport; không seed invoice để thay create | INV-01, INV-03, QA-01 và runner nếu cần | TODO / NOT VERIFIED |
-| [ ] | QA-03 | Gate review thật: booking COMPLETED, create/read/duplicate/ownership/public/Host và viewport | REV-01..03, QA-01 và runner nếu cần | TODO / NOT VERIFIED |
-| [ ] | QA-04 | Gate reporting/admin: KPI fixture độc lập, date/refund/ownership, API/UI khớp nhau; ghi engine được kiểm chứng | HOST/ADM, QA-01 | TODO / NOT VERIFIED |
-| [ ] | QA-05 | Gate FAQ/chat/history: quyền, privacy, provider errors, late response, real integration và viewport | FAQ/CHAT, QA-01 | TODO / NOT VERIFIED |
-
-## Quyết định chưa chốt / blocker
-
-| ID | Nội dung | Tác động / bước gỡ |
-|---|---|---|
-| D1 | Các transition UNPAID/PAID/REFUNDED, paid_at và retry semantics | INV-02 phải chốt trước mutation UC36 |
-| D2 | Trạng thái invoice tính doanh thu, ngày ghi nhận, timezone, refund | RPT-01 phải chốt trước query reporting |
-| D3 | Booking detail/list thật chưa tích hợp | TV2 bàn giao endpoint/contract; TV3 chỉ sửa tích hợp trong scope |
-| D4 | Public property detail thật chưa tích hợp | TV1 bàn giao để nghiệm thu public review UI |
-| D5 | Chưa có browser harness và MySQL test isolation được xác minh | QA-01; không dùng DB development để đóng gate |
-| D6 | Provider/context/retention chatbot chưa thống nhất | CHAT-01; mock provider không thay bằng chứng live provider |
-| D7 | Root AGENTS.md hiện là TV3 MASTER PROMPT dù skills dùng chung | Giữ nguyên theo yêu cầu; chuyển thành common instructions là task nhóm riêng |
-
-## AC task thiết lập
-
-| AC | Điều kiện | Verification / Evidence |
-|---|---|---|
-| SETUP-AC01 | AGENTS.md giữ nguyên; hướng dẫn gọi local rules rõ | PASS — so nội dung với git show HEAD:AGENTS.md; README có prompt đọc local file; tool output chat 2026-11-14 |
-| SETUP-AC02 | Đủ 18 UC + FAQ/history + gaps code hiện có; không tự ACCEPTED | PASS — kiểm tra 18 UC duy nhất, không dòng task/UC nào [x]; FAQ-01/02 và CHAT-03 rõ; inventory S1–S6 |
-| SETUP-AC03 | Năm skills chung có trigger/ownership, không auto áp TV3 cho TV1/TV2 | PASS — review nội dung năm SKILL.md; planning chỉ đọc local TV3 khi áp dụng; root instructions vẫn có hiệu lực |
-| SETUP-AC04 | Skill validator, metadata và links hợp lệ | PASS — quick_validate.py 5/5 exit 0; inline audit 14 files/23 local links, metadata prompt/name/length hợp lệ; tool output chat |
-| SETUP-AC05 | Review tình huống payment chưa chốt, Review thiếu TV2, revenue chưa chốt, SQLite vs MySQL, plan vs acceptance | PASS — walkthrough tĩnh: planning chặn D1/D2, handoff D3; database/verification không đồng nhất SQLite–MySQL; local/checklist phân biệt plan approval–acceptance. Không phải test hành vi host/subagent |
-| SETUP-AC06 | Scope/diff sạch; plan/result chỉ trên chat; branch feature/ | PASS — git diff --check exit 0; inline whitespace audit gồm untracked/ignored local file; branch đúng; không có templates hoặc task report file |
-
-## Lịch sử và bước tiếp theo
-
-- 2026-11-14: owner duyệt SETUP-01; tạo nhánh từ HEAD nêu trên. Owner acceptance của delivery vẫn PENDING.
-- 2026-11-14: SETUP-01 TECHNICAL PASS theo AC trên; local rules + README + checklist + 5 skills/metadata + gitignore (14 file deliverables). Generator gặp encoding Windows và thiếu PyYAML ban đầu; chạy thành công bằng Python UTF-8 với venv cô lập `.agent-workspace/tv3/setup-validation/venv` (PyYAML 6.0.3). Môi trường kiểm tra này được giữ local để dùng lại, không là dependency ứng dụng. Giữ dòng ignore AGENTS.local.md phát hiện khi làm; file local không đi theo Git. Chưa kiểm chứng tự chọn skill trong chat mới; không chạy lại test ứng dụng cho task tài liệu. Plan/Task Result chỉ trên chat; chưa stage/commit/push.
-- Đề xuất sau SETUP-01: **TV3-INV-01**, kiểm tra gap hiện có trước khi chốt **TV3-INV-02** và triển khai UC36. Không bỏ qua các phần Invoice/Review chưa nghiệm thu.
-
-## ARCH-01 — chuyển đổi kiến trúc chung (2026-11-14)
-
-Owner duyệt target toàn StayHub, gồm Repository/DTO/Mapper, base API và exception tập trung; không chỉ TV3. Checklist này theo dõi rollout TV3 và dependency chung, không quản lý nghiệm thu TV1/TV2. Tất cả task code dưới đây chưa triển khai trong ARCH-01. Quyết định này thay đề xuất tiếp tục INV-01 ngay sau SETUP-01: ưu tiên migration nền tảng trước; nghiệp vụ INV-02/UC36 vẫn cần chốt riêng.
-
-| Đóng | Task | Scope và kết quả | Dependency | Impl / Verify / Acceptance |
-|---|---|---|---|---|
-| [x] | ARCH-01 | 9 file kiến trúc/rules/skills/checklist; AGENTS.md nguyên vẹn, không production changes | Owner nghiệm thu trên chat trước API-01 | IMPLEMENTED / PASS / ACCEPTED |
-| [x] | API-01 | ApiResponse tại Controllers/Api/V1, business exception và renderer tập trung cho 9 named routes Invoice/Review; giữ Web/Auth; chưa chuyển Controller nghiệp vụ | Owner nghiệm thu trên chat trước FE-01 | IMPLEMENTED / PASS / ACCEPTED |
-| [x] | FE-01 | Base API error/ID, Invoice/Review API modules và service integration; giữ Axios/Auth | Owner nghiệm thu trên chat trước INV-ARCH-01A | IMPLEMENTED / PASS / ACCEPTED |
-| [x] | INV-ARCH-01 | Invoice read Repository/DTO/Mapper/Resource + list/detail UI consumers; chia A nền tảng, B HTTP, C frontend | Owner nghiệm thu A/C và đóng parent trên chat; B đã ACCEPTED | IMPLEMENTED / PASS / ACCEPTED |
-| [ ] | INV-ARCH-02 | Invoice create Repository + Validator + DTO/Mapper, transaction/logging và consumer compatibility; chia A/B/C | INV-ARCH-01 ACCEPTED; 02A technical PASS, B/C chưa làm | IN PROGRESS / PARTIAL / PENDING |
-| [ ] | REV-ARCH-01 | Review read Repository/DTO/Mapper + customer/Host/public consumers | API-01, FE-01 | TODO / NOT VERIFIED / PENDING |
-| [ ] | REV-ARCH-02 | Review create, ownership/privacy, exception/logging + form consumer | REV-ARCH-01; booking integration D3 còn mở | TODO / NOT VERIFIED / PENDING |
-| [ ] | QA-ARCH-01 | Regression API/DB/UI, auth compatibility và kiến trúc; ghi giới hạn browser/MySQL | INV/REV migration, QA-01 nếu cần harness | TODO / NOT VERIFIED / PENDING |
-
-Mỗi task phải lên Mini Plan chi tiết 30–90 phút; task lớn chia tiếp, không tự làm task sau. TV1/TV2 và các domain mới áp target bằng task riêng. Không suy từ ARCH-01 rằng code đã dùng Repository hoặc Global Exception.
-
-| AC | Điều kiện ARCH-01 | Kết quả |
-|---|---|---|
-| ARCH-AC01 | Target toàn project rõ, phân biệt code hiện có, ownership/task scope | PASS — Review mục 13 kiến trúc: target chung và hiện trạng/ownership tách rõ. |
-| ARCH-AC02 | Repository/DTO/Mapper/Resource trách nhiệm và dependency rõ | PASS — Review ma trận chiều phụ thuộc, DTO thuần/mapper không query, Service sở hữu transaction. |
-| ARCH-AC03 | Base API giữ data/meta/links/summary, error status/code/headers an toàn | PASS — Review contract data/meta/links/summary, error code/field errors/headers, không double wrapping. |
-| ARCH-AC04 | Exception tập trung rollout có giới hạn, giữ Auth/Profile/Web contract | PASS — Review rollout theo module; giữ Auth user/message và Web behavior. |
-| ARCH-AC05 | Logging commit/rollback, safe context và một report boundary | PASS — Review after-commit success, rollback, calculator không log, unexpected report một lần. |
-| ARCH-AC06 | Frontend API/service/mapper và Auth interceptor compatibility | PASS — Review frontend guide mục 17: API/service/mapper, cancel/network và Auth session semantics. |
-| ARCH-AC07 | 5 skill validator, links mới và diff/scope checks PASS | PASS — quick_validate.py 5/5 exit 0; 21 local file links hợp lệ; whitespace và git diff --check PASS; AGENTS.md nguyên vẹn. |
-| ARCH-AC08 | Backlog migration rõ, không tự đóng task runtime/UC | PASS — Migration tasks TODO, acceptance PENDING; chưa đóng runtime/UC; scope 9 file đã đối chiếu. |
-
-Scope được duyệt gồm ARCHITECTURE.md, frontend guide, AGENTS.local.md, 5 SKILL.md, checklist này. Không sửa metadata, README, AGENTS.md hoặc code nghiệp vụ. Runtime API/browser/MySQL của target: NOT VERIFIED. ARCH-01 TECHNICAL PASS sau kiểm tra ngày 2026-11-14, owner acceptance ACCEPTED trên chat trước API-01; plan/result chỉ báo trên chat. Kiểm chứng là static review/skill validation, không chứng minh runtime mới. Chưa chạy PHPUnit/lint/build vì không đổi code ứng dụng. Audit snapshot ban đầu bỏ sót checklist do dấu phân cách đường dẫn Windows; đã kiểm tra bổ sung trực tiếp, không diễn giải lần audit lỗi là PASS. Tự chọn skill trong chat mới chưa kiểm chứng. AGENTS.local.md vẫn bị ignore như trước. Không stage/commit/push; đề xuất tiếp theo API-01, chưa bắt đầu.
-
-## API-01 — base response và exception tập trung
-
-Owner duyệt scope 7 file mới + 2 file sửa; xác nhận ApiResponse đặt trong Controllers/Api/V1, giữ routes/URL. ARCH-01 đã được owner nghiệm thu. API-01 technical PASS; owner đã ACCEPTED trên chat trước FE-01, đóng [x] ở backlog kiến trúc. Không cập nhật acceptance của SETUP-01 hoặc các UC khác theo suy đoán.
-
-### Đã triển khai
-
-- ApiResponse success nhận resource/normalized array, giữ status và Laravel resource pagination/summary; error chỉ thêm errors khi có; noContent trả 204 rỗng. Array input phải là dữ liệu chưa bọc envelope theo contract helper; không tự dò/unwrap payload tùy ý.
-- ApiBusinessException có public message/code/status/field errors, chỉ chấp nhận status domain 403/404/409/422; ShouldntReport tránh ghi lỗi nghiệp vụ dự kiến như failure bất ngờ. Không migrate các exception cũ trong task nền tảng.
-- ApiExceptionRenderer đăng ký withExceptions trong bootstrap/app.php; allowlist 9 route names hiện có Invoice/Review. Không tạo route mới, không đổi URL /api thành /api/v1. Namespace Api/V1 chỉ là vị trí class.
-- Framework auth/validation/HTTP/explicit response giữ xử lý hiện có; AccountStatusException render vẫn được Laravel ưu tiên. Unexpected/non-domain InvalidArgumentException ở route trong scope trả 500 JSON an toàn kể cả app.debug=true; framework chịu report, renderer không log lần hai.
-- Controllers cũ còn catch/return lỗi trực tiếp; nền mới chưa khiến mọi lỗi domain có code. ApiResponse chưa được đưa vào Controller nghiệp vụ; dùng dần trong INV/REV-ARCH. Provider/Repository/DTO/Mapper chưa triển khai bởi API-01.
-
-### File scope
-
-7 file mới: backend/app/Http/Controllers/Api/V1/ApiResponse.php; backend/app/Exceptions/Api/ApiBusinessException.php; backend/app/Exceptions/Api/ApiExceptionRenderer.php; backend/tests/Unit/Api/ApiBusinessExceptionTest.php; backend/tests/Feature/Api/ApiResponseTest.php; backend/tests/Feature/Api/ApiExceptionRenderingTest.php; backend/tests/Feature/Api/ApiCompatibilityTest.php.
-
-2 file sửa: backend/bootstrap/app.php và checklist này. Giữ AGENTS.md, routes, frontend, Services/Models/Controllers nghiệp vụ, providers, config, migration/seeders. Các thay đổi ARCH-01 và file untracked từ task trước được giữ, không tính là API-01 mới làm.
-
-### Kiểm chứng thực tế
-
-- `php artisan test --filter=Api` lần đầu FAIL do test truyền header nhầm tham số previous của HttpException; sửa test, không thay contract để né lỗi. Lệnh filter rộng này cũng chạy test cũ có tên Api.
-- Chạy lại filter namespace chính xác `php artisan test --filter='Tests\\(Unit|Feature)\\Api\\'`: 12 tests PASS, 93 assertions, exit 0.
-- `php artisan test`: 419 tests PASS, 2159 assertions, exit 0 (23.07s); gồm Auth/Profile/Invoice/Review và API mới. Config test SQLite in-memory; bootstrap/cache/config.php không tồn tại. Không migrate/reseed DB development. Test API mới không ghi DB; suite hiện có dùng fixtures cô lập.
-- `php artisan route:list --path=api`: 16 routes; test routes chỉ đăng ký trong test class, không có ở production route list.
-- `git diff --check`: PASS. Kiểm tra diff AGENTS.md, routes, Services/Models, Controllers nghiệp vụ và frontend: nguyên vẹn so với HEAD. Bằng chứng là tool output trong chat, không tạo file Task Result riêng.
-- Frontend lint/build NOT RUN vì không thay frontend; browser/MySQL concurrency NOT VERIFIED và không thuộc gate nền tảng này. 419/429 được kiểm tra exception pipeline/header, không phải browser CSRF/rate-limit E2E mới; Auth session regression được suite hiện có xác minh.
-
-| AC | Kết quả / bằng chứng |
-|---|---|
-| API-AC01 | PASS — ApiResponseTest: 200/201, decimal/null, pagination/meta/links/summary, 204 rỗng; không double wrap resource |
-| API-AC02 | PASS — ApiBusinessExceptionTest và domain pipeline cases: status/code/public message/fields; invalid contract ném programming error |
-| API-AC03 | PASS — renderer registered; named allowlist, outside module/Web fallback tests; route list không đổi |
-| API-AC04 | PASS — toàn suite Auth/Profile; tests ACCOUNT_BLOCKED/INACTIVE, HttpResponseException precedence; không thay Auth code |
-| API-AC05 | PASS — framework 401/403/404/419/429 và Retry-After, authorization privacy-404, validation 422, domain 409; real Auth regression |
-| API-AC06 | PASS — unexpected + InvalidArgumentException trả safe 500 khi debug true; mock logger expectation một error report, expected domain không report |
-| API-AC07 | PASS — focused 12/12 và full 419/419, native exit 0; production 16 API routes |
-| API-AC08 | PASS — đúng 7 file mới + 2 file sửa; base response đúng vị trí được duyệt; business/routes/Auth/AGENTS nguyên vẹn; checklist tách acceptance |
-
-Recommended Next Task: FE-01 — Mini Plan base API/error frontend và domain API boundaries, bảo toàn Auth interceptors. Chưa bắt đầu. API-01 đã dừng sau báo cáo, chưa stage/commit/push.
-
-## FE-01 — base API/error Frontend và domain API modules
-
-Owner duyệt 7 file mới và 3 file sửa; implementation/technical verification PASS, delivery acceptance ACCEPTED trên chat trước INV-ARCH-01A. API-01 đã được owner nghiệm thu. Giữ nguyên Axios singleton, AuthContext, authService/authSession, cookie/XSRF và routes/URL.
-
-### Implementation
-
-- apiError.js chuẩn hóa status/code/message/fields/kind/retryAfter; HTTP, local validation, network, timeout và cancellation được phân biệt. Không giữ config/request; 500 không hiển thị raw message. Chuẩn hóa lại giữ kết quả; chỉ lọc mã lỗi hợp lệ và field errors đúng cấu trúc. Retry-After hỗ trợ giây nguyên không âm và IMF-fixdate GMT, giá trị sai trả 0; không tự retry.
-- apiId.js chỉ nhận positive safe integer number hoặc canonical digit string; reject fractional/exponent string/leading-zero/whitespace/unsafe number, không parseInt đổi ID sang tài nguyên khác. Number literal đã là số nguyên thì không thể suy ra cách người gọi viết ban đầu.
-- invoiceApi.js/reviewApi.js cung cấp factories nhận Axios client. 9 thao tác endpoint hiện có, trả response.data nguyên envelope, chuyển signal, không catch/replace rejection hoặc thêm interceptors/replay.
-- invoiceService/reviewService dùng cùng Axios qua factory; giữ exports, payload validation/trim ở Review, review pagination scan và envelope cho UI. Invoice thêm optional options.signal; parser cũ delegate base normalization, giữ các cờ Review UI dùng. Request ID sai là local validation, không báo mất mạng. Mapper/view-model đầy đủ, thay UI và sửa các response fallback cũ ngoài service không nằm trong FE-01.
-
-### File scope
-
-7 file mới: frontend/src/api/apiError.js, apiId.js, invoiceApi.js, reviewApi.js; frontend/tests/apiError.test.js, domainApi.test.js, apiAuthCompatibility.test.js.
-
-3 file sửa: frontend/src/services/invoiceService.js, frontend/src/services/reviewService.js, docs/TV3/TV3_CHECKLIST.md. Không sửa frontend/src/api/axios.js, Auth files, package/dependencies, Pages/Components, Backend hoặc AGENTS.md. Các diff ARCH/API trước đó giữ nguyên, không tính là FE-01 mới làm. Build cập nhật dist bị ignore là output phát sinh, không source deliverable.
-
-### Tests và evidence
-
-Bằng chứng là tool output trong chat thực thi FE-01, không tạo file plan/Task Result.
-
-- Focused: `node --test tests/apiError.test.js tests/domainApi.test.js tests/apiAuthCompatibility.test.js`: 10/10 PASS, 0 skipped, exit 0.
-- Full: `node --test tests/*.test.js`: 59/59 PASS, 0 skipped, exit 0; gồm Auth/Registration/Profile tests cũ. Node v22.23.4.
-- `npm run lint`: exit 0, 0 errors, 3 warning react-refresh cũ tại ui/badge.jsx, button.jsx, sidebar.jsx.
-- `npm run build`: exit 0, 3315 modules, bundle warning >500 kB như baseline. Không suy từ build rằng browser/responsive PASS.
-- `git diff --check` và file audit gồm untracked: PASS. Diff Axios/Auth/package/AGENTS.md nguyên vẹn. Backend bootstrap diff thuộc API-01 từ trước, không phải sửa FE-01.
-- Tests dùng Axios thật + custom adapter; kiểm chứng transport contract và interceptor integration, không Backend HTTP thật hoặc browser. Service consumer wiring được đọc lại và Vite build, chưa test UI DOM/end-to-end. PHPUnit NOT RUN vì không sửa Backend; MySQL/browser NOT VERIFIED ngoài gate này.
-
-| AC | Kết quả / evidence |
-|---|---|
-| FE-AC01 | PASS — hai service không còn gọi api.get/post trực tiếp; API factories dùng client được inject từ singleton hiện có |
-| FE-AC02 | PASS — exports/response shape giữ qua review diff/build; adapter tests giữ identity envelope, decimal/null/meta/links/summary; không claim browser acceptance |
-| FE-AC03 | PASS — apiError tests cover 401/403/404/409/419/422/429/500, malformed bodies, field errors, timeout/cancel/network/local validation, idempotence và không giữ credentials |
-| FE-AC04 | PASS — canonical ID matrix và invalid inputs request count 0 cho các API cần ID; property filter dùng strict helper |
-| FE-AC05 | PASS — 9 endpoint verb/path/query/body/signal, unchanged rejection và cancellation; mỗi invocation gửi tối đa một request, không replay |
-| FE-AC06 | PASS — Auth interceptors thật trên adapter client: protected/public 401, 2 account codes vs role denial, version snapshot đến muộn, cleanup/resubscribe không nhân callback |
-| FE-AC07 | PASS — focused 10/10 + full Node 59/59, lint/build exit 0; warnings được báo riêng |
-| FE-AC08 | PASS — đúng 7 new + 3 modified source/checklist, Axios/Auth/Backend/routes/AGENTS không đổi trong task; API-01 acceptance cập nhật |
-
-Recommended Next Task: INV-ARCH-01 — lên Mini Plan chuyển Invoice read path sang Repository/DTO/Mapper và giữ list/detail UI contract. Chưa bắt đầu; không stage/commit/push.
-
-## INV-ARCH-01A — Invoice read Repository/DTO/Mapper nền tảng
-
-Owner duyệt cách chia A/B/C và scope 01A, cho phép sửa bootstrap/providers.php. FE-01 đã ACCEPTED trên chat. INV-ARCH-01A technical PASS, delivery acceptance PENDING; parent INV-ARCH-01 chưa hoàn tất. Lượt bị ngắt đã có 9 test mới PASS, lượt tiếp tục đã xác minh lại state và chạy regression. Không bắt đầu 01B/01C.
-
-| Đóng | Task con | Dependency | Implementation / Verification / Acceptance |
-|---|---|---|---|
-| [x] | INV-ARCH-01A — Repository/DTO/Mapper/provider và tests | Owner nghiệm thu trực tiếp trên chat | IMPLEMENTED / PASS / ACCEPTED |
-| [x] | INV-ARCH-01B — Request/mapper/resource, nối Controller/QueryService read path | Owner nghiệm thu trên chat trước 01C | IMPLEMENTED / PASS / ACCEPTED |
-| [x] | INV-ARCH-01C — Frontend invoice mapper và regression consumers | Owner nghiệm thu trực tiếp trên chat | IMPLEMENTED / PASS / ACCEPTED |
-
-### Implementation và scope
-
-9 file mới: backend/app/Repositories/Invoice/Contracts/InvoiceReadRepository.php; backend/app/Repositories/Invoice/Eloquent/EloquentInvoiceReadRepository.php; backend/app/DTOs/Invoice/Requests/InvoiceFilterData.php; backend/app/DTOs/Invoice/Responses/InvoiceData.php; backend/app/DTOs/Invoice/Responses/InvoiceItemData.php; backend/app/Mappers/Invoice/InvoiceResponseMapper.php; backend/app/Providers/Modules/InvoiceServiceProvider.php; backend/tests/Feature/Invoice/InvoiceReadRepositoryTest.php; backend/tests/Unit/InvoiceResponseMapperTest.php.
-
-2 file sửa: backend/bootstrap/providers.php đăng ký provider binding; checklist này. Controllers/InvoiceQueryService/Resources/routes hiện có giữ nguyên; chưa nối Repository vào HTTP. Không sửa frontend/schema/seeders/AGENTS.md và không thay workflow create/payment. Các diff ARCH/API/FE trước đó được giữ nguyên, không tính là thay đổi mới của 01A.
-
-Repository có 4 methods scoped Host/Customer list/detail, grouped search chống OR thoát ownership, filters/status, created_at desc/id desc, explicit page/perPage, eager load items cho detail. Trả null cho missing/foreign-owner; Service của 01B chịu role và map thành privacy-404. Repository không nhận HTTP Request hoặc tự commit. Đây là read boundary, không thêm log INFO mỗi query.
-
-InvoiceFilterData typed readonly, trim search, status chưa hỗ trợ thành null, clamp page >=1 và perPage 1..50. Chuỗi search '0' được giữ như input search có nghĩa; raw HTTP normalization/legacy edge-case contract sẽ được chốt và test ở 01B trước khi đưa vào API.
-
-InvoiceData/InvoiceItemData giữ decimal string, nullable dates/description, list items=null phân biệt detail items=[]. InvoiceResponseMapper dùng cast attributes và relation đã tải; detail thiếu items ném LogicException thay vì lazy-load. Không tính lại total hoặc query; DTO chưa được serialize thành HTTP ở task này. Provider bind interface -> Eloquent implementation; chưa thay injection của Service đang chạy.
-
-### Tests executed
-
-- `php artisan test --filter='InvoiceReadRepositoryTest|InvoiceResponseMapperTest'`: 9/9 PASS, 63 assertions, exit 0.
-- `php artisan test --filter=Invoice`: 84/84 PASS, 353 assertions, exit 0.
-- `php artisan test`: 428/428 PASS, 2222 assertions, exit 0 (21.94s), gồm Auth/Profile/Invoice/Review/API regression.
-- `php artisan route:list --path=api`: 16 route như trước, không đổi URL.
-- `php -l`: 10 file PHP trong scope PASS; `git diff --check` PASS, audit whitespace/newline gồm file mới. Diff Controllers/InvoiceQueryService/Resources/routes/AGENTS.md không đổi so với HEAD.
-- Safety guard kiểm tra env và effective config SQLite :memory: trước RefreshDatabase; từ chối cached config. Fixtures trực tiếp DB chỉ phục vụ read-query integration, không phải evidence tạo invoice qua workflow thật. Không reset/reseed DB development.
-- Mapper unit không boot app/DB; integration query log xác nhận mapping detail tải sẵn phát sinh 0 query. Tests cover decimal max precision, total không bị tính lại, null/empty items, ngày ISO, ownership/filter/search/pagination/DI.
-- Frontend lint/build NOT RUN vì không sửa frontend; browser/MySQL concurrency NOT VERIFIED. Không dùng kết quả test cũ làm kết quả chạy lại. Evidence là tool output trong chat, không tạo file report.
-
-| AC 01A | Kết quả |
-|---|---|
-| A-AC01 — Repository interface/implementation và DI resolve | PASS — provider + repository integration tests |
-| A-AC02 — Ownership và missing/foreign null nhất quán | PASS — Host/Customer list/detail tests; role/HTTP status thuộc 01B |
-| A-AC03 — Filters/search/order/pagination/clamp | PASS — repository/DTO tests với fixture độc lập, ID tie ordering; HTTP compatibility vẫn dùng path cũ |
-| A-AC04 — DTO fields, exact decimal/null/items/date projection | PASS — mapper unit và DB integration; không dùng tính toán production làm expected totals |
-| A-AC05 — Mapper thuần, không query/mutate hoặc lazy-load | PASS — unloaded relation throws, attributes unchanged, query log rỗng |
-| A-AC06 — API hiện có/create/Auth không regression, đúng scope | PASS — 428 tests; 16 routes; read/create source chưa đổi; 9 new + 2 modified |
-
-Parent INVREAD-AC01/06/08 và các gate tích hợp sau này chưa được đóng bằng 01A. Technical PASS chỉ áp dụng foundation scope. Recommended Next Task: lên Mini Plan INV-ARCH-01B, không tự triển khai. Chưa stage/commit/push.
-
-## STRUCT-01 — chuẩn hóa tên và thư mục theo quyết định owner
-
-Owner duyệt STRUCT-01A; 01B/01C chưa thực hiện. Đây là đổi cấu trúc/naming sau foundation INV-ARCH-01A, không nối HTTP read path. Nghiệm thu INV-ARCH-01A không tự suy ra từ việc duyệt kế hoạch rename; giữ acceptance lịch sử PENDING. Các đường dẫn/tên cũ trong sections lịch sử phía trên mô tả code tại thời điểm test, không phải namespace hiện hành.
-
-| Đóng | Task | Implementation / Verification / Acceptance |
-|---|---|---|
-| [x] | STRUCT-01A — Invoice DTO/Mapper/Repository + central binding | IMPLEMENTED / PASS / ACCEPTED (owner trên chat trước 01B) |
-| [x] | STRUCT-01B — Common ApiResponse/PageResponse/Constants và Exceptions mới | IMPLEMENTED / PASS / ACCEPTED (owner trước 01C) |
-| [x] | STRUCT-01C — Kiến trúc/local rules/5 skills theo naming mới | IMPLEMENTED / PASS / ACCEPTED (owner trước INV-ARCH-01B) |
-
-### STRUCT-01A — thay đổi thực tế
-
-7 file rename/move trong backend:
-
-| Cũ | Mới |
-|---|---|
-| app/DTOs/Invoice/Requests/InvoiceFilterData.php | app/DTOs/Invoice/Requests/InvoiceFilterRequest.php |
-| app/DTOs/Invoice/Responses/InvoiceData.php | app/DTOs/Invoice/Responses/InvoiceResponse.php |
-| app/DTOs/Invoice/Responses/InvoiceItemData.php | app/DTOs/Invoice/Responses/InvoiceItemResponse.php |
-| app/Mappers/Invoice/InvoiceResponseMapper.php | app/Mappers/Invoice/InvoiceMapper.php |
-| app/Repositories/Invoice/Contracts/InvoiceReadRepository.php | app/Repositories/Invoice/InvoiceReadRepositoryInterface.php |
-| app/Repositories/Invoice/Eloquent/EloquentInvoiceReadRepository.php | app/Repositories/Invoice/InvoiceReadRepository.php |
-| tests/Unit/InvoiceResponseMapperTest.php | tests/Unit/InvoiceMapperTest.php |
-
-Mapper methods toData/toItemData đổi thành toResponse/toItemResponse. Requests DTO là application data, không phải Http Form Request. Repository methods/query/filter và DTO fields/types/normalization không đổi. Các tests giữ nguyên assertions, chỉ đổi tên/import/method references.
-
-4 file cập nhật tại chỗ: backend/app/Providers/AppServiceProvider.php (binding interface mới -> implementation mới), backend/bootstrap/providers.php (bỏ module provider), backend/tests/Feature/Invoice/InvoiceReadRepositoryTest.php (imports/resolve assertions), checklist này. Bỏ đúng backend/app/Providers/Modules/InvoiceServiceProvider.php sau khi chuyển binding và 3 thư mục rỗng Modules/Contracts/Eloquent bằng non-recursive rmdir. Không xóa file nào khác. Không đổi Composer dependencies hoặc tạo compatibility alias dư.
-
-### Verification
-
-- `php artisan test --filter='InvoiceReadRepositoryTest|InvoiceMapperTest'`: 9/9 PASS, 63 assertions, exit 0.
-- `php artisan test --filter=Invoice`: 84/84 PASS, 353 assertions, exit 0.
-- `php artisan test`: 428/428 PASS, 2222 assertions, exit 0 (25.83s). Gồm Auth/Profile/API/Invoice create-read/Review regression.
-- `php artisan route:list --path=api`: 16 route hiện có, không đổi URL.
-- `php -l` trên 10 file PHP trong scope: PASS. `git diff --check`: PASS; Git có thông báo chuẩn hóa CRLF->LF trên 2 file provider, không phải lỗi test.
-- `rg` không còn InvoiceFilterData/InvoiceData/InvoiceItemData/InvoiceResponseMapper/EloquentInvoiceReadRepository, namespace Contracts/Eloquent/Providers Modules hoặc mapper method cũ trong backend/app, bootstrap và tests. Tên trong checklist/tài liệu lịch sử không phải runtime reference.
-- Controller/Service/Resource/routes/AGENTS.md diff nguyên vẹn. API-01 bootstrap/app.php, frontend và kiến trúc/skills có diff từ các task trước, không sửa trong STRUCT-01A. Tài liệu/skills vẫn mô tả target trước rename, sẽ đồng bộ tại STRUCT-01C, không coi hiện tại đã hoàn toàn nhất quán.
-- Lệnh artisan đầu tiên bị gọi ở repository root và không chạy test (Could not open input file: artisan); đã chạy lại đúng backend và có kết quả trên. Không báo lần gọi sai là PASS.
-- SQLite in-memory, fixtures/query/mapper tests như 01A trước; không migrate/reseed MySQL development. Frontend lint/build NOT RUN vì không thay frontend. Browser/MySQL NOT VERIFIED ngoài scope naming refactor. Evidence là tool output trong chat; không tạo file plan/report.
-
-| AC 01A | Kết quả |
-|---|---|
-| STRUCT-A01 — tên/path DTO/Mapper/Repository đúng quyết định | PASS — inventory và syntax checks |
-| STRUCT-A02 — imports/type hints/method references đầy đủ | PASS — rg không references cũ runtime, focused tests |
-| STRUCT-A03 — binding AppServiceProvider resolve implementation mới | PASS — repository integration, không module provider cũ |
-| STRUCT-A04 — API/nghiệp vụ/contract/ownership giữ nguyên | PASS — 428 tests, business source/routes không đổi, 16 routes |
-| STRUCT-A05 — scope/whitespace/checklist chính xác | PASS — rename/delete đúng danh sách, history giữ tên cũ có giải thích |
-
-STRUCT-01A TECHNICAL PASS, owner acceptance PENDING, chưa stage/commit/push. Parent STRUCT-01 chưa đóng; Common/Exceptions chưa chuyển, PageResponse/Constants chưa tạo, architecture/skills chưa cập nhật. Recommended Next Task: STRUCT-01B theo Mini Plan đã trình bày, chờ scope được duyệt; chưa bắt đầu.
-
-## STRUCT-01B — Common và exception naming
-
-Owner nghiệm thu STRUCT-01A và duyệt 01B trước triển khai. Các ghi chú PENDING của 01A trong lịch sử phía trên được thay thế bởi acceptance này, không viết lại kết quả test cũ. STRUCT-01B IMPLEMENTED/technical PASS, owner acceptance PENDING; STRUCT-01C chưa bắt đầu.
-
-### File scope và mapping hiện hành
-
-| Nguồn cũ | Đích hiện tại |
-|---|---|
-| backend/app/Http/Controllers/Api/V1/ApiResponse.php | backend/app/Common/ApiResponse.php |
-| backend/app/Exceptions/Api/ApiBusinessException.php | backend/app/Exceptions/AppException.php |
-| backend/app/Exceptions/Api/ApiExceptionRenderer.php | backend/app/Exceptions/GlobalExceptionHandler.php |
-| backend/tests/Unit/Api/ApiBusinessExceptionTest.php | backend/tests/Unit/Api/AppExceptionTest.php |
-
-3 file mới: backend/app/Common/PageResponse.php, backend/app/Common/Constants.php, backend/app/Exceptions/ErrorCode.php.
-
-6 file sửa tại chỗ: backend/bootstrap/app.php; backend/app/DTOs/Invoice/Requests/InvoiceFilterRequest.php; backend/tests/Feature/Api/ApiResponseTest.php; ApiExceptionRenderingTest.php; ApiCompatibilityTest.php (cùng thư mục Feature/Api); checklist này. Bỏ riêng thư mục nguồn Exceptions/Api và Controllers/Api/V1 cùng parent Api khi rỗng; không xóa file khác. Không đổi Provider/Repository/Mapper, Auth, routes/URL, Controller/Service/Resource nghiệp vụ, Frontend, schema hoặc dependencies.
-
-### Behavior
-
-ApiResponse success/error/noContent giữ chữ ký và output cũ, thêm page(ResourceCollection, status=200) delegate PageResponse. PageResponse chỉ nhận ResourceCollection chứa LengthAwarePaginator, trả response qua Laravel để giữ data/meta/links/additional summary/query links/header hooks; không tự dựng pagination và không query. Collection không phân trang ném InvalidArgumentException có chủ đích, không biến thành trang rỗng. success(collection) cũ vẫn tương thích.
-
-Constants có DEFAULT_PAGE_SIZE=10, MIN_PAGE_SIZE=1, MAX_PAGE_SIZE=50; InvoiceFilterRequest dùng chúng mà không đổi default/clamp. Không thay mọi literal ở module khác.
-
-AppException giữ nguyên constructor/public errorCode/status/errors/ShouldntReport của ApiBusinessException. ErrorCode::INTERNAL_SERVER_ERROR được GlobalExceptionHandler dùng, không thay string value JSON. Handler vẫn qua withExceptions, allowlist 9 route names như trước, không mở rộng Auth/Profile/Web; framework exceptions/AccountStatusException render/explicit response và unexpected-reporting behavior giữ nguyên. Không migrate exception nghiệp vụ cũ.
-
-### Tests và evidence
-
-- Focused `php artisan test --filter='AppExceptionTest|ApiResponseTest|ApiExceptionRenderingTest|ApiCompatibilityTest'`: 16/16 PASS, 117 assertions, exit 0.
-- `php artisan test --filter='InvoiceReadRepositoryTest|InvoiceMapperTest'`: 9/9 PASS, 63 assertions, exit 0.
-- `php artisan test`: 432/432 PASS, 2246 assertions, exit 0 (21.79s), gồm Auth/Profile/Invoice/Review/API.
-- Test lần đầu FAIL ở fixture custom ResourceCollection chưa khai báo collects=JsonResource::class nên Laravel gọi toArray trên array; sửa fixture và rerun PASS. Không thay production behavior để bỏ assertion.
-- PageResponse tests kiểm tra parity legacy success/page, exact data decimal/null, meta total/current/last page, query links, summary, custom header hook, explicit status, empty page và reject unpaginated. Constants được test số cụ thể/default/clamp. Existing reporting và Auth compatibility assertions giữ nguyên.
-- php -l 12 file PHP trong scope PASS; git diff --check và whitespace/newline audit PASS (gồm untracked). rg references cũ trong app/bootstrap/tests không có kết quả (exit 1 của rg nghĩa no matches, không phải syntax fail).
-- route:list --path=api có 16 route như baseline. Diff AGENTS.md/routes/Services/Controllers nghiệp vụ/Resources không đổi. Các diff task trước giữ nguyên, không tính là 01B mới sửa.
-- SQLite in-memory cho suite, không migrate/reseed DB development. Frontend lint/build NOT RUN vì không sửa frontend; browser/MySQL NOT VERIFIED ngoài scope. Evidence là tool output trên chat, không file plan/Task Result.
-
-| AC | Kết quả |
-|---|---|
-| STRUCT-B01 — Common/Exceptions đúng path/namespace | PASS — file inventory/syntax |
-| STRUCT-B02 — references runtime cũ không còn | PASS — rg app/bootstrap/tests và focused tests |
-| STRUCT-B03 — compatibility ApiResponse và pagination/additional/headers | PASS — ApiResponseTest gồm parity và hook/empty/error cases |
-| STRUCT-B04 — Constants được sử dụng, default/clamp giữ nguyên | PASS — constants/filter tests + repository regression |
-| STRUCT-B05 — exception contract và reporting giữ nguyên | PASS — AppException và rendering tests; JSON error code literal không đổi |
-| STRUCT-B06 — Auth/Web/status/header không regression | PASS — compatibility + full suite |
-| STRUCT-B07 — tests/syntax/diff checks đạt | PASS — 432 tests, 12 PHP lint, diff/whitespace |
-| STRUCT-B08 — đúng scope và checklist tách lịch sử/acceptance | PASS — 4 move/rename + 3 new + 6 modified; acceptance 01B vẫn PENDING |
-
-Recommended Next Task: STRUCT-01C — cập nhật kiến trúc/local rules/5 skills theo naming mới; chưa bắt đầu. Tài liệu hiện hành ngoài checklist vẫn có tên cũ chờ 01C; lịch sử checklist giữ nguồn cũ có mapping. Chưa stage/commit/push. Dừng sau Task Result.
-
-## STRUCT-01C — tài liệu/skills theo cấu trúc hiện hành
-
-Owner đã nghiệm thu STRUCT-01B và duyệt 01C. Các dòng PENDING của 01B trong báo cáo lịch sử phía trên là trạng thái tại thời điểm báo cáo, được thay thế bởi acceptance này. INV-ARCH-01A delivery vẫn PENDING vì không có xác nhận riêng; parent INV-ARCH-01 vẫn mở, không suy ra hoàn tất từ rename/DI tests.
-
-### Cấu trúc hiện hành và phần chưa chuyển
-
-| Boundary | Nguồn hiện tại / trạng thái |
-|---|---|
-| Common | [ApiResponse](../../backend/app/Common/ApiResponse.php), [PageResponse](../../backend/app/Common/PageResponse.php), [Constants](../../backend/app/Common/Constants.php) đã có |
-| Exceptions | [AppException](../../backend/app/Exceptions/AppException.php), [ErrorCode](../../backend/app/Exceptions/ErrorCode.php), [GlobalExceptionHandler](../../backend/app/Exceptions/GlobalExceptionHandler.php); allowlist 9 route names, không đổi Auth/Web |
-| DTO Invoice | [InvoiceFilterRequest](../../backend/app/DTOs/Invoice/Requests/InvoiceFilterRequest.php), [InvoiceResponse](../../backend/app/DTOs/Invoice/Responses/InvoiceResponse.php), [InvoiceItemResponse](../../backend/app/DTOs/Invoice/Responses/InvoiceItemResponse.php) |
-| Mapper/Repository (snapshot STRUCT-01C) | [InvoiceMapper](../../backend/app/Mappers/Invoice/InvoiceMapper.php); lúc đó có InvoiceReadRepositoryInterface/InvoiceReadRepository (tên lịch sử, đã xóa/đổi tên ở SIMPLIFY-01A). Hiện dùng [InvoiceRepository](../../backend/app/Repositories/Invoice/InvoiceRepository.php), không interface/binding. |
-| DI | Binding tại [AppServiceProvider](../../backend/app/Providers/AppServiceProvider.php), không còn module provider |
-| HTTP Invoice | Controller/InvoiceQueryService/Resources còn path cũ; INV-ARCH-01B/02 chưa triển khai |
-| Frontend | Invoice/Review API modules/error/ID có sau FE-01; domain mapper/list-detail integration thuộc INV-ARCH-01C |
-| Module khác | Review migration và TV1/TV2/dashboard/FAQ/chat cần task riêng; không suy ra project đã migrated |
-
-Tên cũ trong sections lịch sử API-01/INV-ARCH-01A/STRUCT-01A/B giữ nguyên để đối chiếu test commands tại thời điểm đó. Mapping tên cũ -> mới đã có ở STRUCT-01A/B; bảng hiện hành này và ARCHITECTURE mục 14 là hướng dẫn làm tiếp. Các số test 428/432 là lịch sử, không chạy lại trong 01C.
-
-### Scope
-
-Chỉ 9 file sửa: ARCHITECTURE.md, docs/ai-frontend-development-guide.md, AGENTS.local.md, 5 SKILL.md (planning/laravel/react/database/verification), checklist này. Không tạo/move/delete source files, không sửa metadata, README TV3, AGENTS.md hoặc code ứng dụng. Baseline hash 530 project files + local rules được ghi trước edit tại ignored .agent-workspace/tv3/struct-01c-validation/baseline.json; đây là evidence kiểm tra phạm vi, không file plan/Task Result.
-
-### Acceptance criteria 01C
-
-| AC | Kết quả |
-|---|---|
-| STRUCT-C01 — naming/path hiện hành khớp code | PASS — Static review ARCHITECTURE mục 14 + file inventory hiện có: Request/Response, Mapper, Repository và Common/Exceptions đúng tên. |
-| STRUCT-C02 — central binding/Common responsibilities | PASS — Review AppServiceProvider binding convention; Common helper/pagination/constants responsibilities rõ, không module provider. |
-| STRUCT-C03 — exception scope/reporting/Auth đúng | PASS — Review GlobalExceptionHandler allowlist 9 names, framework/Auth/Web precedence và một reporting boundary. |
-| STRUCT-C04 — 5 skill nhất quán, không sinh cấu trúc cũ | PASS — 5/5 quick_validate.py exit 0; walkthrough planning/Laravel/database không sinh provider/Contracts/Eloquent cũ, React/verification giữ contract. |
-| STRUCT-C05 — tách foundation khỏi HTTP/UI pending | PASS — Matrix hiện trạng ghi foundation có và INV-ARCH-01B/C, create/Review migration chưa hoàn tất. |
-| STRUCT-C06 — acceptance/history đúng | PASS — STRUCT-01B ACCEPTED theo chat, 01C PENDING; lịch sử tên và 428/432 test counts giữ nguồn cũ; không suy acceptance 01A. |
-| STRUCT-C07 — validator/links/scope checks | PASS — 42 local links + 2 anchors PASS; git diff --check/UTF-8/whitespace PASS; so hash đúng 9 file thay đổi. |
-| STRUCT-C08 — AGENTS.md/application code nguyên vẹn | PASS — 530 baseline entries hash audit: code/AGENTS.md/metadata/README không đổi; không tạo/xóa project files. |
-
-Recommended Next Task: INV-ARCH-01B — lập Mini Plan nối HTTP read path vào Repository/DTO/Mapper với tên mới, chưa triển khai. Plan/Task Result chỉ trên chat; STRUCT-01C TECHNICAL PASS sau validation, owner acceptance PENDING. Chưa stage/commit/push.
-
-Validation evidence: quick_validate.py chạy cả 5 skill bằng venv UTF-8 hiện có, exit 0. Inline hash/link audit có output trên chat, dùng baseline.json chỉ để đối chiếu scope; 530 entries bao gồm ignored local rules. Không chạy lại PHPUnit/Node/lint/build cho task documentation; số tests ở sections cũ là historical. Chưa kiểm chứng auto-selection của skill trong chat mới. Git có warning CRLF->LF từ provider files đã đổi ở task trước, không là code edit của 01C. Task chỉ lưu checklist và evidence scope local; không tạo file plan/result. Dừng sau báo cáo; không làm INV-ARCH-01B.
-
-## INV-ARCH-01B — HTTP Invoice read path
-
-Owner đã nghiệm thu STRUCT-01C, duyệt plan 5 new/6 modified và cho phép thêm error code vào lỗi đọc. Trong thực thi, owner cho phép mở scope đúng một assertion Auth test (file modified thứ 7) để phù hợp contract code mới. Delivery INV-ARCH-01B technical PASS, acceptance PENDING. Parent INV-ARCH-01 vẫn mở vì 01C Frontend mapper chưa làm; acceptance INV-ARCH-01A không tự suy ra từ duyệt plan sau.
-
-### Implementation và scope
-
-5 file mới: backend/app/Http/Requests/Invoice/InvoiceQueryRequest.php, InvoiceDetailRequest.php; backend/app/Mappers/Invoice/InvoiceRequestMapper.php; backend/app/Http/Resources/Invoice/InvoiceReadResource.php, InvoiceItemReadResource.php.
-
-7 file sửa sau scope extension: backend/app/Services/Invoice/InvoiceQueryService.php; backend/app/Http/Controllers/Invoice/HostInvoiceController.php; CustomerInvoiceController.php; backend/app/Exceptions/ErrorCode.php; backend/tests/Feature/Invoice/InvoiceQueryApiTest.php; backend/tests/Feature/Auth/AuthenticationTest.php (một assertion được owner cho phép); checklist này.
-
-4 GET list/detail Host/Customer hiện đi qua Form Request -> request mapper/InvoiceFilterRequest -> QueryService -> InvoiceReadRepositoryInterface -> InvoiceMapper -> InvoiceResponse/InvoiceItemResponse -> Read Resources -> Common ApiResponse/PageResponse. QueryService không xây Eloquent query, kiểm tra role cả khi gọi ngoài HTTP. Form Request dùng authorization trước validation, Repository giữ ownership scoped; read-only không transaction mutation hay INFO logging từng query.
-
-HTTP status/message đọc giữ cũ, thêm INVOICE_READ_FORBIDDEN cho 403 và INVOICE_NOT_FOUND cho privacy-404 qua AppException/GlobalExceptionHandler. Guest 401 giữ framework/middleware. ID sai/missing/foreign cùng 404. Query search/status arrays và page/per_page arrays trả 422 field errors; scalar defaults/clamp, unsupported status, search literal 0 và empty giữ compatibility như plan. Request validation đọc query, không trộn GET JSON body. DTO detail có items (kể cả []), list bỏ items; decimal/null/date/field envelope tương đương Resources cũ. Paginator map Model -> DTO giữ metadata/links.
-
-store() tạo hóa đơn đã so hash chính xác không đổi; InvoiceResource/InvoiceItemResource cũ vẫn phục vụ create, không sửa. Không đổi routes/URL, Auth runtime, shared Axios/Frontend, schema, dependencies, Repository/Response Mapper/provider hoặc AGENTS.md. Tài liệu/skills baseline từ STRUCT-01C giữ nguyên trong task này; các matrix còn nói read path chưa nối là trạng thái trước 01B, hiện trạng mới theo section này.
-
-### Tests và evidence
-
-- `php artisan test --filter=InvoiceQueryApiTest`: 31 PASS, 191 assertions, exit 0, gồm 8 regression tests mới.
-- `php artisan test --filter='InvoiceReadRepositoryTest|InvoiceMapperTest'`: 9 PASS, 63 assertions, exit 0.
-- `php artisan test --filter=Invoice`: 92 PASS, 480 assertions, exit 0.
-- Full suite lần đầu: 439 PASS/1 FAIL do Auth test cũ assertJsonMissingPath(code) trên Host read 403. Không phải session bị hủy; assertion dừng trước kiểm tra /api/me. Owner đã duyệt đổi đúng assertion sang assertJsonPath(code, INVOICE_READ_FORBIDDEN), giữ phần kiểm tra session/public routes.
-- `php artisan test --filter=role_denial_keeps_the_session_and_public_routes_remain_public`: 1 PASS, 6 assertions, exit 0.
-- Full suite cuối `php artisan test`: 440 PASS, 2373 assertions, exit 0, 22.51s. Không skip.
-- `php artisan route:list --path=api`: 16 routes/URL như cũ. Syntax 10 file PHP theo scope gốc PASS; php -l Auth test bổ sung và final audit áp dụng khi kết thúc. `git diff --check`, UTF-8/whitespace, hash audit PASS.
-- Hash baseline tại ignored .agent-workspace/tv3/inv-arch-01b-validation/baseline.json và store.sha256 dùng kiểm tra phạm vi/create body, không phải file report. Baseline bao gồm thay đổi tồn tại từ các task trước; giữ nguyên chúng. Lệnh chạy test bằng php backend/artisan từ root đầu tiên không tìm thấy relative PHPUnit vendor; đã chạy lại đúng backend, không tính lần sai là PASS.
-- Tests mới đi qua routes thật; kiểm chứng role trước malformed input/lookup, 404 parity, malformed query, scalar defaults/clamp, exact legacy resource parity, empty detail/list, DTO pagination, 0 query khi Resource serialize, role check trước repository khi ngoài HTTP và GET không đổi invoices/items/payment.
-- Suite dùng SQLite in-memory và synthetic fixtures; không reset/reseed MySQL development. Không chạy Frontend lint/build vì không sửa frontend; browser/UI và MySQL behavior NOT VERIFIED, không suy từ API tests rằng UC giao diện đã đóng. Auth runtime giữ nguyên, chỉ test expectation đổi theo contract approved. Evidence là tool output trên chat.
-
-| AC | Kết quả |
-|---|---|
-| INVREAD-B01 — read Controller/Service qua Repository/DTO/Mapper | PASS — DTO paginator/service test + source review không Eloquent query |
-| INVREAD-B02 — HTTP validation/authorization đúng tầng/thứ tự | PASS — Form Request tests, wrong-role trước malformed input |
-| INVREAD-B03 — ownership/401/403/privacy-404 | PASS — existing + new HTTP tests và service ngoài HTTP |
-| INVREAD-B04 — filters/search/order/pagination tương thích | PASS — query API/repository tests; defaults/clamp/search 0/unknown status |
-| INVREAD-B05 — success response fields/envelope/decimal/null/items | PASS — exact legacy Resource parity Host/Customer, list/detail/empty |
-| INVREAD-B06 — read error codes qua global handler, status/message giữ | PASS — exact 404 JSON và 403 code cases |
-| INVREAD-B07 — create/Auth/Profile/API regression | PASS — full 440 tests; create store hash nguyên vẹn; Auth expectation mở scope được duyệt |
-| INVREAD-B08 — GET không mutate, mapper/resource không query | PASS — before/after DB arrays và empty query log serialization |
-| INVREAD-B09 — tests/syntax/diff/scope, URL không đổi | PASS — scope 5 new/7 modified sau approval bổ sung, 16 routes |
-
-Recommended Next Task: INV-ARCH-01C — lên Mini Plan Frontend invoice mapper và list/detail consumer regression, dùng contract Backend read đã chuyển. Chưa bắt đầu. Chưa stage/commit/push; dừng sau Task Result.
-
-## INV-ARCH-01C — Frontend invoice mapper/read service
-
-Owner nghiệm thu INV-ARCH-01B và duyệt 01C (4 file mới, 2 file sửa). 01C TECHNICAL PASS ở phạm vi frontend mapper/service/contract tests và build; owner acceptance PENDING, parent INV-ARCH-01 vẫn mở. Không suy acceptance INV-ARCH-01A hoặc browser nghiệm thu từ task này.
-
-### Implementation và scope
-
-4 file mới: frontend/src/mappers/invoiceMapper.js; frontend/src/services/invoiceReadService.js; frontend/tests/invoiceMapper.test.js; frontend/tests/invoiceReadService.test.js.
-
-2 file sửa do task: frontend/src/services/invoiceService.js và checklist này. Read entry points giữ exports/signatures, delegate createInvoiceReadService(invoiceApi) -> API module dùng Axios singleton. createHostInvoice/formatVnd/parseInvoiceError so exact source baseline không đổi. Không sửa Pages/Components, Axios/Auth/API modules, Backend, routes, package/dependencies hoặc AGENTS.md.
-
-Mapper list/detail giữ snake_case fields và envelope Page đang dùng; giữ decimal strings không tính lại tổng, nullable dates/description, items detail (kể cả []), list không tự thêm items. Deep-copy metadata/links/additional fields và invoice/item projection mới, không mutate input. Strict response guard cho object/array/ID/decimal/date/pagination required types; malformed success ném safe normalized contract error INVALID_INVOICE_RESPONSE, không thay bằng data=[] và không chứa raw payload. Unknown payment status string giữ nguyên, không tự đổi UNPAID. Date chỉ kiểm tra shape/parseability rồi giữ string gốc; mapper không xác minh nghiệp vụ/thời điểm hay tổng tài chính.
-
-Read factory giữ filter ALL/search trim/page/perPage và signal; chỉ map sau HTTP resolve. HTTP/network/cancel rejection giữ identity, Auth interceptors xử lý trước và không bị thêm logout/retry. Không mutation trong read service. Consumer regression là envelope/service/compile compatibility; chưa có browser/DOM gate.
-
-### Tests và evidence
-
-- `node --test tests/invoiceMapper.test.js tests/invoiceReadService.test.js`: 8/8 PASS, 0 skipped, exit 0.
-- `node --test tests/*.test.js`: 67/67 PASS, 0 skipped, exit 0 (Node v22.23.4); bao gồm Auth/Registration/Profile và API tests trước.
-- `npm run lint`: exit 0, 0 errors/3 react-refresh warnings cũ ở ui/badge.jsx, button.jsx, sidebar.jsx.
-- `npm run build`: exit 0, 3317 modules; warning bundle >500 kB và plugin timing diagnostics; không phải browser evidence.
-- Tests kiểm chứng deep-frozen input, independent expected values, large decimal/zero/null/items/unknown status, empty page, malformed fields/envelopes, four endpoints/filter/options, safe contract error, unchanged HTTP rejection, fields 422, 401 vs role403 vs account403, Auth version, cancellation và không retry.
-- Hash baseline tại ignored .agent-workspace/tv3/inv-arch-01c-validation/baseline.json và protected-functions.json. Create/helpers nguyên văn; Axios/Auth/API modules/Pages/AGENTS và files ngoài scope giữ baseline ngoại trừ thay đổi ngoài task được nêu dưới đây. UTF-8/whitespace audit và git diff --check PASS, gồm file untracked.
-- PHPUnit NOT RUN vì không sửa Backend trong task; browser/real Backend HTTP/MySQL NOT VERIFIED. Kết quả 440 tests của 01B là historical, không khẳng định backend hiện tại PASS sau external deletion.
-
-### Thay đổi ngoài task phát hiện khi audit
-
-backend/app/Http/Controllers/Controller.php tồn tại ở baseline nhưng bị xóa trong lúc thực thi, không bởi thao tác chỉnh sửa FE-01C của agent. Hash/scope audit ban đầu báo thêm path này; đã kiểm tra git diff xác nhận deleted. Giữ nguyên thay đổi bên ngoài, không tự khôi phục. Base class được Controllers sử dụng nên cần xử lý/kiểm tra Backend trước gate tích hợp tiếp theo; frontend test/build PASS không chứng minh Backend hoạt động. Agent đã thông báo trên chat. Scope changes do agent vẫn đúng 4 new + 2 modified; không gộp deletion này thành deliverable.
-
-| AC | Kết quả |
-|---|---|
-| INVREAD-C01 — 4 read operations dùng mapper production | PASS — read factory tests + entry point wiring/build |
-| INVREAD-C02 — Page envelope/snake_case tương thích | PASS — exact fixture parity, metadata/links/additional preserved |
-| INVREAD-C03 — decimal/null/items/date không mutate/tính lại | PASS — frozen fixtures và independent expected snapshots |
-| INVREAD-C04 — malformed response không giả empty/success | PASS — mapper/service rejection tests, safe contract error |
-| INVREAD-C05 — filters/options/signal/HTTP errors giữ behavior | PASS — Axios adapter service integration và cancel/network tests |
-| INVREAD-C06 — Auth interceptors không đổi | PASS — scoped hash và actual interceptor tests, role code không logout |
-| INVREAD-C07 — create/helpers không regression | PASS — exact source hashes và existing API tests; chưa browser/create end-to-end mới |
-| INVREAD-C08 — tests/lint/build/scope đạt | PASS frontend task — 67 tests, lint/build; external Controller deletion được tách rõ, không claim whole-repo unchanged |
-| INVREAD-C09 — checklist phân biệt evidence và browser limits | PASS — scope/evidence/historical/external dependency ghi rõ |
-
-Recommended Next Task: trước khi gate Backend tiếp theo, xác nhận và xử lý external base Controller deletion bằng scope được owner cho phép; sau đó review acceptance parent INV-ARCH-01 và lên Mini Plan INV-ARCH-02 (create path). Không tự khôi phục hoặc bắt đầu task mới; chưa stage/commit/push. Dừng sau Task Result.
-
-
-## INV-ARCH-01 — owner acceptance và Controller restoration
-
-Owner xác nhận nghiệm thu Invoice read A/C và đóng parent INV-ARCH-01 trên chat. Trạng thái hiện hành: 01A, 01B, 01C và parent ACCEPTED. Những trạng thái PENDING/TODO trong sections lịch sử phía trên phản ánh thời điểm báo cáo cũ và được thay thế bởi xác nhận này. Việc đóng task refactor không đóng các use case Invoice hoặc browser/MySQL gates còn thiếu.
-
-Owner tự khôi phục backend/app/Http/Controllers/Controller.php. Kiểm tra Composer autoload sau khôi phục: cả 7 Controller Auth/Profile/Invoice/Review nạp thành công, exit 0. Không chạy lại full PHPUnit trong lượt xác nhận; 440 Backend tests và 67 Frontend tests/lint/build vẫn là evidence lịch sử của task tương ứng.
-
-Owner yêu cầu xem xét đơn giản hóa Http/Requests và Http/Resources vì trùng tầng với DTO. Chưa thay đổi kiến trúc, skill hoặc code; cần Mini Plan và duyệt phạm vi riêng, giữ validation/authorization/JSON/pagination contract. Chỉ cập nhật checklist trong lượt acceptance này.
-
-
-## SIMPLIFY-01A — một InvoiceRepository, constructor DI
-
-Owner duyệt riêng 01A. Status: IMPLEMENTED / TECHNICAL PASS / acceptance PENDING. INV-ARCH-01 A/B/C và parent vẫn ACCEPTED theo xác nhận trước; simplification là task mới, không viết lại lịch sử nghiệm thu.
-
-| Đóng | Task | Trạng thái hiện hành |
-|---|---|---|
-| [x] | SIMPLIFY-01A — concrete InvoiceRepository, bỏ interface/binding | IMPLEMENTED / PASS / ACCEPTED (owner trên chat trước plan 01B) |
-| [x] | SIMPLIFY-01B — Invoice read Validator/DTO serialization, bỏ bốn lớp HTTP read | IMPLEMENTED / PASS / ACCEPTED (owner trước plan 01C) |
-| [x] | SIMPLIFY-01C — đồng bộ kiến trúc/local rules/5 skills | IMPLEMENTED / PASS / ACCEPTED (owner trước plan INV-ARCH-02) |
-
-### Implementation và file scope
-
-- Rename app/Repositories/Invoice/InvoiceReadRepository.php -> InvoiceRepository.php; class concrete final, bỏ implements/import interface; giữ bốn phương thức đọc, ownership, grouped search, ordering, pagination và eager loading. Chưa bổ sung write methods; create migration vẫn thuộc INV-ARCH-02.
-- Xóa app/Repositories/Invoice/InvoiceReadRepositoryInterface.php.
-- Sửa app/Services/Invoice/InvoiceQueryService.php: constructor nhận trực tiếp InvoiceRepository; vẫn constructor injection, không tự new Repository trong Service.
-- Sửa app/Providers/AppServiceProvider.php: bỏ hai imports và bind Invoice; giữ provider/register/boot.
-- Rename tests/Feature/Invoice/InvoiceReadRepositoryTest.php -> InvoiceRepositoryTest.php: container tự resolve concrete class khi không đăng ký binding, giữ tests query/ownership/metadata/mapping.
-- Sửa tests/Feature/Invoice/InvoiceQueryApiTest.php: thay mock interface bằng concrete Repository và query log; bốn thao tác role sai đều trả 403/code hiện hành và không chạy DB query, query logging tắt trong finally.
-- Sửa checklist này. Tổng: 2 rename + 1 delete + 4 modified, tính checklist. Không sửa API routes/Controller/Form Request/Resource/Common/DTO/Mapper/Auth/Frontend/schema/config/dependencies/AGENTS.md. Không sửa architecture/skills ở 01A; conventions interface trong docs/skills là bản trước, sẽ đồng bộ ở 01C theo duyệt riêng. Quyết định owner 01A được ưu tiên cho InvoiceRepository hiện hành.
-
-### Tests thực chạy
-
-- php artisan test --filter='InvoiceRepositoryTest|InvoiceQueryApiTest': 36 PASS, 223 assertions, exit 0.
-- php artisan test: 440 PASS, 2371 assertions, exit 0, 23.06s. Không skip. Count assertions khác historical 2373 vì bỏ Mockery expectations và thay bằng concrete container/query evidence; không xóa test case nghiệp vụ.
-- php artisan route:list --path=api: 16 routes, exit 0, URL giữ nguyên.
-- php -l: 5 PHP files mới/sửa (repository, provider, query service, hai test files) PASS.
-- No obsolete InvoiceReadRepository references in backend/app hoặc backend/tests. Baseline hash audit 539 entries tại ignored .agent-workspace/tv3/simplify-01a-validation/baseline.json: đúng scope, tất cả files khác nguyên vẹn. git diff --check/UTF-8/whitespace PASS.
-- Suite dùng SQLite in-memory theo phpunit.xml và test safety guards; không reset/reseed hoặc truy cập MySQL development. Frontend tests/lint/build NOT RUN vì không sửa frontend. Browser/MySQL locking/concurrency NOT VERIFIED; không suy từ PHPUnit thành E2E.
-
-| AC | Kết quả và evidence |
-|---|---|
-| SIM-A01 — một concrete Repository, không interface/binding Invoice | PASS — inventory/search + container test không bound và resolve thành công |
-| SIM-A02 — constructor DI giữ nguyên cơ chế | PASS — QueryService concrete typed injection + HTTP tests resolve qua container |
-| SIM-A03 — scoped queries/filter/order/pagination/detail không đổi | PASS — repository + InvoiceQueryApi tests |
-| SIM-A04 — role denial trước query, API/Auth/create không regression | PASS — query log rỗng cả bốn service operations role sai, full 440 tests |
-| SIM-A05 — phạm vi/checklist/test/syntax đúng | PASS — 539 baseline hash audit, 5 php lint, diff check |
-
-Recommended Next Task: nghiệm thu SIMPLIFY-01A rồi duyệt SIMPLIFY-01B theo Mini Plan đã trình bày (cần chốt lại danh sách file/AC nếu thay đổi). Không tự triển khai 01B/01C hoặc INV-ARCH-02. Chưa stage/commit/push; dừng sau Task Result trên chat.
-
-
-### SIMPLIFY-01A — owner acceptance
-
-Owner nghiệm thu SIMPLIFY-01A trực tiếp trên chat, trước yêu cầu Mini Plan SIMPLIFY-01B. Trạng thái hiện hành 01A ACCEPTED; dòng acceptance PENDING trong báo cáo lịch sử phía trên được thay thế bởi xác nhận này. 01B chỉ đang planning, chưa code; 01C chưa triển khai. Lượt này chỉ ghi acceptance vào checklist, không chạy lại application tests; 440 tests/2371 assertions là evidence lượt 01A.
-
-
-## SIMPLIFY-01B — Invoice read Validator và DTO serialization
-
-Owner duyệt đúng 1 file mới, 4 file xóa, 10 file sửa. Status IMPLEMENTED / TECHNICAL PASS / acceptance PENDING. SIMPLIFY-01A và INV-ARCH-01 A/B/C/parent vẫn ACCEPTED. Không tự đóng UC/browser/MySQL gates hoặc bắt đầu 01C.
-
-### Implementation và scope
-
-- Mới backend/app/Validators/Invoice/InvoiceReadValidator.php: authorize nullable actor/expected role, validateQuery(array) dùng Laravel Validator/rules/messages cũ. Không nhận HTTP Request, không query/log/calculate. Role check trước query validation/ID mapping; middleware vẫn sở hữu guest 401. Service giữ role check khi gọi ngoài HTTP.
-- Xóa đúng bốn classes Invoice read: Http/Requests/Invoice/InvoiceQueryRequest.php, InvoiceDetailRequest.php; Http/Resources/Invoice/InvoiceReadResource.php, InvoiceItemReadResource.php.
-- Sửa hai Invoice Controllers Host/Customer: constructor DI validator; index/show nhận Illuminate Http Request, authorize rồi validate query/map DTO/gọi service; response qua Common helpers nhận DTO/paginator trực tiếp. store() của Host so exact source baseline không đổi.
-- Sửa DTOs/Invoice/Responses/InvoiceResponse.php và InvoiceItemResponse.php: JsonSerializable + explicit public field projection. Decimal/date/null giữ nguyên; items null bỏ field list, [] giữ detail; nested items serialize rõ. Không query/mutate/recompute hoặc xuất Model raw.
-- Sửa Common/ApiResponse.php: nhận JsonSerializable và LengthAwarePaginator, giữ legacy array/JsonResource branches. Sửa Common/PageResponse.php: paginator DTO có data/links/meta tương đương Laravel PaginatedResourceResponse, giữ nhánh ResourceCollection/hook/additional/header cũ.
-- Sửa tests/Feature/Invoice/InvoiceQueryApiTest.php, tests/Feature/Api/ApiResponseTest.php, tests/Unit/InvoiceMapperTest.php: 6 test methods mới, update no-query serialization test và giữ regression cũ.
-- Sửa checklist này. Tổng 1 mới + 4 xóa + 10 sửa. Giữ nguyên Repository/QueryService/Request Mapper/Request DTO, InvoiceResource/InvoiceItemResource cho create, Auth/Profile/Review code, routes/bootstrap/global handler, schema/config/dependencies, Frontend, AGENTS.md và architecture/skills/local rules. Đồng bộ conventions thuộc SIMPLIFY-01C chưa làm.
-
-### Tests thực chạy và fidelity
-
-- Focused php artisan test --filter='InvoiceQueryApiTest|InvoiceMapperTest|ApiResponseTest': 48 PASS, 332 assertions, exit 0.
-- Full php artisan test: 446 PASS, 2447 assertions, không skip, exit 0, 22.49s. Includes Auth/Profile/create/Review regressions.
-- Frontend node --test tests/*.test.js: 67/67 PASS, 0 fail/cancel/skip, exit 0.
-- php artisan route:list --path=api: 16 routes, exit 0. php -l cho 10 PHP files mới/sửa PASS.
-- git diff --check và UTF-8/whitespace PASS; baseline hash scope audit đúng 1 new/4 deleted/10 modified; store exact source PASS. Baseline/store.txt ở ignored .agent-workspace/tv3/simplify-01b-validation là scope evidence, không file plan/result.
-- Không còn InvoiceQueryRequest/InvoiceDetailRequest/InvoiceReadResource/InvoiceItemReadResource trong backend/app hoặc tests. rg no-match exit 1 là expected absence, không application failure.
-- Một lần gọi artisan nhầm từ repo root không tìm thấy file (exit 1); đã chạy lại đúng backend và có focused/full results phía trên, không tính lần nhầm là PASS.
-- Source-confirmed: rules/messages/error codes, role-before-input behavior, Request Mapper defaults/clamp, DTO fields và legacy create Resources. Pagination parity test so DTO branch với Laravel ResourceCollection thật trên cùng fixture độc lập; empty/normal/out-of-range/per-page-one, query parameters/fragment/status, immutable paginator items. Existing legacy additional/summary/header-hook tests giữ PASS.
-- Tests mới kiểm chứng DTO JSON exact fields/no internal note/large decimal/zero/null/items, GET JSON body không override query, validated fields loại unknown input, exact validation field messages, role checks và no DB query. Serialization không query và GET không mutate giữ test cũ.
-- SQLite in-memory/test safety guards, không reset/reseed hoặc truy cập MySQL development. Frontend source không đổi; lint/build NOT RUN theo plan. Browser/real HTTP Frontend-to-Backend/MySQL concurrency NOT VERIFIED. Node tests là service/contract regression, không browser evidence.
-
-| AC | Kết quả/evidence |
-|---|---|
-| SIM-B01 — xóa bốn lớp HTTP read, không còn references | PASS — file inventory + app/tests search |
-| SIM-B02 — Controller DI validator, không query/rules/business logic | PASS — source review + validator/HTTP tests |
-| SIM-B03 — 401/403/404/422 và order/error codes giữ nguyên | PASS — guest/role-before-malformed/privacy/field-errors regressions |
-| SIM-B04 — filters/default/clamp/query-only | PASS — scalar regressions + GET body isolation tests |
-| SIM-B05 — DTO list/detail JSON giữ fields/decimal/null/items | PASS — exact legacy Resource parity + unit explicit expectations |
-| SIM-B06 — pagination envelope và legacy branch behavior | PASS — boundary parity + additional/summary/header-hook/status tests |
-| SIM-B07 — serialize no queries, GET no mutation | PASS — query log + before/after DB tests |
-| SIM-B08 — store nguyên văn, Backend/Node regression | PASS — source baseline + 446 PHP/67 Node tests |
-| SIM-B09 — syntax/diff/scope/checklist | PASS — 10 php lint + final scope/hash/whitespace audit |
-
-Recommended Next Task: owner nghiệm thu SIMPLIFY-01B; sau đó lập/chốt Mini Plan SIMPLIFY-01C cập nhật 9 file architecture/local rules/5 skills/checklist theo concrete Repository + Validator + DTO serialization. Giữ tương thích legacy module chưa migrate. Chưa stage/commit/push; dừng sau Task Result trên chat.
-
-
-### SIMPLIFY-01B — owner acceptance
-
-Owner nghiệm thu SIMPLIFY-01B trực tiếp trên chat trước yêu cầu Mini Plan 01C. Trạng thái hiện hành 01B ACCEPTED; acceptance PENDING ở section delivery là lịch sử và được thay thế bởi xác nhận này. 01A và INV-ARCH-01 A/B/C/parent vẫn ACCEPTED. 01C chỉ đang planning, chưa sửa architecture/local rules/skills hoặc application code. 446 Backend tests/2447 assertions và 67 Node tests là evidence lượt 01B, không chạy lại ở lượt ghi acceptance này.
-
-
-## SIMPLIFY-01C — kiến trúc/local rules/5 skills hiện hành
-
-Owner duyệt đúng 9 file. Status IMPLEMENTED / TECHNICAL PASS / owner acceptance PENDING. 01A/B đã ACCEPTED; INV-ARCH-01 A/B/C/parent giữ ACCEPTED. Plan approval 01C không phải delivery acceptance. Không bắt đầu INV-ARCH-02 hoặc migration khác.
-
-### Implementation và scope
-
-9 file sửa: ARCHITECTURE.md, docs/ai-frontend-development-guide.md, AGENTS.local.md, .agents/skills/{stayhub-task-planning,stayhub-laravel,stayhub-react,stayhub-database,stayhub-verification}/SKILL.md và checklist này. Không thêm/xóa/rename project file, giữ tên/description/frontmatter skills và metadata/policy/README hiện có. AGENTS.md và code ứng dụng không đổi.
-
-Architecture cập nhật sơ đồ, cây thư mục và trách nhiệm: concrete Repository một file/domain, constructor DI/container auto-resolution, không interface/binding mặc định; chỉ đề xuất abstraction/factory khi có nhu cầu resolve/config/thay implementation rõ trong scope. Controller -> Validator -> Request Mapper/DTO -> Service/Repository -> Mapper/Response DTO JsonSerializable -> Common response. Validator array/scalar/actor, role trước malformed input/lookup; Service giữ quyền ngoài HTTP, Repository giữ ownership query. Không query/tính tiền/log trong Mapper/DTO, không thêm Form Request/Resource song song cho target mới.
-
-DTO explicit projection giữ decimal/date/null/items; Common giữ data/meta/links và legacy Resource additional/summary/header hooks theo branch. Global renderer vẫn 9 Invoice/Review named routes; không đổi Auth/Profile/Web/headers/exception reporting. Logging meaningful workflow success sau commit, không query INFO rải rác/log-and-throw/secrets.
-
-Current-state matrix ghi Invoice read Backend/Frontend migrated, create/Review/Auth/Profile còn implementation hiện hữu. Một Repository tên chung không chứng minh write path đã chuyển. Không xóa toàn bộ Http/Requests/Resources; giữ Invoice create Resources và module chưa được duyệt migration. Target chung không mở ownership TV1/TV2; AGENTS.md được giữ theo owner, hướng dẫn cũ đọc cùng quyết định hiện hành.
-
-Frontend guide/React skill ghi invoiceMapper.js và invoiceReadService.js đã có, malformed success không fake empty, giữ snake_case/meta/links/decimal/null/unknown status/HTTP errors/cancellation/Auth version. Không tự thêm libraries hoặc đổi URL/field/envelope. Không giả định skill auto-selection đã được kiểm thử.
-
-### Verification thực hiện
-
-- quick_validate.py của skill-creator chạy bằng venv UTF-8 hiện có cho 5 skill: 5/5 PASS, mỗi process exit 0. Đây là structural validation; không chứng minh auto-selection hoặc mọi hành vi agent.
-- Local links/anchors trên cả 9 file: PASS sau sửa hai link lịch sử InvoiceReadRepository/interface đã không còn tồn tại. Giữ tên cũ thành plain historical text và liên kết concrete Repository hiện hành; không xóa lịch sử/đổi counts test.
-- Static source inventory: 23 paths hiện có, 6 obsolete paths không tồn tại, concrete constructor DI/JsonSerializable signatures/no Invoice binding đúng code. Không chạy PHP/DB trong inventory audit. Một lần Python source audit dùng encoding mặc định Windows bị UnicodeDecodeError; đã chạy lại explicit UTF-8 PASS.
-- Self-review walkthrough, không phải agent/runtime test: (1) Invoice read giữ concrete Repository/validator/DTO/Common, (2) Invoice create phải inventory store/snapshots/transaction và lập scope INV-ARCH-02, không sinh interface hoặc xóa legacy response trước parity, (3) Review phải inventory Requests/Resources/COMPLETED/ownership/duplicate và dependencies trước migration. Không case nào cấp quyền ngoài task.
-- Baseline hash tại ignored .agent-workspace/tv3/simplify-01c-validation/baseline.json gồm 535 entries (cả AGENTS.local.md). Final audit: đúng 9 modified; không new/delete; AGENTS.md/application/metadata nguyên vẹn. UTF-8/whitespace và git diff --check PASS; links/content hiện hành đã rà soát.
-- Không chạy PHPUnit/Node/lint/build trong task docs-only. Evidence 446 Backend tests/2447 assertions, 67 Node tests của SIMPLIFY-01B là historical. Browser/MySQL concurrency/skill auto-selection trong chat mới NOT VERIFIED, không chuyển thành skipped success.
-
-| AC | Kết quả/evidence |
-|---|---|
-| SIM-C01 — sơ đồ/naming/paths khớp concrete Repository | PASS — architecture mục 4/13/14 và source inventory |
-| SIM-C02 — constructor DI rõ, không bắt buộc interface/binding | PASS — 5 skills/local rules thống nhất; source review QueryService/AppServiceProvider |
-| SIM-C03 — Validator/DTO/Common responsibilities/auth/JSON đúng | PASS — source signatures/projection/pagination và content review |
-| SIM-C04 — migrated/legacy matrix chính xác | PASS — read Backend/Frontend migrated; create/Review/other-owner/browser/MySQL tách rõ |
-| SIM-C05 — 5 skills nhất quán và validator đạt | PASS — 5/5 quick_validate exit 0 + content review |
-| SIM-C06 — links/anchors/walkthrough không dẫn về cấu trúc cũ | PASS — links audit sau correction + ba self-review walkthrough |
-| SIM-C07 — checklist giữ lịch sử/acceptance | PASS — A/B ACCEPTED, C PENDING; counts/commands lịch sử giữ nguyên |
-| SIM-C08 — đúng 9 file, AGENTS.md/code giữ nguyên | PASS — 535-entry hash scope audit, không project new/delete |
-
-Recommended Next Task: owner nghiệm thu SIMPLIFY-01C; sau đó lên Mini Plan INV-ARCH-02 chuyển Invoice create theo target mới, giữ snapshot/atomicity/decimal/Auth/API và consumer UI hiện có. Chưa triển khai; không stage/commit/push. Dừng sau Task Result chi tiết trên chat; không tạo file plan/result.
-
-
-### SIMPLIFY-01C — owner acceptance
-
-Owner nghiệm thu SIMPLIFY-01C trên chat trước yêu cầu Mini Plan INV-ARCH-02. Trạng thái hiện hành SIMPLIFY-01 A/B/C ACCEPTED; delivery PENDING trong sections cũ là lịch sử và được thay thế bởi xác nhận này. INV-ARCH-01 vẫn ACCEPTED; INV-ARCH-02 chỉ planning, chưa sửa application code. Lượt này chỉ ghi acceptance vào checklist, không chạy lại validators/application suites; evidence 01C và 01B giữ đúng lượt nguồn.
-
-
-## INV-ARCH-02A — create Repository boundary và exception riêng
-
-Owner duyệt 02A, không duyệt triển khai 02B/C ở lượt này. Status IMPLEMENTED / TECHNICAL PASS / owner acceptance PENDING. Parent INV-ARCH-02 IN PROGRESS/PARTIAL; INV-ARCH-01 và SIMPLIFY-01 A/B/C vẫn ACCEPTED.
-
-| Đóng | Task con | Implementation / verification / acceptance |
-|---|---|---|
-| [x] | INV-ARCH-02A — Service queries/persistence qua InvoiceRepository, exception riêng | IMPLEMENTED / PASS / ACCEPTED (owner trước plan 02B) |
-| [ ] | INV-ARCH-02B — DTO/Mapper/Validator + Symfony attributes, chia B.1/B.2/B.3 | IN PROGRESS / PARTIAL / PENDING; B.1 pilot technical PASS |
-| [ ] | INV-ARCH-02C — HTTP DTO/Common, consumer regression và đồng bộ trạng thái tài liệu | TODO / NOT VERIFIED / PENDING |
-
-### Implementation và scope
-
-1 file mới: backend/app/Exceptions/Invoice/DuplicateInvoiceException.php, canonical DomainException subclass, tự autoload; xóa conditional class declarations trong Service/Validator. Không class_alias hoặc conditional fallback.
-
-7 file sửa: backend/app/Repositories/Invoice/InvoiceRepository.php; backend/app/Services/Invoice/InvoiceService.php; backend/app/Validators/Invoice/InvoiceCreationValidator.php; backend/app/Http/Controllers/Invoice/HostInvoiceController.php; backend/tests/Feature/Invoice/InvoiceRepositoryTest.php; backend/tests/Feature/Invoice/InvoiceCreationTest.php; checklist này.
-
-InvoiceRepository có sáu methods mới: findBookingForInvoiceWithLock, invoiceExistsForBooking, invoiceCodeExists, createInvoice, createInvoiceItem, loadInvoiceItems. Giữ bốn read methods/scopes/filter/order cũ. Booking lookup giữ customer/room.property/bookingServices eager loading và lockForUpdate; repository không tự authorize/transaction/commit/tính tiền/quyết định workflow. Attributes được Service chuẩn bị từ trusted snapshots như trước.
-
-InvoiceService nhận InvoiceRepository bắt buộc qua constructor DI, container auto-resolve không binding; chuyển các Eloquent query/create/load trực tiếp của Service sang repo. Giữ createInvoice(int, User): Invoice, DB::transaction, Calculator, order/exception messages, generate code algorithm, handleQueryException classification và DB::afterCommit logging. Dependencies Validator/CalculationService/logger legacy optional sẽ chuyển ở 02B; chưa tuyên bố workflow fully migrated.
-
-CreationValidator ở 02A chỉ bỏ conditional exception/import canonical exception và giữ nguyên nghiệp vụ/query hiện hữu. Query duplicate trong Validator sẽ chuyển ra ở 02B cùng thay đổi flow validation/DTO, đúng giới hạn plan 02A. Controller chỉ thay import exception; class body và mọi action giữ exact baseline. Test anonymous Service cho invoice-code collision cập nhật constructor thêm Repository.
-
-Không sửa routes/Auth/global handler/bootstrap/providers, schema/Models/Calculator, Request/Response DTO/Mapper/Common/Resources, Frontend hoặc AGENTS.md/architecture/skills. Tài liệu current-state sẽ đồng bộ ở 02C; checklist này là trạng thái 02A hiện hành. Không xóa Invoice create Resources.
-
-User hỏi Mapper/Validator có thể gom theo domain như Repository: có thể; đề xuất planning 02B tái sử dụng một InvoiceMapper thay vì mặc định tạo InvoiceCreationMapper, cân nhắc gom read/create validator thành InvoiceValidator và giữ calculation validator riêng vì quy tắc số/tiền. Đây là đề xuất cấu trúc cần chốt trong Mini Plan 02B, chưa đổi tên/gom lớp hoặc mở scope trong 02A.
-
-### Tests và evidence
-
-- Added 6 tests: repository snapshot lookup/eager-loading/missing/existence/caller transaction level; exact header/items persistence; real NOT NULL failure rollback controlled by caller; canonical exception autoload; real booking unique error translated with previous QueryException; other DB NOT NULL error rethrown, rollback unchanged. Controlled competing write is same-transaction fault injection, không chứng minh concurrent clients/InnoDB locking.
-- Focused đầu: 40 PASS/1 FAIL do assertion test mới coi payment_status là enum thay vì string thực tế. Sửa đúng assertion test, không sửa production để khớp test.
-- Focused cuối php artisan test --filter='InvoiceRepositoryTest|InvoiceCreationTest|HostInvoiceApiTest|InvoiceCreationValidatorTest': 41 PASS, 240 assertions, exit 0.
-- Full php artisan test: 452 PASS, 2489 assertions, không skip, exit 0, 22.96s. Includes Auth/Profile/read/create/Review regression.
-- node --test tests/*.test.js: 67/67 PASS, fail/cancel/skip 0, exit 0. Frontend không sửa; lint/build NOT RUN. Node regression không phải browser/real-backend E2E.
-- php artisan route:list --path=api: 16 routes, exit 0. php -l cả 7 PHP files mới/sửa PASS. Search chỉ có một class DuplicateInvoiceException, không old FQCN trong app/tests.
-- Source audit: Service không còn Booking::/Invoice:: hoặc relation create/load query trực tiếp; thân HostInvoiceController exact baseline; handleQueryException/logInfo methods exact source trước thay đổi. Log afterCommit registration/transaction/snapshots/calculation giữ nguyên; chưa thêm runtime gate logging mới (02B).
-- Hash baseline 535 entries tại ignored .agent-workspace/tv3/inv-arch-02a-validation/baseline.json và protected controller-body.txt. Final scope đúng 1 new/7 modified, không deleted; tất cả files khác nguyên vẹn. UTF-8/whitespace và git diff --check PASS.
-- SQLite in-memory với safety guards; không reset/reseed/truy cập MySQL development. MySQL concurrency/locks, browser và runtime commit logging gate mới NOT VERIFIED. Parent AC chỉ được đóng sau B/C/gates tương ứng.
-
-| AC 02A | Kết quả/evidence |
-|---|---|
-| INV2-A01 — Service create queries/persistence qua một Repository | PASS — source audit + focused/full tests; Validator query còn thuộc 02B |
-| INV2-A02 — Repository giữ transaction ownership ở Service | PASS — transactionLevel tests, actual failed item rollback và source review DB::transaction |
-| INV2-A03 — canonical exception và DB error classification | PASS — autoload/unique/NOT NULL/invoice-code collision tests; single class search |
-| INV2-A04 — API/Auth/read/create/snapshot/decimal không regression | PASS — 452 tests + Controller body baseline + 67 Node tests |
-| INV2-A05 — constructor DI và không binding mới | PASS — container resolves required Repository, HTTP/Service integration tests |
-| INV2-A06 — tests/syntax/checklist/scope đạt | PASS — 1 new/7 modified, 7 PHP lint, baseline/diff/UTF-8 audit |
-
-Recommended Next Task: owner nghiệm thu 02A rồi lên/chốt Mini Plan 02B, giải quyết câu hỏi một Mapper/Validator theo domain, chuyển Validator khỏi query và required workflow dependencies/DTO. Không tự triển khai 02B/C; chưa stage/commit/push. Dừng sau Task Result chi tiết trên chat.
-
-
-### INV-ARCH-02A — owner acceptance
-
-Owner nghiệm thu INV-ARCH-02A trên chat trước yêu cầu Mini Plan 02B. Trạng thái hiện hành 02A ACCEPTED; parent 02 vẫn PARTIAL, 02B/C chưa triển khai. 452 Backend tests/2489 assertions và 67 Node tests là evidence lượt 02A, không chạy lại ở lượt ghi acceptance. 02B được yêu cầu lập plan gom Mapper/Validator theo domain, đưa query khỏi Validator, thêm DTO và giữ constructor DI/API/Auth/nghiệp vụ; chưa sửa application code.
-
-
-## INV-ARCH-02B.1 — Symfony dependencies/adapters và pilot attributes
-
-Owner duyệt hướng Symfony và B.1, chưa duyệt triển khai B.2/B.3. Status IMPLEMENTED / TECHNICAL PASS (pilot functionality) / owner acceptance PENDING. Security audit còn baseline advisories như phần dưới, không claim clean audit/production readiness. Parent INV-ARCH-02 và 02B vẫn PARTIAL; 02A ACCEPTED.
-
-| Đóng | Checkpoint | Trạng thái |
-|---|---|---|
-| [x] | INV-ARCH-02B.1 — dependencies/adapter/Model-DTO attributes/mapping pilot | IMPLEMENTED / TECHNICAL PASS / ACCEPTED (owner trước plan B.2) |
-| [ ] | INV-ARCH-02B.2 — chia 2A gom lớp/input attributes và 2B workflow/query/typed DI | IN PROGRESS / PARTIAL; 2A technical PASS, 2B chưa làm |
-| [x] | INV-ARCH-02B.3 — tích hợp Model validation vào create workflow và full regression | IMPLEMENTED / PASS / ACCEPTED |
-
-### Implementation và files
-
-5 file mới:
-- backend/app/Validation/AttributeValidator.php: Symfony ValidatorInterface constructor DI; errors(object, groups, fieldMap) chỉ message/path, không raw invalid value; validateHttp -> Laravel ValidationException 422 với alias fields; validateDomain -> InvalidArgumentException với public message do boundary hiện hành cung cấp. Constraint authors phải dùng safe explicit messages; adapter không tự sanitize arbitrary message interpolation của constraint tương lai.
-- backend/app/Mapping/EloquentObjectMapper.php: constructor-injected ObjectMapperInterface; map Model qua developer-owned explicit loaded-attribute allowlist sang stdClass rồi engine. Reject unknown fields/relations trước getAttribute, không lazy-load, không map toàn bộ Model hoặc lấy allowlist từ user. Đây là Eloquent compatibility adapter trong pilot đã duyệt.
-- backend/app/DTOs/Invoice/Requests/InvoiceCreateInputRequest.php: readonly DTO, mixed raw storage để tránh TypeError, Sequentially NotNull/Type(integer)/Positive. Pilot nhận ID integer đã normalize; string '7' bị từ chối theo schema pilot. Chưa là production route reader; preserve route string/overflow/default/error contract phải thiết kế ở B.2 trước integration. Không suy từ attributes rằng đã hoàn tất input pipeline.
-- backend/tests/Feature/Validation/AttributeValidatorTest.php.
-- backend/tests/Feature/Validation/InvoiceAttributeMappingTest.php, có test-only readonly DateMappingPilot fixture.
-
-7 file sửa:
-- backend/composer.json và composer.lock: require symfony/validator, symfony/object-mapper, symfony/property-access ~7.4.0; lock v7.4.23, thêm transitive property-info/type-info v7.4.23. Chính xác 5 additions, 0 updates/removals cho production+dev dependencies. Giữ Laravel/PHP requirements và Composer scripts hiện hữu; composer require chạy --no-scripts.
-- backend/app/Providers/AppServiceProvider.php: singleton framework ValidatorInterface với attribute metadata loader và ObjectMapperInterface với PropertyAccessor. Framework engine registration cần configuration, không tái tạo InvoiceRepository interface/binding; Repository vẫn concrete auto-DI.
-- backend/app/Models/Invoice.php và InvoiceItem.php: NotBlank getter attributes group invoice-pilot cho invoice_code/item_name. Getters đọc getAttribute; không khai báo public DB-column properties, không observer/global save hook. Default validation group không áp pilot rule, không sửa production workflow/schema/fillable/casts.
-- backend/app/DTOs/Invoice/Responses/InvoiceItemResponse.php: Map source attributes trên promoted properties, giữ readonly constructor/jsonSerialize fields nguyên behavior. Mapping engine chỉ được pilot gọi, InvoiceMapper production vẫn như trước.
-- Checklist này.
-
-Tổng 5 new + 7 modified, không deleted/renamed. Giữ Controllers/Services/Repositories/current Validators/InvoiceMapper/RequestMapper, routes/Auth/global handler/bootstrap/schema/Frontend/AGENTS.md/architecture/skills nguyên baseline. Chưa rút gọn/replace production mapper hoặc bỏ Validator query ở B.1.
-
-### Finding và giới hạn mapping
-
-Pilot đầu: 9 PASS/1 FAIL; ObjectMapper + PropertyAccessor đọc trực tiếp Eloquent description=null gặp NoSuchPropertyException do magic attribute readability. Không đổi API/readonly/ORM hoặc bỏ ca null. Bổ sung adapter projection allowlist ở trên, test lại đạt và thêm negative control quan hệ/field không có. Nullable values được giữ bằng explicit stdClass fields. Date conversion được test bằng fixture transformation, không thay formatter ngày API hiện tại. Nonempty/empty item collection được map từng item, đối chiếu production mapper; chưa chứng minh library tự suy mọi nested relation/collection.
-
-### Tests Executed
-
-- Composer require dry-run: exit 0, chỉ 5 additions/0 updates/0 removals. Actual require --no-scripts: exit 0; lock/install thành công, optimized autoload generated.
-- composer validate --no-check-publish: PASS, exit 0. composer check-platform-reqs: PASS trên PHP 8.2.12 và extensions hiện hành.
-- Focused pilot sau adapter correction: 11 PASS/77 assertions, exit 0. Sau đó bổ sung 3 assertions cho nonempty collection vào cùng test, được kiểm chứng trong full suite cuối.
-- Full php artisan test: 463 PASS, 2569 assertions, không skip, exit 0, 22.79s. Gồm 11 pilot tests và Auth/Profile/Invoice read/create/Review trước đó.
-- node --test tests/*.test.js: 67/67 PASS, fail/cancel/skip 0, exit 0. Frontend không sửa nên lint/build NOT RUN.
-- php artisan route:list --path=api: 16 routes, exit 0. php -l 9 new/modified PHP files PASS.
-- Pilot checks: container registration/DI, DTO validation before coercion, safe alias/error envelope/domain message; explicit Model groups/no queries/no mutation, save-refresh-dirty tracking; no global validation on save; readonly target/constructor/null/decimal/internal field exclusion; mapping missing field/relation rejects without query; date/null transform; list omission/detail empty and nonempty items parity.
-- Baseline hash tại ignored .agent-workspace/tv3/inv-arch-02b1-validation/baseline.json và packages.json: 536 entries, final 5 new/7 modified, không delete. UTF-8/whitespace và git diff --check PASS. Không file plan/result.
-- Tests dùng SQLite in-memory với safety guards; synthetic pilot fixtures không thay thế create API gate. Không reset/reseed hoặc truy cập MySQL development. Browser/MySQL concurrency, integration B.2/B.3 và security remediation NOT VERIFIED.
-
-### Dependency audit còn tồn tại
-
-composer audit --locked --format=json: FAIL (native exit 1), 9 advisories/6 existing packages: laravel/framework (1), symfony/http-foundation (4), symfony/http-kernel (1), symfony/mime (1), symfony/routing (1), symfony/yaml (1). Đối chiếu lock trước task: các package/version này có từ baseline (yaml ở dev); không package mới nào nằm trong advisories hiện hành. Không tự nâng framework/dependencies ngoài task. Shell tổng hợp audit in rõ native exit, không đổi audit FAIL thành PASS. Cần task dependency/security riêng; pilot technical PASS không tuyên bố audit sạch.
-
-| AC B.1 | Kết quả/evidence |
-|---|---|
-| B1-01 — dependency resolution phù hợp PHP/Laravel/lock | PASS — dry-run/install/validate/platform, 5 additions only |
-| B1-02 — registered engines/adapter qua constructor DI | PASS — container singleton + adapter tests |
-| B1-03 — attributes thực thi trên DTO/Model explicit groups | PASS — positive/negative cases, default group không auto-activate |
-| B1-04 — Eloquent save/refresh/dirty/JSON giữ nguyên | PASS — SQLite persistence/attribute checks, no public column shadowing |
-| B1-05 — readonly DTO/null/decimal/date mapping capability | PASS with projection adapter — direct nullable magic mapping unsupported, evidence/correction ghi rõ |
-| B1-06 — no query/lazy-loading/internal-field leak | PASS — query log, loaded-field allowlist và relation rejection tests |
-| B1-07 — API/Auth/create regression và boundaries giữ nguyên | PASS — full 463 + Node 67, no production consumers changed |
-| B1-08 — scope/syntax/checklist/evidence đúng | PASS — 536-entry audit, 9 php lint, diff/UTF-8; audit FAIL disclosed separately |
-
-Recommended Next Task: nghiệm thu B.1 rồi lên/chốt Mini Plan B.2 dựa trên finding Eloquent projection và normalized-vs-raw route DTO, gom InvoiceMapper/InvoiceValidator và chuyển query khỏi Validator. Dependency advisories cần scope remediation riêng. Không tự triển khai B.2/B.3/02C; chưa stage/commit/push. Dừng sau Task Result chi tiết trên chat.
-
-
-### INV-ARCH-02B.1 — owner acceptance
-
-Owner nghiệm thu B.1 trực tiếp trên chat trước yêu cầu Mini Plan B.2. Trạng thái hiện hành B.1 ACCEPTED; parent 02/02B vẫn PARTIAL, B.2/B.3/02C chưa triển khai. Security audit 9 advisories/6 baseline packages vẫn unresolved, không được coi đã xử lý bởi acceptance. 463 PHP tests/2569 assertions và 67 Node tests là evidence lượt B.1; lượt này chỉ ghi acceptance/planning, không chạy lại application suites hoặc sửa application code.
-
-
-## INV-ARCH-02B.2A — gom Mapper/Validator và DTO input attributes
-
-Owner duyệt cách chia và riêng 02B.2A. Status IMPLEMENTED / TECHNICAL PASS / owner acceptance PENDING. 02B.1 ACCEPTED; parent 02/02B/02B.2 vẫn PARTIAL, không bắt đầu 02B.2B/02B.3/02C.
-
-| Đóng | Checkpoint | Trạng thái |
-|---|---|---|
-| [x] | INV-ARCH-02B.2A — constraints/DTO attributes, gom Mapper/Validator | IMPLEMENTED / PASS / ACCEPTED |
-| [x] | INV-ARCH-02B.2B — Validator khỏi query, typed create workflow và required workflow DI | IMPLEMENTED / PASS / ACCEPTED |
-
-### Implementation và scope
-
-4 file mới: backend/app/Validation/Constraints/CanonicalPositiveId.php, CanonicalPositiveIdValidator.php; backend/app/DTOs/Invoice/Requests/InvoiceIdInputRequest.php, InvoiceQueryInputRequest.php.
-
-2 rename có sửa: app/Validators/Invoice/InvoiceCreationValidator.php -> InvoiceValidator.php; tests/Unit/InvoiceCreationValidatorTest.php -> InvoiceValidatorTest.php.
-
-2 file xóa sau gom: app/Mappers/Invoice/InvoiceRequestMapper.php; app/Validators/Invoice/InvoiceReadValidator.php.
-
-9 file sửa: app/Mappers/Invoice/InvoiceMapper.php, app/Services/Invoice/InvoiceService.php, app/Http/Controllers/Invoice/HostInvoiceController.php, CustomerInvoiceController.php, app/DTOs/Invoice/Requests/InvoiceCreateInputRequest.php, tests/Unit/InvoiceMapperTest.php, tests/Feature/Invoice/InvoiceQueryApiTest.php, tests/Feature/Validation/AttributeValidatorTest.php và checklist này. Các app/tests paths ở trên thuộc backend/. Không tạo CreateInvoiceRequest typed command chưa có consumer; thuộc 2B.
-
-InvoiceMapper nhận toFilterRequest normalization từ RequestMapper, giữ nguyên response projection/toItemResponse. ID validation chuyển sang InvoiceValidator và custom Symfony constraint. Response mapping engine vẫn chưa thay trong production ở 2A; EloquentObjectMapper pilot adapter giữ nguyên. Persistence payload mapping/typed create workflow thuộc 2B.
-
-CanonicalPositiveId tái sử dụng đúng native PHP canonical-ID predicate cũ, kiểm tra raw trước cast. Read classifier trả AppException INVOICE_NOT_FOUND/404, booking classifier InvalidArgumentException message-only 422 cho boundary sau này; không active trong store() ở 2A. Integral float như 1.0 khi gọi nội bộ vẫn được chấp nhận giống code cũ; string '1.0'/'1e2'/leading-zero/whitespace/overflow bị từ chối. Không tự áp regex/type mới làm đổi semantics.
-
-InvoiceCreateInputRequest đổi từ pilot normalized-int sang raw canonical ID; InvoiceIdInputRequest tương ứng read; InvoiceQueryInputRequest Type attributes giữ nullable/string/scalar behaviors. InvoiceValidator validateQuery giữ array boundary/presence, loại unknown keys, map validation.string qua Laravel translator như trước và giữ pagination messages. Query defaults/clamp/status/search behavior vẫn ở Mapper/InvoiceFilterRequest. No GET body merge; Controller authorize trước validate query/ID, giữ framework guest 401 và Service ownership checks.
-
-InvoiceValidator gom read/create; các creation validation methods nguyên văn không đổi, query duplicate vẫn tồn tại và sẽ chuyển ra ở 2B. Controller read dependencies gom thành mapper/validator. InvoiceService import/type/getValidator đổi sang merged class; workflow create, transaction, calculator, error classification/logging và return Invoice giữ nguyên. store() Controller exact baseline.
-
-### DI finding và điều chỉnh tối thiểu
-
-Focused đầu: 63 PASS/20 FAIL vì Laravel resolve optional class dependencies bằng default null, không inject AttributeValidator vào merged class. Sửa bằng AttributeValidator bắt buộc trong InvoiceValidator và InvoiceValidator bắt buộc trong InvoiceService; bỏ fallback new Validator, không Service Locator/factory/binding mới. Unit test truyền engine/adapter trực tiếp. Đây là điều chỉnh cần cho consolidation ở 2A; Calculator/Logger optional legacy và required workflow DI đầy đủ vẫn thuộc 2B. Không dùng fallback mới để che dependency thiếu.
-
-### Tests Executed
-
-- Focused sau DI correction trước regressions mới: 83 PASS/504 assertions, exit 0.
-- Thêm 3 test methods (canonical read/create ID/errors, query attributes/scalars/messages, consolidated filter normalization). Focused cuối php artisan test --filter='InvoiceValidatorTest|InvoiceMapperTest|InvoiceCreationTest|InvoiceQueryApiTest|HostInvoiceApiTest|AttributeValidatorTest|InvoiceAttributeMappingTest': 86 PASS, 608 assertions, exit 0.
-- Full php artisan test: 466 PASS, 2679 assertions, không skip, exit 0, 23.22s. Includes Auth/Profile/read/create/Review regressions.
-- node --test tests/*.test.js: 67/67 PASS, fail/cancel/skip 0, exit 0. Frontend source không sửa nên lint/build NOT RUN.
-- php artisan route:list --path=api: 16 routes, exit 0. php -l 14 PHP files mới/sửa/rename PASS; no obsolete InvoiceRequestMapper/InvoiceReadValidator/InvoiceCreationValidator references in app/tests.
-- Regression coverage includes canonical IDs native integer bounds/string/integral float; invalid array/object/null/bool/exponent/fraction/leading-zero/whitespace/overflow/INF/NAN; fixed 404 vs 422 messages; nullable/scalar query/presence/unknown field rejection; exact Laravel field messages; filters defaults/clamp/unknown status/search 0; DTO null/decimal/items JSON; role-before-input/privacy/no-query read validation; create unchanged.
-- Protected source audit: Host store() và InvoiceService từ createInvoice() đến cuối file exact baseline; InvoiceValidator từ validateForCreation() đến cuối file exact creation-validator baseline. Không thay read Service/Repository/Common/Response DTO/Model constraints hoặc create Resources.
-- Baseline 541 entries tại ignored .agent-workspace/tv3/inv-arch-02b2a-validation/baseline.json, workflow.txt/store.txt/creation-validator.txt là scope evidence, không file plan/result. Final audit 4 new + 2 rename + 2 delete + 9 modified; tất cả files khác nguyên vẹn. UTF-8/whitespace/git diff --check PASS. Checklist current-state link đổi sang InvoiceValidator; historical names/counts giữ nguồn cũ.
-- Không sửa composer/lock/provider/framework registration, AttributeValidator/EloquentObjectMapper, Models/schema/Auth/Frontend, AGENTS.md/architecture/skills. Current-state naming trong architecture/skills sẽ đồng bộ theo checkpoint tài liệu đã plan; checklist này ghi trạng thái mới. Không chạy lại composer audit; 9 advisories/6 baseline packages của B.1 vẫn unresolved, không coi đã fix.
-- SQLite in-memory/safety guards, không truy cập/reset/reseed MySQL development. Browser/MySQL concurrency và no-query toàn bộ creation Validator NOT VERIFIED; không được đóng bằng checkpoint này.
-
-| AC 2A | Kết quả/evidence |
-|---|---|
-| B2A-01 — một InvoiceMapper/InvoiceValidator read-create, no obsolete references | PASS — inventory/search, consumers cập nhật, unit test rename |
-| B2A-02 — canonical/raw DTO attributes giữ ID/query contract | PASS — positive/negative/error/native-boundary/query tests |
-| B2A-03 — input/read validation no query, Mapper thuần | PASS — query-log/mapper immutability/source review; creation query deferred rõ |
-| B2A-04 — read API/Auth/create không regression | PASS — 466 PHP/67 Node, protected workflow/store/creation validation baseline |
-| B2A-05 — constructor DI cho merged input boundary | PASS — required AttributeValidator/InvoiceValidator, full container/API tests |
-| B2A-06 — syntax/scope/checklist/history đúng | PASS — 14 php lint, 541-entry scope/hash/whitespace/diff |
-
-Recommended Next Task: owner nghiệm thu 02B.2A, sau đó lên/chốt Mini Plan 02B.2B chuyển query khỏi Validator, typed create command/persistence mapping và required workflow dependencies còn lại. Không tự làm 02B.2B/02B.3/02C; chưa stage/commit/push; dừng sau Task Result trên chat.
-
-### INV-ARCH-02B.2A — owner acceptance
-
-Owner nghiệm thu 02B.2A trực tiếp trên chat trước yêu cầu Mini Plan 02B.2B. Trạng thái hiện hành 02B.2A ACCEPTED; phần PENDING và Recommended Next Task ở báo cáo phía trên là lịch sử trước nghiệm thu. Parent INV-ARCH-02/02B/02B.2 vẫn PARTIAL; 02B.2B chỉ planning, chưa được phép triển khai. Evidence 466 PHP tests/2679 assertions và 67 Node tests thuộc lượt 02B.2A, không phải test chạy lại trong lượt acceptance/planning này. Chỉ cập nhật checklist, không sửa code ứng dụng hoặc AGENTS.md, không tạo file plan/result, không commit/push.
-
-
-## INV-ARCH-02B.2B — query-free Validator, typed create command và persistence mapping
-
-Owner duyệt đúng 2 file mới và 7 file sửa trên chat. Status IMPLEMENTED / TECHNICAL PASS; Owner Acceptance PENDING. 02B.2A ACCEPTED; parent INV-ARCH-02/02B/02B.2 vẫn PARTIAL, chưa bắt đầu 02B.3/02C. Planning/PENDING/TODO ở các đoạn lịch sử phía trên không thay trạng thái hiện hành này.
-
-### Implemented và file scope
-
-2 file mới:
-- backend/app/DTOs/Invoice/Requests/CreateInvoiceRequest.php: readonly application command với int bookingId; raw InvoiceCreateInputRequest/attributes giữ nguyên. Không mang actor/giá/status từ client, không thêm validation làm đổi legacy lookup behavior.
-- backend/tests/Feature/Invoice/InvoiceCreationCommitTest.php: ba ca thực thi commit/rollback trên named SQLite :memory: connection riêng, production transaction manager, không RefreshDatabase wrapping transaction. Safety guards trước/sau boot; migrate chỉ trên connection test do test sở hữu, không fresh/refresh/rollback schema hoặc seed development. Rollback transaction còn lại và purge connection trong teardown.
-
-7 file sửa:
-- backend/app/Services/Invoice/InvoiceService.php: createInvoice(int, User): Invoice là adapter sang createInvoiceFromRequest(CreateInvoiceRequest, User): Invoice, dùng chung một workflow/transaction. Service gọi Repository duplicate query sau role/ownership/status và trước snapshot validation; giữ recheck trước persistence. Calculator/Mapper/Logger và Repository/Validator là required constructor DI; không fallback new/Log facade trong Service. Mapper cung cấp payload; workflow vẫn quyết định discount/extra_fee 0.00, UNPAID và paid_at null.
-- backend/app/Validators/Invoice/InvoiceValidator.php: validateCreationEligibility rồi pure validateInvoiceNotExists(int, bool) và validateCreationSnapshots; không inject Repository/query callback, không query hoặc lazy-load. Required AttributeValidator/Calculator; loadedRelation guard dùng getRelation, role denial trước relation guard. Loaded null giữ business error cũ; unloaded relation là LogicException nội bộ. Giữ read/raw validation behavior.
-- backend/app/Mappers/Invoice/InvoiceMapper.php: toCreateRequest/toServiceSnapshots/toInvoiceAttributes/toRoomItemAttributes/toServiceItemAttributes, chỉ projection loaded snapshots và kết quả calculator. Không query/tính tiền/log/mutate; giữ decimal strings, null, room description và explicit payload fields. Read mapping/response engine không thay.
-- backend/tests/Unit/InvoiceValidatorTest.php: cập nhật required Calculator; thêm 5 ca pure duplicate, unloaded relation, role-before-relation, loaded null và fully loaded creation validation không cần DB.
-- backend/tests/Unit/InvoiceMapperTest.php: thêm 2 ca typed command/persistence parity/immutability và unloaded relation; expected fixture độc lập, cố tình không khớp công thức để phát hiện mapper tự tính lại.
-- backend/tests/Feature/Invoice/InvoiceCreationTest.php: sửa anonymous subclass theo DI mới; thêm 4 ca typed create persisted result, no-query validation/mapping, role/status/duplicate precedence và legacy ID 0 vẫn ModelNotFoundException.
-- docs/TV3/TV3_CHECKLIST.md: cập nhật implementation, evidence, AC và acceptance pending; giữ lịch sử.
-
-Service tiếp tục transaction/lock workflow, sinh invoice code và phân loại QueryException như trước. Đã loại bỏ hai duplicate queries từ Validator, thay bằng Repository existence check tại cùng vị trí nghiệp vụ; giữ thêm recheck hiện có. Không chuyển transaction vào Repository. Success message/context và DB::afterCommit giữ nguyên, log không có customer name/email/phone. Calculator legacy và logging nội bộ Calculator không nằm trong scope thay đổi này.
-
-### Tests Executed và giới hạn
-
-- Final focused: php artisan test --filter='InvoiceValidatorTest|InvoiceMapperTest|InvoiceCreationTest|InvoiceCreationCommitTest|InvoiceRepositoryTest|InvoiceQueryApiTest|HostInvoiceApiTest|InvoiceAttributeMappingTest': 102 PASS, 596 assertions, exit 0, 2.82s.
-- Full php artisan test: 480 PASS, 2738 assertions, exit 0, 23.49s; includes Auth/Profile/Invoice read-create/Review. Không test skipped.
-- Commit tests riêng: 3 PASS, 26 assertions, exit 0. Callback thấy transactionLevel 0 và PDO không inTransaction khi log; nested service commit chưa log, outer commit log đúng một lần và đúng bốn context fields; outer rollback không log/không persistence, commit sau đó không revive callback; real item NOT NULL failure rollback header/items, không log success.
-- Frontend node --test tests/*.test.js: 67/67 PASS, fail/cancel/skip 0, exit 0. Frontend không sửa; lint/build NOT RUN.
-- php -l: 8/8 PHP files mới/sửa PASS. php artisan route:list --path=api: 16 routes, exit 0. Git diff --check PASS (existing line-ending conversion warnings riêng, không whitespace errors).
-- Static/runtime no-query gates: InvoiceValidator/InvoiceMapper không query tokens; loaded workflow validation và persistence mapping capture zero DB queries; pure unit tests không boot DB. No-query evidence không phải MySQL concurrency proof.
-- Scope baseline 537 source/config/doc entries tại .agent-workspace/tv3/inv-arch-02b2b-validation/baseline.json; final audit đúng 2 new + 7 modified, không delete. App/Auth/Controllers/routes/Repository/Models/Calculator/Resources/Common/Composer/providers/architecture/skills/AGENTS.md/AGENTS.local.md/Frontend ngoài scope giữ baseline.
-- Evidence logs: cùng thư mục baseline, focused.log, backend-full.log, frontend-node.log, routes.log; đây là execution evidence, không file Mini Plan/Task Result. Không stage/commit/push, không truy cập/reset/reseed MySQL development.
-- Không rerun Composer security audit; 9 advisories/6 baseline packages từ 02B.1 vẫn unresolved. Model attributes chưa active trong create (02B.3); HTTP store()/Resource vẫn legacy tới 02C. Browser/MySQL concurrency NOT VERIFIED.
-
-| AC | Trạng thái và evidence |
-|---|---|
-| B2B-01 — Validator không query/lazy-load, giữ thứ tự lỗi | PASS — pure unit tests, zero-query capture, role/status/duplicate precedence |
-| B2B-02 — typed command có consumer, legacy entry tương thích | PASS — shared typed workflow, persisted-result regression, legacy ID 0 |
-| B2B-03 — Mapper sở hữu persistence projection đúng dữ liệu | PASS — độc lập fixture, decimal/null/description/immutability, create persistence tests |
-| B2B-04 — required constructor DI, không fallback Service/Validator | PASS — source review, container/API/full suite, subclass cập nhật |
-| B2B-05 — atomicity/duplicate/DB exception giữ contract | PASS — unique booking/code, non-unique failure, rollback tests |
-| B2B-06 — success log sau commit, không khi rollback | PASS — real outer/nested commit và rollback trên owned SQLite connection |
-| B2B-07 — API/Auth/read/create không regression | PASS — 480 PHP tests, 67 Node tests; Controller/routes/Auth source unchanged |
-| B2B-08 — đúng scope, checklist và evidence | PASS — 537-entry scope/hash audit, 8 php lint, routes/diff checks |
-
-Recommended Next Task: owner nghiệm thu 02B.2B; sau đó lên Mini Plan 02B.3 kích hoạt Model validation trong create workflow. Không tự triển khai 02B.3/02C hoặc đóng parent. Dừng sau báo cáo trên chat.
-
-### INV-ARCH-02B.2B — owner acceptance
-
-Owner nghiệm thu 02B.2B trực tiếp trên chat trước yêu cầu Mini Plan 02B.3. Trạng thái hiện hành 02B.2B ACCEPTED; PENDING/Recommended Next Task trong báo cáo phía trên là lịch sử trước nghiệm thu. Parent INV-ARCH-02/02B vẫn PARTIAL; 02B.3 chỉ planning, chưa được phép triển khai. Evidence 480 PHP tests/2738 assertions và 67 Node tests thuộc lượt 02B.2B, không phải kết quả chạy lại ở lượt acceptance/planning này. Lượt này chỉ cập nhật checklist và rà soát; không sửa application code/AGENTS.md hoặc tạo file plan/result.
-
-
-## INV-ARCH-02B.3 — kích hoạt Model validation trước persistence Invoice/ROOM
-
-Owner duyệt đúng 9 file sửa trên chat. Status IMPLEMENTED / TECHNICAL PASS; Owner Acceptance PENDING. 02B.2B ACCEPTED; parent INV-ARCH-02/02B vẫn PARTIAL, không tự đóng parent hoặc bắt đầu 02C. Các đoạn TODO/planning phía trên là lịch sử; trạng thái hiện hành theo section này.
-
-### Implemented và scope
-
-0 file mới, 0 file xóa, đúng 9 file sửa:
-- backend/app/Models/Invoice.php: thêm group invoice-create vào NotBlank(invoice_code) hiện có; giữ invoice-pilot/default semantics và getter/casts/fillable/relationships.
-- backend/app/Models/InvoiceItem.php: thêm group invoice-create-room vào NotBlank(item_name); workflow chỉ gọi cho ROOM, không thêm business rule tên SERVICE. Không observer, global hook hoặc public property trùng DB column.
-- backend/app/Validators/Invoice/InvoiceValidator.php: thêm validateInvoiceModel(Invoice) và validateRoomItemModel(InvoiceItem), gọi AttributeValidator.validateDomain với explicit group và safe public message. Không query/log/mutate Model.
-- backend/app/Services/Invoice/InvoiceService.php: tạo Model candidates từ đúng Mapper payload, validate Invoice trước insert header và ROOM trước insert ROOM, rồi Repository nhận lại payload gốc như trước. Không đổi Repository/Mapper contracts, transaction/lock, quyền/status/duplicate/snapshot order, calculator/money/payment defaults, QueryException classifier hoặc DB::afterCommit. SERVICE persistence path giữ nguyên.
-- backend/tests/Unit/InvoiceValidatorTest.php: thêm 2 methods cho valid candidates không mutation/DB và blank/null/whitespace bị từ chối với safe domain message.
-- backend/tests/Feature/Invoice/InvoiceCreationTest.php: thêm invalid generated code trước header insert, test-only corrupt ROOM candidate qua real parent attributes engine và rollback header, HTTP 422 exact message-only ở hai ca; thêm data provider 3 trường hợp SERVICE name empty/whitespace/literal zero, HTTP 201 và response/persistence parity.
-- backend/tests/Feature/Invoice/InvoiceCreationCommitTest.php: thêm Model validation failure Invoice/ROOM trên owned SQLite connection thực, không success log, không persisted records, transactionLevel 0/PDO ngoài transaction và subsequent unrelated commit không revive callback.
-- backend/tests/Feature/Validation/InvoiceAttributeMappingTest.php: thêm group isolation/pilot parity/default behavior, no-query và attributes/dirty-state/toArray immutability; giữ test global save không validation và date mapping pilot.
-- docs/TV3/TV3_CHECKLIST.md: cập nhật trạng thái/evidence/AC, không tạo file plan/result.
-
-Constraints chỉ dùng trim để kiểm tra, không trim/sửa snapshot. Model candidate validation không đảm bảo mọi mutation ở Eloquent events sau đó; không thêm global enforcement. SERVICE vẫn qua snapshot/financial checks hiện có, chưa thêm NotBlank tên SERVICE. Đây không phải chuyển toàn bộ financial validation sang Model.
-
-### Tests Executed
-
-- Focused cuối: php artisan test --filter='InvoiceValidatorTest|InvoiceCreationTest|InvoiceCreationCommitTest|InvoiceAttributeMappingTest|InvoiceMapperTest|InvoiceRepositoryTest|HostInvoiceApiTest|InvoiceQueryApiTest': 111 PASS, 674 assertions, exit 0, 3.06s.
-- Full php artisan test: 489 PASS, 2816 assertions, exit 0, 23.37s, không skip. So với 02B.2B thêm 9 test cases (7 methods gồm một provider 3 datasets), bao phủ Auth/Profile/Invoice read-create/Review regressions trong full gate.
-- node --test tests/*.test.js: 67/67 PASS, fail/cancel/skip 0, exit 0. Frontend không sửa; lint/build NOT RUN.
-- php -l: 8/8 PHP files sửa PASS. php artisan route:list --path=api: 16 routes, exit 0. Git diff --check PASS; existing line-ending conversion warnings không phải whitespace failure.
-- Model invalid code: capture zero INSERT trước exception; HTTP 422 đúng duy nhất message an toàn. ROOM fault injection đi qua constraints thật: capture đúng một header INSERT, không item INSERT, rollback header/items và HTTP 422 exact message-only. Injection chỉ test candidate, không fake success JSON hoặc sửa Mapper production.
-- SERVICE empty/whitespace/'0': create qua HTTP 201, response và persisted item giữ nguyên tên, total_amount 4150000.00, UNPAID và 3 items. Không thêm luật SERVICE-name.
-- Explicit group tests: default/wrong group không active; pilot/production errors tương đương; normalizer không đổi attributes, dirty state hoặc JSON; query capture bằng 0. Ordinary Model save vẫn không tự validation.
-- SQLite :memory: safety guards trước/sau boot; commit gate named connection riêng/production transaction manager, teardown rollback transaction còn lại/purge đúng ownership. Không truy cập/reset/reseed DB MySQL development.
-- Baseline 539 source/config/doc entries: .agent-workspace/tv3/inv-arch-02b3-validation/baseline.json. Scope final đúng 9 modified, 0 new/deleted; các file khác giữ baseline, gồm AGENTS.md/AGENTS.local.md/architecture/skills/Controller/routes/Auth/Repository/Mapper/DTO/adapters/Composer/provider/Calculator/Frontend.
-- Evidence cùng thư mục: focused.log, backend-full.log, frontend-node.log, routes.log, scope-audit.log và production before snapshots. Đây là execution evidence, không file plan/result. Không stage/commit/push.
-- Không chạy lại Composer audit; 9 advisories/6 baseline packages ghi từ B.1 vẫn unresolved. Browser/MySQL concurrency NOT VERIFIED; SQLite không chứng minh InnoDB locking. HTTP create còn Resource legacy tới 02C.
-
-| AC | Kết quả và evidence |
-|---|---|
-| B3-01 — production groups active, pilot/default tương thích | PASS — blank/null/whitespace, group isolation và pilot parity tests |
-| B3-02 — create gọi Model validation trước persistence | PASS — invalid-code zero INSERT; invalid ROOM chỉ header INSERT rồi rollback; real engine negative controls |
-| B3-03 — validation không query/mutate | PASS — unit không DB, query capture 0, attributes/dirty-state/JSON parity |
-| B3-04 — validation failure rollback và không success log | PASS — persistence counts và owned-connection commit gate |
-| B3-05 — error order/SERVICE/money/response giữ nguyên | PASS — HTTP 422 exact messages, 3 SERVICE HTTP/persistence cases, existing precedence/financial tests |
-| B3-06 — Auth/read/create/full regression | PASS — 489 PHP tests/2816 assertions, 67 Node tests, exit 0 |
-| B3-07 — đúng scope/checklist/evidence | PASS — 539-entry baseline, exactly 9 modified, php lint/routes/whitespace/diff checks |
-
-Recommended Next Task: owner nghiệm thu 02B.3, sau đó lên Mini Plan 02C nối HTTP create sang DTO/Common, regression Frontend và đồng bộ tài liệu/skills theo phạm vi được duyệt. Parent INV-ARCH-02 vẫn mở. Dừng sau Task Result trên chat.
-
-### INV-ARCH-02B.3 — owner acceptance
-
-Owner nghiệm thu 02B.3 trực tiếp trên chat trước yêu cầu Mini Plan 02C. Trạng thái hiện hành 02B.3 ACCEPTED; PENDING/Recommended Next Task phía trên là lịch sử trước nghiệm thu. Parent INV-ARCH-02/02B chưa tự đóng; 02C chỉ planning, chưa được phép triển khai. Evidence 489 PHP tests/2816 assertions và 67 Node tests thuộc lượt 02B.3, không phải kết quả chạy lại ở lượt acceptance/planning này. Lượt này chỉ cập nhật checklist và rà soát; không sửa application code/AGENTS.md hoặc tạo file plan/result.
-
-
-## INV-ARCH-02C.2 — gom Frontend Invoice create/read vào một service
-
-Owner duyệt riêng 02C.2 với scope cập nhật trên chat. Status IMPLEMENTED / TECHNICAL PASS; Owner Acceptance PENDING. 02B.3 ACCEPTED. 02C.1 Backend HTTP DTO/Common và 02C.3 kiến trúc/skills chưa triển khai, không được suy hoàn tất từ checkpoint này. Parent INV-ARCH-02/02C vẫn PARTIAL.
-
-| Đóng | Checkpoint | Trạng thái |
-|---|---|---|
-| [x] | INV-ARCH-02C.1 — HTTP create DTO/Common và bỏ Invoice Resources | IMPLEMENTED / PASS / ACCEPTED |
-| [x] | INV-ARCH-02C.2 — một invoiceService.js cho create/read | IMPLEMENTED / PASS / ACCEPTED |
-| [x] | INV-ARCH-02C.3 — kiến trúc, local rules và 5 skills | IMPLEMENTED / PASS / ACCEPTED |
-
-### Implemented và file scope
-
-5 file sửa:
-- frontend/src/services/invoiceService.js: factory createInvoiceService(invoiceApi) gom create/list/detail; dùng Mapper detail cho create, giữ filter normalization và public named exports/defaults/options. Singleton dùng đúng shared Axios hiện tại qua createInvoiceApi; import thêm .js để Node resolve module test. formatVnd và parseInvoiceError giữ nguyên nội dung.
-- frontend/src/components/invoice/CreateInvoiceButton.jsx: chỉ thay onSuccess(result.data || result) thành onSuccess(result.data); loading/disabled/callback/UI giữ nguyên.
-- frontend/src/mappers/invoiceMapper.js: chỉ đổi mô tả phạm vi read/create; không thay behavior/projection.
-- frontend/tests/invoiceMapper.test.js: thêm create response frozen fixture, decimal/null và SERVICE names empty/whitespace/literal zero, malformed items không fallback.
-- docs/TV3/TV3_CHECKLIST.md: implementation, evidence, AC và owner acceptance pending.
-
-1 rename có sửa: frontend/tests/invoiceReadService.test.js -> frontend/tests/invoiceService.test.js. Giữ cả 4 read regressions; thêm create mapping/options, malformed success, HTTP/Auth/version/error fields, cancel/timeout/network/no replay, invalid IDs no HTTP và cả 5 public exports qua shared-client mock. Tổng 8 test cases mới trong hai test files.
-
-1 file xóa: frontend/src/services/invoiceReadService.js sau khi gom; không tạo invoiceCreateService.js, không thêm production helper/factory module khác.
-
-Factory và public exports ở cùng file. API module vẫn sở hữu URL/method/params/body/signal; shared Axios và Auth interceptors không sửa/đăng ký lại. Create/detail result {data: Invoice}, list {data,meta,links} và metadata bổ sung giữ contract. Không tính lại tiền, giữ decimal strings/null/items/SERVICE names. Rejections giữ identity; không tự retry hoặc replay POST. Component nhận result shape chính thức, không che malformed success.
-
-### Tests Executed
-
-- Node v22.23.4; focused node --experimental-test-module-mocks --test tests/invoiceService.test.js tests/invoiceMapper.test.js: 16/16 PASS, fail/cancel/skip 0, exit 0.
-- Full node --experimental-test-module-mocks --test tests/*.test.js: 75/75 PASS, fail/cancel/skip 0, exit 0. 67 cases cũ giữ và 8 cases mới.
-- npm run lint: PASS, exit 0; 0 errors, 3 react-refresh/only-export-components warnings tại badge.jsx/button.jsx/sidebar.jsx không sửa trong scope.
-- npm run build -- --outDir ../.agent-workspace/tv3/inv-arch-02c2-validation/build: PASS, exit 0, 3316 modules transformed. Build cô lập giữ output trước đó; Vite báo outDir ngoài project không tự empty và JS chunk >500 kB (khoảng 1,078.77 kB), không sửa chunk config ngoài scope.
-- node --check: 4/4 JS files mới-path/sửa PASS; JSX được compile qua build. Git diff --check và UTF-8/whitespace/scope audit PASS.
-- Test mock.module chỉ thay shared Axios module trước dynamic import invoiceService.js, vì module production đọc Vite import.meta.env. Factory/public functions thật được import và thực thi; các HTTP responses là adapter fixtures, không browser/real backend evidence. Node mock.module là experimental và cần flag trên; không thay package.json/scripts hoặc dependencies.
-- No obsolete invoiceReadService/createInvoiceReadService/invoiceCreateService references trong frontend/src và frontend/tests. CreateInvoiceButton không còn raw result fallback. Helper formatVnd/parseInvoiceError exact baseline sau normalization newline.
-- Baseline 539 source/config/doc entries tại .agent-workspace/tv3/inv-arch-02c2-validation/baseline.json. Scope đúng 5 modified + 1 test rename có sửa + 1 deleted service; không sửa Backend/API/Axios/Auth/pages/routes/AGENTS.md/AGENTS.local.md/architecture/skills/lockfiles. Historical names trong docs/skills giữ đến 02C.3.
-- Evidence cùng thư mục: source-head.txt, git-before.txt, focused.log, node-full.log, lint.log, build.log, scope-audit.log và build/. Đây là execution evidence, không file plan/result. Không stage/commit/push; không truy cập DB.
-- Backend tests NOT RUN: không đổi Backend; 489 PHP/2816 assertions là evidence lịch sử 02B.3, không claim chạy lại. Browser/real Auth backend, duplicate-click UI, stale responses/unmount/auth-change và responsive NOT VERIFIED; Node adapters/lint/build không thay browser gate.
-
-| AC | Kết quả và evidence |
-|---|---|
-| C2-01 — một invoiceService.js, không runtime import service cũ | PASS — factory consolidation, reference search, build |
-| C2-02 — 5 public functions giữ signature/result contract | PASS — shared-client mock public-export test, factory read/create regressions |
-| C2-03 — create/read mapping giữ decimal/null/items/SERVICE | PASS — frozen projection fixtures, empty/whitespace/zero names, malformed responses |
-| C2-04 — API/Auth/signal/errors và no replay | PASS — HTTP statuses/Auth session versions/identity/fields/signal/cancel/network/timeout tests |
-| C2-05 — Node/lint/build | PASS — 75/75, lint exit 0 với 3 warnings, build exit 0 với bundle warning |
-| C2-06 — scope/checklist/evidence | PASS — 539-entry baseline, 5 sửa + 1 rename + 1 xóa, syntax/whitespace/diff audit |
-
-Recommended Next Task: owner nghiệm thu 02C.2; sau đó thực hiện 02C.1 theo plan Backend đã trình khi được duyệt, rồi 02C.3 đồng bộ kiến trúc/skills. Không tự triển khai task tiếp theo hoặc đóng parent. Dừng sau Task Result trên chat.
-
-
-### INV-ARCH-02C.2 — owner acceptance
-
-Owner nghiệm thu 02C.2 và duyệt riêng 02C.1 trực tiếp trên chat. 02C.2 ACCEPTED; PENDING/Recommended Next Task trong báo cáo 02C.2 phía trên là lịch sử. Evidence 75 Node tests, lint/build của 02C.2 giữ nguồn lượt đó; lần 02C.1 có chạy lại Node regression nhưng không chạy lại lint/build. Không sửa Frontend ở 02C.1.
-
-## INV-ARCH-02C.1 — HTTP create dùng typed DTO và Common response
-
-Owner duyệt đúng 4 file sửa và 2 file xóa. Status IMPLEMENTED / TECHNICAL PASS; Owner Acceptance PENDING. 02C.2 ACCEPTED, 02C.3 chưa triển khai; parent INV-ARCH-02/02C vẫn PARTIAL. Không tự đóng parent hoặc bắt đầu đồng bộ kiến trúc/skills.
-
-### Implemented và scope
-
-4 file sửa:
-- backend/app/Http/Controllers/Invoice/HostInvoiceController.php: raw booking ID qua InvoiceValidator.validateBookingId (Symfony DTO attributes), Mapper.toCreateRequest -> CreateInvoiceRequest -> InvoiceService.createInvoiceFromRequest; loaded Invoice -> Mapper.toResponse(includeItems true) -> ApiResponse.success(status 201). Giữ một data envelope; không thêm error code hoặc chuyển catch sang Common.error. Guest middleware và thứ tự ID/actor bên trong create giữ contract. Toàn bộ catch blocks và các read methods exact baseline.
-- backend/tests/Feature/Invoice/HostInvoiceApiTest.php: thêm 3 test methods cho typed entry point (legacy method cố tình fail nếu HTTP gọi nhầm), exact create response/date/null/decimals/items và create/read list-detail parity ở Host/Customer; raw ID invalid/overflow/native max; guest malformed ID, role denial message-only và /api/me chứng minh session giữ nguyên. Body financial/owner fields không thể ghi đè server snapshots/defaults.
-- backend/tests/Feature/Invoice/InvoiceQueryApiTest.php: loại dependency hai Invoice Resources, dùng test-owned expected public payload giữ contract trước migration, không gọi production Mapper/DTO làm expected. Giữ list không items/detail items, paid_at/date/null/decimal, empty list/detail và ownership tests.
-- docs/TV3/TV3_CHECKLIST.md: ghi nghiệm thu 02C.2, implementation/evidence/AC 02C.1 và acceptance pending.
-
-2 file xóa:
-- backend/app/Http/Resources/Invoice/InvoiceResource.php
-- backend/app/Http/Resources/Invoice/InvoiceItemResource.php
-
-Không còn InvoiceResource/InvoiceItemResource references trong backend/app và backend/tests. Không xóa Http/Resources/Auth/Profile/Review hoặc Common legacy Resource compatibility. Không sửa Service/Repository/Mapper/DTO/Validator/Models/Calculator/transactions/locks/logging, Auth/Sanctum/routes/Common/handler/Composer/provider/Frontend/AGENTS.md/AGENTS.local.md/architecture/skills.
-
-### Tests Executed và evidence
-
-- Focused php artisan test --filter='HostInvoiceApiTest|InvoiceQueryApiTest|InvoiceCreationTest|InvoiceCreationCommitTest|InvoiceValidatorTest|InvoiceMapperTest': 98 PASS, 597 assertions, exit 0, 2.89s.
-- Full php artisan test: 492 PASS, 2860 assertions, exit 0, 23.68s, không skip. Includes Auth/Profile/Review/Invoice read-create, rollback/commit logging, Model validation faults và SERVICE empty/whitespace/literal-zero regressions.
-- Frontend node --experimental-test-module-mocks --test tests/*.test.js: 75/75 PASS, fail/cancel/skip 0, exit 0. Frontend không sửa nên lint/build NOT RUN lượt này; giữ evidence PASS có warnings của 02C.2 riêng.
-- php -l: 3/3 PHP files sửa PASS. php artisan route:list --path=api: 16 routes, exit 0. Git diff --check và UTF-8/whitespace/scope audit PASS (existing line-ending conversion warnings không phải whitespace errors).
-- HTTP 201 exact data envelope/public fields; độc lập expected totals 4150000.00 và ROOM/SERVICE values, room description, timestamp 2026-11-14T01:02:03.000000Z, nullable paid_at/description. Create và đọc lại detail khớp; list chỉ bỏ items. Chỉ IDs/code tạo ngẫu nhiên lấy từ persisted record, không gọi production Mapper/DTO tính expected.
-- Invalid canonical IDs 0/-1/fraction/exponent/leading-zero/plus/whitespace/text/overflow: 422 exact message-only; PHP_INT_MAX là canonical nhưng không có resource: 404 exact message-only. Guest invalid ID vẫn 401; ADMIN malformed ID 422 theo create order hiện hữu, valid resource 403 rồi /api/me 200 cùng user. Read authorization precedence không đổi.
-- Test override legacy createInvoice throws LogicException; HTTP vẫn 201 qua createInvoiceFromRequest, capture typed DTO bookingId/actor từ session. Request body total/payment/customer/booking fields không override snapshots.
-- SQLite in-memory safety guards, không truy cập/reset/reseed MySQL development. Browser/MySQL concurrency NOT VERIFIED; Node adapter/SQLite không thay E2E. Dependencies/advisories B.1 không thay và không chạy lại Composer audit.
-- Baseline 538 source/config/doc entries tại .agent-workspace/tv3/inv-arch-02c1-validation/baseline.json; final scope đúng 4 modified + 2 deleted, không new source files. Evidence: source-head.txt, git-before.txt, Controller/Resource before snapshots, focused.log, backend-full.log, frontend-node.log, routes.log và scope-audit.log. Không file plan/result, không stage/commit/push.
-
-| AC | Kết quả và evidence |
-|---|---|
-| C1-01 — HTTP create nối Validator/typed command/Response DTO/Common | PASS — typed entry spy và HTTP success, source review |
-| C1-02 — 201 fields/envelope/date/null/decimal/items và read parity | PASS — exact fixture assertions, create-to-read Host/Customer tests |
-| C1-03 — API/Auth/error classification và nghiệp vụ giữ nguyên | PASS — raw ID/guest/role/session tests, original catches exact baseline, full 492 tests |
-| C1-04 — xóa Invoice Resources an toàn | PASS — no app/test references, test-owned public contract và full suite |
-| C1-05 — required regression gates | PASS — 492 PHP/2860 assertions, 75 Node, syntax 3/3 và routes 16, exit 0 |
-| C1-06 — scope/checklist/evidence | PASS — 538-entry baseline, 4 modified/2 deleted, UTF-8/whitespace/diff audit |
-
-Recommended Next Task: owner nghiệm thu 02C.1; sau đó chốt/duyệt phạm vi 02C.3 cập nhật 9 file kiến trúc, AGENTS.local.md, 5 skills và checklist. Parent INV-ARCH-02 còn mở. Dừng sau Task Result trên chat.
-
-
-### INV-ARCH-02C.1 — owner acceptance
-
-Owner nghiệm thu 02C.1 trực tiếp trên chat trước yêu cầu Mini Plan 02C.3, sau đó duyệt triển khai riêng 02C.3. 02C.1 ACCEPTED; PENDING/Recommended Next Task trong báo cáo trước đó là lịch sử. 02C.2 giữ ACCEPTED. Evidence 492 PHP/2860 assertions, 75 Node của 02C.1 được đọc đối chiếu log nguồn, không chạy lại ở lượt tài liệu này. Parent INV-ARCH-02/02B/02C chưa tự đóng.
-
-## INV-ARCH-02C.3 — đồng bộ 9 file kiến trúc, local rules và skills
-
-Owner duyệt đúng 9 file sửa; giữ AGENTS.md và application code. Status IMPLEMENTED / TECHNICAL PASS; Owner Acceptance PENDING. 02C.1/02C.2 ACCEPTED; parent INV-ARCH-02 và các parent checkpoints vẫn chờ tổng hợp/owner acceptance, không tự đóng UC/browser/MySQL gates.
-
-### Implemented và files changed
-
-0 file source mới/xóa; đúng 9 file sửa:
-- ARCHITECTURE.md: cập nhật sections 4/13/14, naming/tree và read/create DTO/Repository/Common; explicit Model groups và mapping runtime/pilot; Provider engine registrations khác Repository bindings. Sửa sơ đồ Invoice cũ CHECKED_IN/check-out sang thực tế COMPLETED/Host tạo Invoice, giữ UNPAID/defaults và không suy schema enum là feature đã hỗ trợ. Endpoint session table được ghi rõ là danh sách tiêu biểu, không toàn bộ inventory.
-- docs/ai-frontend-development-guide.md: sections 17-19 dùng một invoiceService.js cho năm create/read operations, mapper/result shapes, expected errors/Auth/signal/no-replay và Node module-mocks flag; phân biệt module/build evidence với browser.
-- AGENTS.local.md: inventory mới, phân tầng/DI, read-vs-create error order, raw/typed DTO, Model groups/SERVICE, logging legacy và trạng thái acceptance. Giữ quy trình TV3/ownership, chat-only plan/result và sự khác biệt guidance hiện hành với AGENTS.md được owner yêu cầu giữ nguyên.
-- .agents/skills/stayhub-task-planning/SKILL.md: current inventory và scope planning dựa DTO/groups/persistence/Auth/transaction/logging, không sinh lớp hoặc module forwarding dư.
-- .agents/skills/stayhub-laravel/SKILL.md: query-free Validator, typed HTTP create, no automatic Repository binding, explicit groups/candidate checks, Resource deletion và create message-only compatibility.
-- .agents/skills/stayhub-react/SKILL.md: một service/factory/public exports, create/detail/list mapper, shared Axios/Auth/signal/identity, test module mock và browser evidence boundary.
-- .agents/skills/stayhub-database/SKILL.md: bốn read/sáu create Repository methods, Service transaction/duplicate-fact order/eager loading, Model validation/rollback/outer commit và DB isolation.
-- .agents/skills/stayhub-verification/SKILL.md: current acceptance matrix, independent contract expected values, Model/SERVICE/no-query/rollback/logging regression và docs-only checks.
-- docs/TV3/TV3_CHECKLIST.md: owner nghiệm thu 02C.1, bảng refactor hiện hành, implementation/evidence/AC 02C.3; lịch sử naming/test counts giữ nguyên nguồn.
-
-Năm skill names/descriptions/frontmatter và agents/openai.yaml giữ baseline; không thêm references/scripts/assets hoặc settings. Dọn phần inventory lặp/lỗi thời trong skills, giữ workflow tổng quát/ownership và trỏ kiến trúc làm nguồn chi tiết. Không sửa code để khớp tài liệu.
-
-### Source fidelity và giới hạn
-
-- Source-confirmed: một InvoiceRepository 4 read/6 create methods; InvoiceValidator gom read/create không query/lazy-load; InvoiceMapper projection tường minh; raw attribute DTO và typed CreateInvoiceRequest; required workflow DI; explicit invoice-create/invoice-create-room trước insert; SERVICE empty/whitespace/'0' giữ hành vi; Common success 201 và expected create errors message-only; frontend một invoiceService.js.
-- Symfony engine bindings ở AppServiceProvider vẫn cần; EloquentObjectMapper chỉ runtime adapter/pilot loaded scalar allowlist, chưa thay mọi production mapping và không phải Java compile-time MapStruct.
-- InvoiceCalculationService còn legacy begin/end INFO và optional Validator/Logger fallback. Không claim đã sửa toàn bộ Calculator/DI/logging. 9 security advisories/6 baseline packages được ghi từ 02B.1 vẫn unresolved, không chạy lại audit hoặc coi đã fix.
-- Target áp toàn project nhưng Review/TV1/TV2 và backlog dashboard/payment/FAQ/chat vẫn có scope/ownership riêng; không coi đã migrate hoặc hoàn thành use case nhờ tài liệu.
-- Browser/real backend Auth/UI stale-response/double-click/responsive và MySQL concurrency NOT VERIFIED. Static skill review không chứng minh auto-selection/behavior của agent ở lượt tương lai.
-
-### Checks Executed
-
-- Skill Creator original scripts/quick_validate.py: 5/5 PASS, từng process exit 0. Lần đầu thiếu PyYAML; cài PyYAML 6.0.3 vào riêng .agent-workspace/tv3/inv-arch-02c3-validation/tools và chạy validator bằng PYTHONPATH/PYTHONUTF8 của child process. Không sửa project/global Python dependencies hoặc validator gốc; YAML/frontmatter/naming/scaffold checks thật, không tự dựng PASS thay thế.
-- Local Markdown links/anchors: 54/54 PASS, 0 missing paths/anchors trên cả 9 file. Current inventories không còn obsolete InvoiceReadValidator/InvoiceCreationValidator/InvoiceRequestMapper/invoiceReadService/Invoice Resource class references; checklist giữ tên cũ trong lịch sử hoặc ghi rõ đã xóa.
-- Source inventory/contract review PASS: kiểm tra 10 Repository methods, 5 Request DTO files, Controller/Service/Validator/Mapper/Models/provider/frontend, Model groups/candidate calls và Calculator legacy. Lịch sử 02C.1 PHP 492/2860 + Node 75 và 02C.2 lint 3 warnings được đối chiếu logs nguồn, không execute lại các suites.
-- UTF-8/BOM/trailing whitespace và git diff --check PASS; existing line-ending conversion warnings không phải failure.
-- Baseline 536 source/config/doc entries tại .agent-workspace/tv3/inv-arch-02c3-validation/baseline.json, gồm ignored AGENTS.local.md/skills metadata; final hash/scope audit đúng 9 modified, 0 new/deleted source. AGENTS.md, app/tests/Frontend/dependencies/schema/skill metadata và mọi file khác giữ baseline.
-- Evidence cùng thư mục: source-head.txt, git-before.txt, before snapshots, skill-validators.log, content-links-audit.log, scope-audit.log và tools/. Đây là execution evidence/tooling cô lập, không file plan/result. Không stage/commit/push, không DB operation.
-- Application suites PHPUnit/Node/lint/build NOT RUN ở 02C.3 vì không đổi application code; các con số lịch sử bên trên không phải test mới. Không browser/MySQL gate hoặc independent live-agent behavior test trong checkpoint này.
-
-| AC | Kết quả và evidence |
-|---|---|
-| C3-01 — Backend/Frontend architecture đúng code | PASS — source inventory/contracts/flow và active trees/links |
-| C3-02 — local rules/5 skills thống nhất naming/phân tầng | PASS — current-state content review, no obsolete current references, 5 validators |
-| C3-03 — groups/SERVICE/logging/legacy đúng giới hạn | PASS — Model/Validator/Service/Calculator/provider/mapper source đối chiếu |
-| C3-04 — skill validators và links hợp lệ | PASS — original validator 5/5 exit 0, 54 links/anchors |
-| C3-05 — checklist acceptance/evidence đúng nguồn | PASS — 02C.1 ACCEPTED, 02C.3 PENDING, lịch sử giữ nguồn và parent chưa tự đóng |
-| C3-06 — đúng 9 file, giữ AGENTS.md/application code | PASS — 536-entry hash/scope audit, metadata/code untouched, UTF-8/whitespace/diff |
-
-Recommended Next Task: owner nghiệm thu 02C.3, sau đó audit tổng hợp và đề nghị nghiệm thu parent INV-ARCH-02 theo phạm vi refactor; không suy đóng browser/MySQL/use cases hoặc tự bắt đầu Review. Dừng sau Task Result trên chat.
-
-
-### INV-ARCH-02C.3 — owner acceptance
-
-Owner nghiệm thu 02C.3 trên chat, sau đó duyệt INV-ARCH-02-AUDIT với scope chỉ sửa checklist. 02C.3 ACCEPTED; PENDING/Recommended Next Task phía trên là lịch sử trước nghiệm thu. Các kết quả 5 validators/54 links của 02C.3 giữ nguồn cũ; audit dưới đây chạy lại các gates và ghi evidence mới riêng.
-
-## INV-ARCH-02-AUDIT — nghiệm thu kỹ thuật tổng hợp Invoice refactor
-
-Status TECHNICAL PASS — đủ điều kiện đề nghị owner đóng parent INV-ARCH-02 trong phạm vi refactor Invoice read/create đã duyệt. Owner Acceptance của audit/parent PENDING; chưa đánh dấu [x] parent. Toàn bộ checkpoint 02A, 02B.1/02B.2A/02B.2B/02B.3, 02C.1/02C.2/02C.3 đã được owner nghiệm thu riêng. Không tự chuyển Review hoặc task nghiệp vụ mới.
-
-### Scope và kết luận audit
-
-Chỉ sửa docs/TV3/TV3_CHECKLIST.md. AGENTS.md, code Backend/Frontend, tests, dependencies/schema, architecture/local rules/5 skills và metadata giữ baseline. Không thêm/sửa test để đạt audit, không fix code ngoài scope. Evidence/logs/build nằm trong .agent-workspace/tv3/inv-arch-02-audit/, không file plan/result.
-
-- Inventory/phân tầng: concrete InvoiceRepository 4 read/6 create methods, constructor DI; Controller không query/business/transaction, Validator/Mapper không query/lazy-load; Service/QueryService giữ workflow/quyền và Repository ownership/eager-loading/persistence. Không còn obsolete Invoice validator/mapper/Resources hoặc split frontend read/create service imports.
-- DTO/Mapper: raw mixed input attributes trước normalize; CreateInvoiceRequest typed được HTTP consume, actor từ session; Mapper/JsonSerializable DTO giữ explicit fields/decimal/date/null/items. Symfony mapper adapter/pilot chưa thay hết production mapping; không claim compile-time MapStruct.
-- API/Auth: HTTP create 201 một data envelope, read pagination/meta/links/detail parity; read role-before-input/privacy-404 và create raw-ID/actor/Service order giữ nguyên; expected create message-only errors, read codes/framework fields và Auth session semantics PASS.
-- Tài chính/persistence: Booking COMPLETED, server Booking/BookingService snapshots, BCMath/exact decimal, chống client override, unique booking/code classification và atomic header/items rollback được regression gates xác nhận. SQLite controlled conflict tests không phải InnoDB race proof.
-- Model/logging: explicit Invoice/ROOM validation trước respective insert, default/save không global hook, SERVICE blank/whitespace/'0' giữ behavior. Owned SQLite connection tests xác nhận outer commit mới success log, rollback/no stale callback; không suy toàn bộ Calculator logging/optional DI đã chuyển.
-- Frontend: một invoiceService.js cho năm operations, factory/public exports giữ contract, invoiceApi/shared Axios và invoiceMapper phân trách nhiệm; signal/rejection identity/Auth account-vs-role/version/network/timeout/cancel/no replay và malformed-success regression PASS.
-- Docs/skills: five validators/link/content/source fidelity PASS; dated histories không thay thành evidence mới. 02C.3 acceptance không suy parent đã được owner nghiệm thu.
-
-### CRUD và phạm vi đóng parent
-
-Repository/Mapper/Validator/InvoiceService/frontend invoiceService là các lớp/module theo domain, có thể bổ sung update/delete ở đó khi use case được duyệt. Raw/typed Request DTO vẫn tách theo input contract. Backend InvoiceQueryService hiện giữ read orchestration riêng, không tự tạo thêm một service cho từng CRUD method.
-
-Hiện đã refactor Create và Read; Update payment thuộc UC36 còn backlog workflow/API/UI, Delete chưa có route/use case được chốt trong phạm vi này. Không thêm update/delete chỉ để đủ CRUD. Đóng INV-ARCH-02 chỉ xác nhận refactor các luồng đã triển khai; không đóng UC36, QA browser/MySQL hoặc toàn bộ Invoice business roadmap.
-
-### Tests Executed — evidence mới của audit
-
-- Safety: phpunit.xml SQLite :memory:, bootstrap/cache/config.php không tồn tại; process chạy PHP tests/route inventory được đặt APP_ENV=testing, DB_CONNECTION=sqlite, DB_DATABASE=:memory:, DB_URL rỗng. Test guards xác nhận effective config; commit gate named in-memory connection riêng/production manager và cleanup owned resources. Không truy cập/reset/reseed MySQL development.
-- Focused php artisan test --filter='InvoiceValidatorTest|InvoiceMapperTest|InvoiceRepositoryTest|InvoiceCreationTest|InvoiceCreationCommitTest|HostInvoiceApiTest|InvoiceQueryApiTest|InvoiceAttributeMappingTest': 114 PASS, 718 assertions, exit 0, 3.22s.
-- Full php artisan test: 492 PASS, 2860 assertions, exit 0, 23.82s, không skip. Bao gồm Auth/Profile/Review regressions và toàn bộ Invoice read/create/Model/rollback/commit logging.
-- Frontend node --experimental-test-module-mocks --test tests/*.test.js: 75/75 PASS, fail/cancel/skip 0, exit 0. Shared Axios module mock/adapter fixtures giữ đúng giới hạn module tests, không real browser/backend.
-- npm run lint: PASS, exit 0; 0 errors, 3 react-refresh/only-export-components warnings tại badge.jsx/button.jsx/sidebar.jsx giữ baseline.
-- npm run build -- --outDir ../.agent-workspace/tv3/inv-arch-02-audit/build: PASS, exit 0, 3316 modules transformed; JS chunk 1078.77 kB/gzip 303.68 kB, cảnh báo >500 kB; outDir cô lập ngoài project không tự empty. Không đổi chunk config để che warning.
-- php artisan route:list --path=api: 16 routes, exit 0. Billing có 4 GET/1 POST hiện hành, không tự thêm update/delete.
-- Original Skill Creator quick_validate.py: 5/5 PASS, mỗi process exit 0. Reuse PyYAML tooling isolated từ evidence 02C.3 bằng child PYTHONPATH/PYTHONUTF8/PYTHONDONTWRITEBYTECODE; không sửa project/global deps hoặc validator gốc.
-- Markdown local links/anchors: 54/54 PASS trước cập nhật audit; source/inventory/ordering/groups/removed-file references reviewed và static assertions PASS. Sau cập nhật checklist chạy lại link/anchor/scope/whitespace checks.
-- Git status trước/sau, baseline 536 source/config/doc entries; final hash audit chỉ checklist thay đổi, 0 new/deleted source; AGENTS.md và toàn bộ application code/tests/dependencies/skills/metadata giữ nguyên. UTF-8/BOM/trailing whitespace và git diff --check PASS; existing line-ending conversion warnings không phải whitespace failure.
-- Evidence: .agent-workspace/tv3/inv-arch-02-audit/{baseline.json,source-head.txt,git-before.txt,checklist-before.txt,backend-focused.log,backend-full.log,frontend-node.log,frontend-lint.log,frontend-build.log,routes.log,skill-validators.log,static-audit.log,scope-audit.log} và build/. Không stage/commit/push, không standalone plan/result file.
-
-### Acceptance criteria
-
-| AC | Kết quả và evidence |
-|---|---|
-| AUD-01 — Inventory/phân tầng/DI/DTO/Mapper | PASS — static chain/source review, DI/repository/mapper tests |
-| AUD-02 — API/Auth/error order/response parity | PASS — exact HTTP/read-create tests và Auth/Profile full suite |
-| AUD-03 — Snapshot/money/uniqueness/atomicity | PASS — calculator/snapshot/client override/duplicate/rollback regression |
-| AUD-04 — Model groups/SERVICE/logging | PASS — explicit-group/no-query/mutation/negative-control/outer-commit tests |
-| AUD-05 — Frontend service/API/mapper/Auth/signal/errors | PASS — 75 Node tests và production compile |
-| AUD-06 — Full tests/lint/build/5 validators | PASS — native exits 0; lint/build warnings ghi riêng |
-| AUD-07 — Checklist/evidence/scope | PASS — chỉ checklist đổi so 536-entry baseline, links/whitespace/history đúng nguồn |
-| AUD-08 — Closure scope và backlog tách rõ | PASS — chỉ refactor read/create; CRUD/domain files không đồng nghĩa đủ UC36/Delete/browser/MySQL |
-
-### Risks / unresolved và đề nghị đóng parent
-
-Browser/real backend Auth/UI duplicate-click/stale/unmount/auth-change/responsive và MySQL concurrency NOT VERIFIED, tiếp tục thuộc QA gates riêng. Calculator legacy begin/end INFO + optional DI và 9 security advisories/6 baseline packages từ 02B.1 chưa sửa; audit này không chạy lại Composer audit hoặc claim clean security/production readiness. Runtime mapping adapter vẫn pilot như kiến trúc ghi nhận. Không phát hiện regression/blocker trong các gates đã duyệt của parent refactor.
-
-Recommended Next Task: owner nghiệm thu INV-ARCH-02-AUDIT và đóng parent INV-ARCH-02 (cùng parent checkpoint tổng hợp tương ứng) trong phạm vi refactor. Giữ backlog UC36/Review/QA và các giới hạn trên mở. Dừng, không tự triển khai task tiếp theo.
-
-
-## INV-ARCH-02 — owner nghiệm thu audit và đóng parent
-
-Owner nghiệm thu INV-ARCH-02-AUDIT và yêu cầu đóng parent INV-ARCH-02 trực tiếp trên chat. Trạng thái hiện hành: audit ACCEPTED; parent INV-ARCH-02 CLOSED / ACCEPTED, bao gồm các checkpoint tổng hợp 02B/02C và toàn bộ subtasks đã nghiệm thu. Các PENDING/TODO/đề nghị đóng trong sections lịch sử phía trên được thay bởi xác nhận này, không sửa lại counts/lệnh/evidence cũ.
-
-| Đóng | Phần | Trạng thái hiện hành |
-|---|---|---|
-| [x] | INV-ARCH-01 — Invoice read Backend/Frontend | CLOSED / ACCEPTED |
-| [x] | INV-ARCH-02A | ACCEPTED |
-| [x] | 02B.1 / 02B.2A / 02B.2B / 02B.3 và parent 02B | CLOSED / ACCEPTED |
-| [x] | 02C.1 / 02C.2 / 02C.3 và parent 02C | CLOSED / ACCEPTED |
-| [x] | INV-ARCH-02-AUDIT | PASS / ACCEPTED |
-| [x] | INV-ARCH-02 — Invoice create refactor parent | CLOSED / ACCEPTED |
-| [ ] | UC36 — cập nhật thanh toán | Backlog nghiệp vụ, chưa có workflow/API/UI được nghiệm thu |
-| [ ] | REV-ARCH-01 / REV-ARCH-02 | TODO / NOT VERIFIED |
-| [ ] | QA-ARCH-01 và browser/MySQL gates | Còn mở / NOT VERIFIED |
-
-Phạm vi đóng là refactor Invoice read/create đã triển khai, không chứng nhận đủ CRUD hoặc hoàn tất mọi Invoice use case. Update/delete có thể bổ sung trong các file domain chung khi có nghiệp vụ/scope được duyệt; không tự tạo cho đủ CRUD. Calculator legacy logging/optional DI, baseline security advisories và các QA giới hạn giữ nguyên như audit.
-
-Lượt closure chỉ cập nhật checklist; giữ nguyên AGENTS.md, application code/tests/dependencies/architecture/local rules/skills/metadata. Git diff --check, UTF-8/whitespace và scope/hash trước–sau xác nhận chỉ file này thay đổi. Không chạy lại application suites: evidence audit 492 PHP tests/2860 assertions, 75 Node tests, lint/build/5 validators PASS thuộc lượt INV-ARCH-02-AUDIT, không phải execution mới của closure. Không stage/commit/push; không tạo file plan/result hoặc bắt đầu task tiếp theo. Dừng sau báo cáo checklist trên chat.
-
-
-## VAL-STRUCT-01 — gom Validation/Validators về một root Validators
-
-Owner duyệt đúng 3 file di chuyển và 17 file sửa theo Mini Plan. Status IMPLEMENTED / TECHNICAL PASS; Owner Acceptance PENDING. Parent INV-ARCH-02 và audit giữ CLOSED / ACCEPTED; task này không mở lại Invoice parent hoặc bổ sung nghiệp vụ CRUD.
-
-### Cấu trúc và files changed
-
-Root hiện hành backend/app/Validators/:
-- AttributeValidator.php: shared adapter gọi Symfony Validator, không HTTP/container coupling trong DTO/Model.
-- Constraints/CanonicalPositiveId.php và CanonicalPositiveIdValidator.php: custom attribute/validator cùng namespace để Symfony validatedBy() tự resolve.
-- Invoice/{InvoiceValidator,InvoiceCalculationValidator}.php và Review/ReviewCreationValidator.php: domain validators giữ trách nhiệm hiện hữu.
-
-3 file di chuyển có đổi namespace (logic nguyên vẹn):
-- backend/app/Validation/AttributeValidator.php -> backend/app/Validators/AttributeValidator.php
-- backend/app/Validation/Constraints/CanonicalPositiveId.php -> backend/app/Validators/Constraints/CanonicalPositiveId.php
-- backend/app/Validation/Constraints/CanonicalPositiveIdValidator.php -> backend/app/Validators/Constraints/CanonicalPositiveIdValidator.php
-
-Old root app/Validation đã hết file và bỏ directory rỗng; không alias/forwarder hoặc namespace runtime cũ. tests/Feature/Validation giữ tên test category, không phải application root thứ hai. AppServiceProvider/engine bindings không đổi.
-
-8 consumer/test files sửa:
-- backend/app/Validators/Invoice/InvoiceValidator.php: import AttributeValidator mới.
-- backend/app/DTOs/Invoice/Requests/InvoiceCreateInputRequest.php và InvoiceIdInputRequest.php: import CanonicalPositiveId mới.
-- backend/tests/Unit/InvoiceValidatorTest.php: adapter FQCN mới.
-- backend/tests/Feature/Validation/AttributeValidatorTest.php: import mới và 2 test methods cho class autoload/container/no aliases, validatedBy/new namespace/actual engine/DTO Reflection attributes.
-- backend/tests/Feature/Validation/InvoiceAttributeMappingTest.php: import adapter mới.
-- backend/tests/Feature/Invoice/InvoiceCreationTest.php và InvoiceCreationCommitTest.php: test-only validator dependencies theo FQCN mới.
-
-9 guidance/checklist files sửa:
-- ARCHITECTURE.md: cây Validators/AttributeValidator/Constraints/domain và link/namespace mới, giải thích convention/DI không đổi; cập nhật trạng thái parent đã owner đóng.
-- docs/ai-frontend-development-guide.md: internal namespace không làm đổi transport/API/Auth/UI; parent closure hiện hành.
-- AGENTS.local.md: canonical shared/domain root, no alias/forwarder/provider dư; giữ closed parent và task mới nghiệm thu riêng.
-- .agents/skills/stayhub-task-planning/SKILL.md: cấu trúc dùng khi lập task/import/autoload verification.
-- .agents/skills/stayhub-laravel/SKILL.md: common/domain/constraint namespaces, validatedBy và no-scripts autoload.
-- .agents/skills/stayhub-react/SKILL.md: PHP namespace move không kéo theo đổi API/frontend modules.
-- .agents/skills/stayhub-database/SKILL.md: validation infrastructure/domain grouping không thay schema/persistence/transaction.
-- .agents/skills/stayhub-verification/SKILL.md: moved-class/negative alias/engine resolution/scope checks.
-- docs/TV3/TV3_CHECKLIST.md: implementation/evidence/AC/acceptance pending, lịch sử giữ nguồn.
-
-Tổng 3 namespace-only moves + 17 modified (8 consumers/tests + 9 guidance/checklist). Không thêm class; AGENTS.md, Models/Symfony built-in attributes, Controller/Service/Repository/Mapper/Common/Exceptions/routes/Auth/Frontend/Review validator/Composer source và skill metadata giữ baseline. Chỉ refresh generated vendor autoload qua lệnh đã duyệt.
-
-### Tests Executed và evidence
-
-- composer dump-autoload --no-scripts: PASS, exit 0, optimized autoload 6974 classes. Không chạy setup/migration/discovery hooks, không update/install dependencies hoặc đổi composer.json/lock.
-- Focused php artisan test --filter='AttributeValidatorTest|InvoiceAttributeMappingTest|InvoiceValidatorTest|InvoiceCalculationServiceTest|InvoiceRepositoryTest|InvoiceCreationTest|InvoiceCreationCommitTest|HostInvoiceApiTest|InvoiceQueryApiTest': 126 PASS, 866 assertions, exit 0, 4.22s.
-- Full php artisan test: 494 PASS, 2875 assertions, exit 0, 24.39s, không skip. Includes Auth/Profile/Review, raw IDs/field errors/DTO/Model groups/no-query/SERVICE/financial/rollback/commit-log regressions. 2 new tests/15 assertions so với audit parent, không đổi test expectations nghiệp vụ cũ.
-- node --experimental-test-module-mocks --test tests/*.test.js: 75/75 PASS, fail/cancel/skip 0, exit 0. Frontend không sửa nên lint/build NOT RUN, không relabel kết quả audit cũ là vừa chạy.
-- New namespace tests: 3 classes autoload; old namespace class_exists false (không alias); container resolve adapter; Constraint.validatedBy bằng đúng new validator FQCN; explicit group valid/invalid ID đi qua Symfony engine; Reflection đọc đúng DTO attribute class, messages/semantics giữ nguyên.
-- PHP syntax 11/11 files moved/sửa PASS. php artisan route:list --path=api: 16 routes, exit 0. Original Skill Creator validators 5/5 PASS/exit 0, reuse isolated PyYAML tooling từ evidence 02C.3 qua child env; không sửa global/project dependencies hoặc validator gốc.
-- Content/source/link checks: 3 moved classes exact before bodies sau normalize newline và thay duy nhất namespace; no old imports/instantiations trong app/tests; old FQCN strings chỉ trong explicit negative-alias test và dated history. Local Markdown paths/anchors 54/54 PASS; active architecture tree/link đã đổi đúng root.
-- DB safety: không cached config; PHP test process APP_ENV=testing, DB_CONNECTION=sqlite, DB_DATABASE=:memory:, DB_URL rỗng; test effective-config guards/owned commit connection giữ nguyên. Không truy cập/reset/reseed development MySQL.
-- Baseline 536 source/config/doc entries: .agent-workspace/tv3/val-struct-01/baseline.json. Final scope 3 moves + 17 modifications, no unexpected source; AGENTS.md/code ngoài scope/metadata/dependencies nguyên vẹn. UTF-8/BOM/trailing whitespace, links và git diff --check PASS, existing line-ending conversion warnings ghi riêng không phải test failure.
-- Evidence cùng thư mục: source-head.txt, git-before.txt, original moved-class snapshots, autoload.log, backend-focused.log, backend-full.log, frontend-node.log, routes.log, skill-validators.log, content-links-audit.log và scope-audit.log. Không standalone plan/result, không stage/commit/push, không tự triển khai task tiếp theo.
-
-### Acceptance criteria
-
-| AC | Kết quả và evidence |
-|---|---|
-| VAL-01 — một root Validators, không legacy aliases | PASS — old root absent, inventory/import scan và negative alias tests |
-| VAL-02 — autoload/DI/Symfony resolution | PASS — no-scripts autoload + container/validatedBy/actual engine tests |
-| VAL-03 — attributes/groups/messages/ID semantics | PASS — moved bodies namespace-only, raw ID/DTO Reflection/Model groups/field errors regression |
-| VAL-04 — API/Auth/nghiệp vụ/persistence/logging | PASS — 494 backend tests, exact HTTP/SERVICE/financial/rollback/afterCommit gates |
-| VAL-05 — Full Backend/Node/5 validators | PASS — 494 PHP/2875 assertions, 75 Node, 5 validators và native exits 0 |
-| VAL-06 — docs/scope/AGENTS.md | PASS — 9 docs/skills/checklist đồng bộ, 54 links, 536-entry scope hash và metadata preserved |
-
-### Risks / deviations và next action
-
-Không thay business logic hoặc API/Auth contract. Browser/MySQL concurrency/real UI/Auth integration vẫn NOT VERIFIED, không được đóng bằng namespace refactor. Calculator legacy logging/optional DI và security advisories từ 02B.1 giữ nguyên; không chạy lại Composer audit. Symfony mapping vẫn runtime adapter/pilot như kiến trúc ghi nhận.
-
-Recommended Next Task: owner nghiệm thu VAL-STRUCT-01; sau đó chọn task nghiệp vụ/refactor tiếp theo qua Mini Plan riêng (Review/UC36/QA còn mở). INV-ARCH-02 vẫn CLOSED / ACCEPTED. Dừng sau Task Result trên chat.
+| Đóng | UC | Triển khai | Refactor luồng hiện hữu | Kiểm chứng chức năng | Nghiệm thu UC | Đã có và bước còn lại |
+| --- | --- | --- | --- | --- | --- | --- |
+| [ ] | UC15 · Hóa đơn cá nhân | IMPLEMENTED | ACCEPTED | PARTIAL | PENDING | API/UI Customer list/detail. Còn browser/XAMPP và xác nhận theo INV-01, QA-02. |
+| [ ] | UC16 · Tạo đánh giá | IMPLEMENTED | ACCEPTED | PARTIAL | PENDING | E3–E4 xác minh API và modal với fixture. Còn điểm vào Booking detail thật và QA-03. |
+| [ ] | UC17 · Chat với chatbot | TODO | Chưa có luồng hoàn chỉnh để chốt | NOT VERIFIED | PENDING | Còn luồng gửi câu hỏi, provider, lưu message và UI theo CHAT-01..05. |
+| [ ] | UC34 · Tạo Invoice từ Booking | IMPLEMENTED | ACCEPTED | PARTIAL | PENDING | Transaction, snapshot, uniqueness, rollback và UI Host. Còn QA-02 trên luồng Booking thật. |
+| [ ] | UC35 · Chi tiết Invoice Host | IMPLEMENTED | ACCEPTED | PARTIAL | PENDING | API/UI, ownership và items. Còn QA-02 trình duyệt. |
+| [ ] | UC36 · Cập nhật trạng thái thanh toán | TODO | Chưa có luồng hoàn chỉnh để chốt | NOT VERIFIED | PENDING | Chốt transition, role, paid_at, refund và retry trước INV-03. |
+| [ ] | UC37 · Quản lý Invoice | IMPLEMENTED | ACCEPTED | PARTIAL | PENDING | Host list, lọc, tìm kiếm và phân trang. Còn QA-02 và UC36 riêng. |
+| [ ] | UC38 · Host xem đánh giá | IMPLEMENTED | ACCEPTED | PARTIAL | PENDING | API list/summary và Edge/XAMPP theo E4. Còn nghiệm thu chức năng trong REV-03. |
+| [ ] | UC39 · Host Dashboard | TODO | Chưa có luồng hoàn chỉnh để chốt | NOT VERIFIED | PENDING | Khung điều hướng. Cần KPI, query, API và UI theo RPT-01, HOST-01/02. |
+| [ ] | UC44 · Admin xem toàn bộ booking | TODO | Chưa có luồng hoàn chỉnh để chốt | NOT VERIFIED | PENDING | Cần contract Booking TV2 và ADM-02. |
+| [ ] | UC45 · Admin xem toàn bộ Invoice | TODO | Chưa có luồng hoàn chỉnh để chốt | NOT VERIFIED | PENDING | Cần API/UI, bộ lọc, phân trang và quyền theo ADM-01. |
+| [ ] | UC47 · Admin Dashboard | TODO | Chưa có luồng hoàn chỉnh để chốt | NOT VERIFIED | PENDING | Có UI khung. Cần query và lát API/UI theo RPT-01, ADM-03/04. |
+| [ ] | UC48 · Thống kê hệ thống | TODO | Chưa có luồng hoàn chỉnh để chốt | NOT VERIFIED | PENDING | Cần định nghĩa kỳ, chỉ tiêu và số liệu test độc lập theo ADM-05/06. |
+| [ ] | UC56 · Tạo dòng Invoice | IMPLEMENTED | ACCEPTED | PARTIAL | PENDING | ROOM/SERVICE lưu nguyên tử cùng header. Còn nghiệm thu theo INV-01, QA-02. |
+| [ ] | UC57 · Tính subtotal | IMPLEMENTED | ACCEPTED | PARTIAL | PENDING | Decimal chính xác từ snapshot, có unit/feature test. Còn xác nhận AC INV-01. |
+| [ ] | UC58 · Tính tổng thanh toán | IMPLEMENTED | ACCEPTED | PARTIAL | PENDING | Calculator có discount/extra_fee, workflow hiện dùng 0. Còn đối chiếu AC INV-01. |
+| [ ] | UC60 · Điều kiện Review | IMPLEMENTED | ACCEPTED | PARTIAL | PENDING | Booking COMPLETED, ownership và một Review mỗi Booking. Còn luồng TV2 và race trên XAMPP. |
+| [ ] | UC61 · Ngữ cảnh nội bộ cho chatbot | TODO | Chưa có luồng hoàn chỉnh để chốt | NOT VERIFIED | PENDING | Cần allowlist, quyền dữ liệu và context service theo CHAT-01/02. |
+
+### Công việc ngoài số đếm UC
+
+| Đóng | Hạng mục | Trạng thái | Việc còn lại |
+| --- | --- | --- | --- |
+| [ ] | FAQ Management | TODO / NOT VERIFIED / PENDING | FAQ-01 list/create, FAQ-02 sửa/xóa, test quyền và UI. |
+| [ ] | Chat History | TODO / NOT VERIFIED / PENDING | CHAT-03 list/detail, ownership và phân trang. Chốt retention ở CHAT-01. |
+
+## Checkpoint refactor
+
+### Invoice và nền tảng áp dụng cho TV3
+
+| Đóng | Checkpoint | Phạm vi | Kiểm chứng và nghiệm thu |
+| --- | --- | --- | --- |
+| [ ] | SETUP-01 | Checklist, local rules và 5 skill | PASS thiết lập. Acceptance riêng chưa ghi nhận. |
+| [x] | CLEANUP-ARCH-01 | Dọn thư mục rỗng và chuyển CredentialRules về Validators/Auth | TECHNICAL PASS E18 / ACCEPTED theo chat ngày2026-11-16.12app dirs/datadir test đã dọn; source/hash/route/autoload đạt. SQL dev chưa xác nhận;55offline fingerprints giữ baseline. UC21 chưa triển khai. |
+| [ ] | HANDOVER-BASELINE-01 | Đóng gói baseline và kiểm tra trước PR vào dev | TECHNICAL PASS / PACKAGE VERIFIED E19; chờ nghiệm thu gói. Chưa stage/commit/push/merge, GitHub mergeability/CI/review/merge approval vẫn PENDING. UC21 chưa triển khai. |
+| [x] | ARCH-01 | Quy chuẩn Repository/DTO/Mapper và ranh giới nhóm | PASS kiểm tra tài liệu/skill, ACCEPTED. |
+| [x] | API-01 | Common response và exception rendering cho Invoice/Review | PASS E1, ACCEPTED. |
+| [x] | FE-01 | Shared ID/error và Invoice/Review API modules | PASS E1, ACCEPTED. |
+| [x] | INV-ARCH-01A | Nền Repository, DTO và mapper cho Invoice read | PASS E1, ACCEPTED. |
+| [x] | INV-ARCH-01B | Nối Controller/QueryService của Invoice read | PASS E1, ACCEPTED. |
+| [x] | INV-ARCH-01C | Invoice Frontend mapper và consumer đọc | PASS E1, ACCEPTED. |
+| [x] | INV-ARCH-01 | Tổng hợp refactor read | CLOSED / ACCEPTED trong phạm vi read. |
+| [x] | STRUCT-01A | Gom DTO, mapper, repository theo domain và wiring lúc đổi tên | PASS E1, ACCEPTED. |
+| [x] | STRUCT-01B | Common/exception naming và tương thích Resource | PASS E1, ACCEPTED. |
+| [x] | STRUCT-01C | Đồng bộ quy ước tên, tài liệu và skill | PASS E1, ACCEPTED. |
+| [x] | SIMPLIFY-01A | Concrete InvoiceRepository và constructor DI | PASS E1, ACCEPTED. |
+| [x] | SIMPLIFY-01B | Invoice read Validator, Response DTO và Common | PASS E1, ACCEPTED. |
+| [x] | SIMPLIFY-01C | Đồng bộ quy chuẩn đơn giản hóa | PASS E1, ACCEPTED. |
+| [x] | INV-ARCH-02A | Repository cho Invoice create và phân loại xung đột | PASS E2, ACCEPTED. |
+| [x] | INV-ARCH-02B.1 | Symfony Validator/ObjectMapper và adapter ban đầu | PASS chức năng E2, ACCEPTED. Composer audit lịch sử có finding. |
+| [x] | INV-ARCH-02B.2A | Raw DTO, canonical ID, gom Validator/Mapper | PASS E2, ACCEPTED. |
+| [x] | INV-ARCH-02B.2B | Validator thuần, typed input, required DI và mapping ghi | PASS E2, ACCEPTED. |
+| [x] | INV-ARCH-02B.3 | Explicit validation groups cho Invoice/ROOM trước khi lưu | PASS E2, ACCEPTED. |
+| [x] | INV-ARCH-02C.1 | Nối HTTP create DTO/Common, bỏ Invoice Resources đã chuyển | PASS E2, ACCEPTED. |
+| [x] | INV-ARCH-02C.2 | Gom create/read vào một Invoice service | PASS E2, ACCEPTED. |
+| [x] | INV-ARCH-02C.3 | Đồng bộ kiến trúc, local rules và skill | PASS E2, ACCEPTED. |
+| [x] | INV-ARCH-02-AUDIT | Audit read/create, quyền, snapshot, rollback, outer commit | PASS E2, ACCEPTED. |
+| [x] | INV-ARCH-02 | Tổng hợp create, gồm parent 02B và 02C | CLOSED / ACCEPTED trong phạm vi read/create. |
+| [ ] | VAL-STRUCT-01 | Thống nhất root Validators và Symfony constraints | PASS E2. Acceptance riêng PENDING theo hồ sơ nguồn. |
+| [ ] | MAP-01 | Chuẩn Symfony và gate resolve InvoiceMapper qua Laravel container | Source có test resolve và có hồi quy ở lượt sau. Hồ sơ riêng giữ PARTIAL đến khi đối chiếu đủ bằng chứng lượt test quyền/full suite được yêu cầu. |
+| [x] | MAP-02 | Symfony ObjectMapper cho Invoice header | ACCEPTED trên chat. Mapper và regression header có trong source. |
+
+### Review
+
+| Đóng | Checkpoint | Phạm vi | Kiểm chứng và nghiệm thu |
+| --- | --- | --- | --- |
+| [x] | REV-ARCH-01A | Nền tảng refactor Review read | PASS / ACCEPTED trên chat. |
+| [x] | REV-ARCH-01B | Bước tách lớp luồng đọc | PASS / ACCEPTED trên chat. |
+| [x] | REV-ARCH-01C.1 | Chuyển luồng đọc theo mốc C.1 | PASS / ACCEPTED trên chat. |
+| [x] | REV-ARCH-01C.2 | Chuyển luồng đọc theo mốc C.2 | PASS / ACCEPTED trên chat. |
+| [x] | REV-ARCH-02A | Tách lớp của luồng tạo Review | PASS / ACCEPTED trên chat. |
+| [x] | MAP-03 | Symfony ObjectMapper cho Review Response DTOs | PASS / ACCEPTED trên chat. |
+| [x] | REV-ARCH-02B | Typed Request cho POST và Customer Response DTO/Common | PASS / ACCEPTED trên chat. |
+| [x] | [REV-ARCH-AUDIT](#rev-arch-audit) | Rà 4 API, quyền, mapping, transaction và parity | PASS E3, ACCEPTED trên chat. |
+| [x] | REV-ARCH-01 và REV-ARCH-02 | Phạm vi refactor Backend đã audit | ACCEPTED theo nghiệm thu audit. |
+| [x] | [REV-FE-01](#rev-fe-01) | Mapper/service, ba màn hình đọc và modal tạo | PASS E4, ACCEPTED trên chat trước lượt cập nhật tài liệu. |
+
+### Auth và Profile liên module
+
+| Đóng | Checkpoint | Phạm vi | Kiểm chứng và nghiệm thu |
+| --- | --- | --- | --- |
+| [x] | AUTH-01 / AUTH-ARCH-01A–01D | Response user chung, validation/DTO đăng nhập và đăng ký, persistence đăng ký qua Repository | ACCEPTED theo chuỗi nghiệm thu trên chat. Các số test lịch sử riêng chưa đối chiếu lại trong lượt cập nhật checklist này. |
+| [x] | AUTH-ARCH-AUDIT | Rà Auth sau 01A–01D | ACCEPTED trên chat. Profile mutations được tách thành các checkpoint dưới đây. |
+| [x] | PROFILE-ARCH-01A | PATCH /api/profile qua Validator, typed Request DTO và Repository | PASS E5, ACCEPTED trên chat. Giữ PATCH omission/null, whitelist, quyền và projection 13 trường. |
+| [x] | PROFILE-ARCH-01B | PATCH /api/profile/password qua Validator, DTO và Repository | PASS E5, ACCEPTED trên chat. Giữ phiên thao tác và từ chối phiên có fingerprint cũ. |
+| [x] | PROFILE-ARCH-01C | POST /api/profile/avatar qua Validator, DTO và Repository | PASS E5, ACCEPTED trên chat. Có kiểm chứng stream riêng tư, ownership, rollback và cleanup. |
+| [x] | PROFILE-ARCH-FIX-01 | F01 vòng đời avatar theo outer commit/rollback và F02 hai bộ đếm throttle riêng | PASS E5, ACCEPTED trên chat. Phạm vi bản sửa 4 file. |
+| [x] | PROFILE-ARCH-AUDIT | Rà đủ 5 endpoint UC03 và tái kiểm sau FIX-01 | TECHNICAL PASS E5, ACCEPTED trên chat sau lượt chốt audit. F01/F02 CLOSED. |
+
+### Catalog liên module
+
+Các dòng sau ghi nhận checkpoint người dùng giao và đã nghiệm thu. Chúng thể hiện phần refactor/triển khai được giao trên module TV1, cùng các phụ thuộc dữ liệu cần bảo toàn.
+
+| Đóng | Checkpoint | Phạm vi | Kiểm chứng và việc còn lại |
+| --- | --- | --- | --- |
+| [x] | CAT-ARCH-00 | Kiểm kê Public Property Catalog | ACCEPTED trên chat, làm baseline cho các bước chuẩn hóa Public. |
+| [x] | CAT-ARCH-01, CAT-ARCH-02A, CAT-ARCH-02B | Chuẩn hóa Public Property list/detail UC04–UC05 | ACCEPTED trên chat. Source có Validator, DTO, Repository và Symfony ObjectMapper. |
+| [x] | CAT-ARCH-AUDIT | Audit Public Catalog sau 02A–02B | ACCEPTED trên chat. Số test lịch sử riêng chưa đối chiếu lại trong lượt cập nhật này. |
+| [x] | CAT-MGMT-00 | Kiểm kê API Catalog quản lý TV1 | ACCEPTED trên chat, làm baseline UC18. |
+| [x] | CAT-MGMT-01–05 | Host list/detail/create/update/status cơ sở thuộc mình | ACCEPTED trên chat. Giữ trạng thái tạo ACTIVE và ma trận trạng thái đã duyệt. |
+| [x] | CAT-MGMT-06A | Upload ảnh cơ sở, giới hạn file và storage link | ACCEPTED trên chat sau khi kiểm tra cleanup và đóng MGMT06A-AC5. |
+| [x] | CAT-MGMT-06B | Chọn ảnh đại diện và xóa ảnh cơ sở | ACCEPTED trên chat. Typed input dùng hậu tố Request theo quyết định đã duyệt. |
+| [x] | CAT-MGMT-AUDIT | Audit UC18 sau 01–06B | ACCEPTED trên chat. E6 ghi nguồn kiểm chứng lịch sử. |
+| [x] | CAT-RT-00 | Kiểm kê Host quản lý loại phòng UC19 | ACCEPTED trên chat, làm baseline các slice loại phòng. |
+| [x] | CAT-RT-01–03 | Host list/create/update loại phòng của cơ sở thuộc mình | ACCEPTED theo các mốc chốt trên chat. Đã có API/UI thật. |
+| [x] | CAT-RT-04A, CAT-RT-04B | Chốt quy tắc và triển khai xóa loại phòng chưa có phòng tham chiếu | ACCEPTED trên chat. Có dependency Room và kiểm tra FK/concurrency trong audit. |
+| [x] | CAT-RT-AUDIT | Audit UC19 sau 01–04B | PASS E6, ACCEPTED trên chat. |
+| [x] | CAT-ROOM-00 | Kiểm kê Host quản lý từng phòng UC20 | TECHNICAL PASS E7 / ACCEPTED trên chat. Có dữ liệu Room và projection Public, chưa có 5 route Host Room dự kiến hoặc UI quản lý từng phòng. |
+| [x] | CAT-ROOM-01 | Host xem danh sách phòng của cơ sở thuộc mình | IMPLEMENTED / TECHNICAL PASS E8 / ACCEPTED trên chat. Có API và UI thật. Phạm vi 16 file cùng bổ sung 1 dòng trong AuthenticationTest đã được duyệt. |
+| [x] | CAT-ROOM-02 | Host đọc chi tiết phòng thuộc mình | IMPLEMENTED / TECHNICAL PASS E9 / ACCEPTED trên chat. Có API, trang React và liên kết từ list. Đúng phạm vi 18 file đã duyệt. |
+| [x] | CAT-ROOM-03 | Host tạo phòng thuộc cơ sở mình | IMPLEMENTED / TECHNICAL PASS E10 / ACCEPTED trên chat. API/UI thật, trạng thái đầu ACTIVE, đúng phạm vi 15 file đã duyệt. |
+| [x] | CAT-ROOM-04 | Host cập nhật phòng thuộc cơ sở mình | IMPLEMENTED / TECHNICAL PASS E11 / ACCEPTED trên chat. API/UI thật, giữ trạng thái và Booking snapshot, đúng phạm vi 15 file. |
+| [x] | CAT-ROOM-05A | Chốt ma trận trạng thái Room và ràng buộc Booking/Maintenance | SPECIFIED / TECHNICAL PASS E12 / ACCEPTED trên chat. Đúng 2 file tài liệu; API/UI status được triển khai sau ở05B, race workflow Booking/Maintenance thật vẫn chưa kiểm chứng. |
+| [x] | CAT-ROOM-05B | Host đổi trạng thái phòng theo đặc tả 05A | IMPLEMENTED / TECHNICAL PASS E13 / ACCEPTED trên chat. API/UI thật, đúng16file, giữ matrix05A và baseline. |
+| [x] | CAT-ROOM-AUDIT | Rà UC20 sau01–05B | TECHNICAL PASS E16, ACCEPTED theo chat ngày2026-11-16; F01 CLOSED. E14 giữ lịch sử PARTIAL; không đồng nghĩa đóng toàn UC20. |
+| [x] | CAT-ROOM-FIX-01 | Sửa F01 file multipart trùng key khi tạo phòng | TECHNICAL PASS E15, ACCEPTED theo chat ngày2026-11-16. F01 CLOSED sau tái kiểm E16; đúng3file đã duyệt, contract giữ nguyên. |
+| [ ] | CAT-ROOM-IMG-00 | Kiểm kê Host quản lý ảnh phòng UC21 | PLANNED / APPROVAL PENDING; bàn giao phần tiếp theo cho TV1. P1 chưa thực hiện; chưa kiểm kê runtime, chưa chạy test hoặc triển khai UC21. |
+
+## Backlog và phụ thuộc trực tiếp
+
+Các mục dưới đây là chức năng/QA/tích hợp tiếp theo của TV3 hoặc phối hợp owner; không phải danh sách refactor còn nợ của các luồng đã được nghiệm thu.
+
+| Task | Việc còn lại | Phụ thuộc hoặc quyết định |
+| --- | --- | --- |
+| INV-01 | Đối chiếu UC15/34/35/37/56/57/58 với tiêu chí chức năng | Billing API, Booking snapshot và bằng chứng E1–E2 |
+| INV-02, INV-03 | Chốt payment transition, rồi triển khai API/UI UC36 | Quyền, trạng thái đích, paid_at, refund, retry/409 |
+| REV-01 | Nghiệm thu điểm vào tạo Review từ Booking detail thật | Endpoint và contract Booking detail TV2 |
+| REV-02 | Chốt nghiệm thu chức năng phần Public Review đã chạy trong E4 | Public Property detail đã nối và được dùng trong E4 |
+| REV-03 | Nghiệm thu list/summary và quyền Host/Customer | Edge/XAMPP của E4 đã cover các màn hình đọc |
+| RPT-01 | Chốt KPI, kỳ, timezone và refund | Quyết định Invoice/payment |
+| HOST-01, HOST-02 | Query, API và UI Dashboard Host | RPT-01 và ownership Property |
+| ADM-01 | Admin Invoice list/filter/detail theo contract được duyệt | Invoice read và quyền Admin |
+| ADM-02 | Admin Booking list/API/UI | Contract Booking TV2 |
+| ADM-03, ADM-04 | Query KPI và Dashboard Admin API/UI | RPT-01 |
+| ADM-05, ADM-06 | Query thống kê và giao diện theo kỳ | RPT-01, metric/dimension được duyệt |
+| FAQ-01, FAQ-02 | Admin list/create và sửa/xóa FAQ | Contract, quyền Admin, lỗi và trạng thái UI |
+| CHAT-01, CHAT-02 | Chốt provider/retention/allowlist rồi xây context | Quyền truy cập dữ liệu Catalog, dịch vụ và FAQ |
+| CHAT-03 | Session và lịch sử chat, list/detail API/UI | CHAT-01 và schema history |
+| CHAT-04, CHAT-05 | Provider adapter, chat API/UI và lưu message | CHAT-01/02/03, test double và gate live riêng |
+| QA-01 | Dùng harness và schema cô lập phù hợp từng luồng | E4 có runtime Review. Chuẩn bị fixture riêng cho Invoice, Admin và Chat. |
+| QA-02 | Invoice create/read/payment qua luồng thật | INV-01, INV-03 và QA-01 |
+| QA-03 | Review chức năng từ Booking thật và race hai kết nối MySQL | E4, REV-01 và fixture Booking/Review |
+| QA-04, QA-05 | Gate Reporting/Admin và FAQ/Chat/History | Các API/UI tương ứng và quyền theo actor |
+
+## Bằng chứng kiểm thử theo lượt
+
+Các kết quả dưới đây thuộc lượt triển khai và audit gốc. Số PHP được ghi theo tests/assertions. Lượt cập nhật tài liệu dùng các bằng chứng này để đối chiếu.
+
+### E1 · Nền tảng và Invoice read
+
+| Lượt | Kiểm chứng đã ghi |
+| --- | --- |
+| API-01 | SQLite focused 12/93, full 419/2.159. Renderer, exception và parity Auth. |
+| FE-01 | Node focused 10, full 59. Adapter/Auth, lint/build. |
+| INV-ARCH-01A | SQLite focused 9/63, Invoice 84/353, full 428/2.222. |
+| STRUCT-01A | SQLite full 428/2.222, syntax và namespace. |
+| STRUCT-01B | SQLite API focused 16/117, full 432/2.246. |
+| STRUCT-01C | 5 skill validators, liên kết và scope. |
+| INV-ARCH-01B | SQLite read HTTP focused 31/191, full 440/2.373 sau khi đổi assertion quyền theo scope duyệt. |
+| INV-ARCH-01C | Node focused 8, full 67, lint/build. |
+| SIMPLIFY-01A | SQLite full 440/2.371, container và repository/query. |
+| SIMPLIFY-01B | SQLite full 446/2.447, Node 67. |
+| SIMPLIFY-01C | Skill validators, nội dung, liên kết và scope. |
+
+### E2 · Invoice create và namespace validation
+
+| Lượt | Kiểm chứng đã ghi |
+| --- | --- |
+| INV-ARCH-02A | SQLite 452/2.489, Node 67. |
+| INV-ARCH-02B.1 | SQLite 463/2.569, Node 67. Composer audit lúc đó exit 1 với 9 advisory trên 6 package baseline. |
+| INV-ARCH-02B.2A | SQLite 466/2.679, Node 67. |
+| INV-ARCH-02B.2B | SQLite 480/2.738, Node 67. |
+| INV-ARCH-02B.3 | SQLite 489/2.816, Node 67. |
+| INV-ARCH-02C.1 | SQLite 492/2.860, Node 75. |
+| INV-ARCH-02C.2 | Node focused 16, full 75, lint/build đạt cùng các warning đã ghi. |
+| INV-ARCH-02C.3 | 5 skill validators và 54 liên kết/anchor. |
+| INV-ARCH-02-AUDIT | SQLite focused 114/718, full 492/2.860. Node 75, lint/build và 5 validators. Lượt này chưa chạy browser hoặc MySQL concurrency cho Invoice. |
+| VAL-STRUCT-01 | SQLite focused 126/866, full 494/2.875. Node 75, 5 validators và 54 liên kết/anchor. |
+
+Nguồn E1–E2 là Task Result/checklist lịch sử và log local khi có, ví dụ .agent-workspace/tv3/inv-arch-02-audit/backend-full.log và .agent-workspace/tv3/val-struct-01/backend-full.log.
+Security audit ghi nhận kết quả theo dependency lúc chạy. Chưa có bằng chứng xử lý các finding trong phạm vi này.
+
+### REV-ARCH-AUDIT
+
+**E3 · Audit 2026-11-14 · TECHNICAL PASS / ACCEPTED.**
+
+- Laravel đã nhận đủ 4 route Review. Kiểm tra role/ownership, privacy, summary, pagination và parity POST–GET theo contract.
+- SQLite: 201 tests/1.285 assertions tập trung Review, full 606 tests/3.806 assertions. Đã kiểm tra rollback, log outer commit và mapping phát sinh 0 query trên dữ liệu đã eager-load.
+- Node 75, lint và build PASS. Lint có 3 cảnh báo Fast Refresh, build có cảnh báo chunk và outDir của lượt audit.
+- Nguồn là Task Result REV-ARCH-AUDIT và checklist của lượt đó. E4 bổ sung bằng chứng browser/XAMPP sau audit.
+
+### REV-FE-01
+
+**E4 · Kiểm chứng 2026-11-15 · TECHNICAL PASS / ACCEPTED.**
+
+- Node full 133 tests, gồm 8 tests mới. Laravel SQLite in-memory full 828 tests/5.311 assertions. Lint/build PASS với 3 cảnh báo Fast Refresh và cảnh báo chunk lớn.
+- Edge + XAMPP, 390/768/1440 px. Public/Host/Customer dùng API thật. Đã kiểm tra phân trang, lọc, rỗng, quyền và response muộn. Lượt chạy lại tắt mock Public Catalog bằng Vite tạm.
+- Modal React dùng fixture Booking COMPLETED và session Customer thật. Double-submit chỉ gửi một POST, API trả 201, lần gửi lại trả 409 và XAMPP lưu đúng một Review.
+- Diff đúng 10 file, đã dọn 2 schema fixture và đóng các cổng tạm. Nguồn là Task Result REV-FE-01 và log stayhub-rev-fe-*.txt trong TEMP.
+- Điểm vào từ trang Booking thật vẫn phụ thuộc TV2. Race tạo Review trên MySQL còn ở QA-03.
+
+### E5 · Profile và chốt audit sau F01/F02
+
+Các số PHPUnit dưới đây thuộc PHP XAMPP chạy SQLite in-memory theo guard của suite. Các ca API, transaction và file được ghi riêng là XAMPP MariaDB/InnoDB.
+
+| Lượt | Bằng chứng đã ghi trong Task Result |
+| --- | --- |
+| PROFILE-ARCH-01A | Focused 254/1.553, full 830/5.321. Node 133, lint/build PASS. XAMPP API và React Customer lưu/reload/auth sync, Host/Admin smoke test. |
+| PROFILE-ARCH-01B | Focused 255/1.558, full 831/5.326. Node 133, lint/build PASS. XAMPP kiểm hash, rollback, throttle và hai phiên Sanctum. |
+| PROFILE-ARCH-01C | Focused 256/1.573, full 832/5.341. Node 133, lint/build PASS. Disk thật, stream/header, thay ảnh, rollback, ownership và cleanup. Hai fixture ảnh của lượt cấu hình storage ban đầu đã được đối chiếu hash và dọn, lượt cuối dùng storage riêng. |
+| PROFILE-ARCH-AUDIT ban đầu | PARTIAL. Tái hiện F01 outer rollback làm pointer trỏ ảnh cũ đã bị xóa và F02 dùng chung bộ đếm upload/password. |
+| PROFILE-ARCH-FIX-01 | Regression mới tái hiện lỗi trước sửa. Sau sửa focused 268/1.687, full 844/5.455. Node 133, lint/build PASS. InnoDB/disk thật kiểm outer commit/rollback, savepoint, nhiều upload, log sau commit, cleanup lỗi và hai bộ đếm độc lập. |
+| PROFILE-ARCH-AUDIT chốt | Chạy lại 12 tests/114 assertions và runtime XAMPP/Edge ba role ở 390/1440 px. Kế thừa full suite 844/5.455 và Frontend gates của FIX-01 đã nghiệm thu. Hash 631 đường dẫn khớp, 0 file source/tài liệu đổi, fixture/schema/storage/Edge/cổng tạm đã dọn. TECHNICAL PASS / ACCEPTED. |
+
+Nguồn là Task Results trên chat và log stayhub-profile01a-*, stayhub-profile01b-*, stayhub-profile01c-*, stayhub-profile-audit-*, stayhub-profile-fix01-* và stayhub-profile-audit-close-* trong TEMP.
+Các warning nền được ghi nhận gồm 3 Fast Refresh, build chunk lớn và git diff --check toàn repo báo whitespace ở backend/app/Services/Invoice/InvoiceService.php dòng 91. Những cảnh báo này nằm ngoài phạm vi bản sửa Profile.
+
+### E6 · Audit Catalog đã nghiệm thu
+
+- CAT-MGMT-AUDIT có log full SQLite 787 tests/4.958 assertions. Nguồn local stayhub-mgmt-audit-* trong TEMP và Task Result đã nghiệm thu trên chat.
+- CAT-RT-AUDIT có log full SQLite 828 tests/5.311 assertions và Node 125 PASS. Log Edge ghi luồng UC19 thật list/create/update/delete, 409, 419, quyền Host, response muộn và các viewport. Nguồn stayhub-rt-audit-* trong TEMP.
+- Các số trên là bằng chứng của lượt audit gốc, chưa chạy lại ở lượt cập nhật checklist. Checkpoint được nghiệm thu theo phạm vi đã giao. UC20 được kiểm kê riêng ở E7.
+
+### E7 · CAT-ROOM-00 kiểm kê UC20
+
+**Kiểm chứng 2026-11-15 · TECHNICAL PASS / ACCEPTED trên chat.**
+
+Task kiểm kê đã thực hiện theo Mini Plan được duyệt. Bảng dưới ghi baseline UC20 tại CAT-ROOM-00, trước triển khai. E8 cập nhật phần list Room đã bổ sung sau đó.
+
+| Phạm vi | Hiện trạng đã xác nhận | Việc còn lại |
+| --- | --- | --- |
+| GET /api/host/properties/{property}/rooms | Chưa đăng ký route, fixture runtime trả 404 | API và UI list phòng thuộc cơ sở của Host |
+| POST /api/host/properties/{property}/rooms | Chưa đăng ký route, fixture runtime trả 404 | Chốt input, trạng thái đầu, room_number và RoomType, rồi triển khai tạo phòng |
+| GET /api/host/rooms/{room} | Chưa đăng ký route, fixture runtime trả 404 | API/UI chi tiết phòng có ownership |
+| PUT /api/host/rooms/{room} | Chưa đăng ký route, fixture runtime trả 404 | Chốt semantics cập nhật, giá/sức chứa, quan hệ và tác động Booking |
+| PATCH /api/host/rooms/{room}/status | Chưa đăng ký route, fixture runtime trả 404 | Chốt ma trận trạng thái và ràng buộc Booking/Maintenance |
+| Host UI | Có Property detail, quản lý RoomType UC19 và ảnh Property. Chưa có route/component/service riêng cho Host quản lý từng Room | Điểm vào, list/detail/form và các trạng thái UI theo từng checkpoint |
+| Public UI/API | GET /api/public/properties/{property} trả rooms. RoomsList/RoomCard hiển thị phòng ACTIVE với RoomType cùng Property | Bảo toàn projection khi triển khai mutation Host |
+| GET /api/public/rooms/{room} | Có trong tài liệu dự kiến, chưa đăng ký route thực tế, runtime trả 404 | Xem xét riêng trong phạm vi Public Room, không tính là API đã có của UC20 |
+
+**Schema và phụ thuộc đã kiểm tra**
+
+- Kết nối ứng dụng thực tế dùng XAMPP MariaDB 10.4.32, schema stayhub, bảng nghiệp vụ InnoDB. Kiểm tra metadata và số đếm bằng transaction READ ONLY. Có 13 Room, 0 RoomType lệch Property, 0 nhóm trùng số phòng trong cùng cơ sở, 0 sức chứa không dương/giá âm và 0 liên kết Room/Booking mồ côi trong các truy vấn đã chạy.
+- rooms có room_number VARCHAR(50), name VARCHAR(255), description nullable, capacity INT, price_per_night DECIMAL(12,2), status ACTIVE/MAINTENANCE/INACTIVE với default DB ACTIVE. Trạng thái đầu và chuyển trạng thái nghiệp vụ UC20 còn cần chốt.
+- Có PK id và index FK property_id/room_type_id. Chưa có unique index (property_id, room_number) hoặc FK tổng hợp buộc RoomType cùng Property. Fixture riêng xác nhận DB chấp nhận số phòng trùng và liên kết RoomType lệch Property. Public query hiện loại Room lệch Property.
+- bookings.room_id dùng RESTRICT khi xóa. rooms.property_id và rooms.room_type_id dùng CASCADE khi xóa cha. RoomImage, RoomAmenity và Maintenance tham chiếu Room với CASCADE. API xóa RoomType hiện có bảo vệ Room tham chiếu bằng 409.
+- Booking lưu price_per_night, room_total và guest_count. Thay giá/sức chứa Room trong transaction fixture giữ nguyên các giá trị đó của Booking. InvoiceCalculation dùng giá Booking đã lưu. Ownership Invoice đi qua Booking → Room → Property, nên việc cho phép chuyển Room sang Property khác phải được quyết định trước khi có mutation tương ứng.
+- BookingService phía React có lời gọi endpoint và nhánh mock bật bằng DEV cùng VITE_ENABLE_BOOKING_MOCKS. Route Backend Booking hiện chưa được tích hợp. Contract availability, Booking đang hiệu lực và Maintenance cần phối hợp TV2.
+- UC21 ảnh phòng, UC22 tiện nghi và UC23 bảo trì là các phạm vi phụ thuộc riêng. Các model/quan hệ đã tồn tại.
+
+**Kiểm thử của lượt CAT-ROOM-00**
+
+| Cổng | Kết quả và giới hạn |
+| --- | --- |
+| Catalog regression | PHP XAMPP chạy SQLite in-memory, 213 tests/1.399 assertions PASS. Đây là các test Catalog đang có của UC04–UC05, UC18 và UC19. |
+| Backend full suite | 844 tests/5.455 assertions PASS trên SQLite in-memory. |
+| Frontend gates | Node 133 PASS, lint/build PASS. Có 3 warning Fast Refresh và warning chunk lớn. |
+| XAMPP API/Edge | Dùng schema fixture riêng. Public projection giữ giá decimal string, lọc ACTIVE/cùng Property và trạng thái rỗng. Host Property/RoomType own 200, guest 401, Customer/Admin 403, Host khác privacy 404. RoomType có Room tham chiếu trả 409. |
+| Browser UI | Public và Host Property detail chạy API thật với mock Catalog tắt, kiểm viewport 390/1440 px. Xác nhận UI RoomType hiện có và thiếu điểm vào quản lý từng Room. |
+| Data probes | Fixture riêng xác nhận thiếu unique room_number, Booking snapshot giữ nguyên và Booking FK từ chối xóa Room. Transaction probe đã rollback. |
+| Baseline và cleanup | Source được đối chiếu hash trước/sau. Chỉ checklist này được cập nhật theo scope. Schema fixture, storage/Edge tạm và các cổng test được dọn sau chạy. |
+
+Nguồn local gồm stayhub-cat-room00-routes.json, stayhub-cat-room00-schema.txt, stayhub-cat-room00-catalog.txt, stayhub-cat-room00-full.txt, stayhub-cat-room00-node.txt, stayhub-cat-room00-lint.txt, stayhub-cat-room00-build.txt và stayhub-cat-room00-xampp.txt trong TEMP.
+Runtime dùng DB 3306, origin 5173, Backend tạm 8157, Vite tạm 5174 và Edge CDP 9231.
+
+| AC | Trạng thái | Bằng chứng |
+| --- | --- | --- |
+| CATROOM00-AC1 | PASS | Ma trận route/API/UI có source và runtime. Các route dự kiến còn thiếu được ghi rõ. |
+| CATROOM00-AC2 | PASS | Metadata schema thực tế, ownership và Room–Property–RoomType đã đối chiếu. |
+| CATROOM00-AC3 | PASS | Liệt kê Booking/Invoice/Maintenance dependencies và quyết định còn mở. |
+| CATROOM00-AC4 | PASS | Các API/UI đang có được kiểm chứng trên XAMPP và Edge. |
+| CATROOM00-AC5 | PASS | Regression đạt, scope được kiểm soát và cleanup hoàn tất. |
+| CATROOM00-AC6 | PASS | Đề xuất thứ tự triển khai và checkpoint đầu tiên dưới đây. |
+
+**Thứ tự đề xuất**
+
+1. CAT-ROOM-01 — Host xem danh sách phòng của cơ sở thuộc mình, gồm API và UI.
+2. Host đọc chi tiết phòng thuộc mình.
+3. Host tạo phòng, sau khi chốt uniqueness số phòng, trạng thái đầu và RoomType cùng Property.
+4. Host cập nhật phòng, sau khi chốt field được sửa và bảo toàn Booking/Invoice.
+5. Host đổi trạng thái, sau khi chốt ma trận và ràng buộc Booking/Maintenance.
+6. Audit UC20 theo các checkpoint được giao và đã tích hợp.
+
+Mỗi bước tiếp theo cần Mini Plan và nghiệm thu riêng. Tại CAT-ROOM-00, UC20 chức năng chưa triển khai. CAT-ROOM-00 đã được người dùng nghiệm thu trên chat. Phần list Room được triển khai sau đó tại E8.
+
+### E8 · CAT-ROOM-01 Host xem danh sách phòng
+
+**Kiểm chứng 2026-11-15 · IMPLEMENTED / TECHNICAL PASS / ACCEPTED trên chat.**
+
+- GET /api/host/properties/{property}/rooms dùng Sanctum/account.active, role HOST và ownership Property. Cơ sở thuộc Host được đọc ở cả ACTIVE/INACTIVE/PENDING/BLOCKED. Danh sách gồm ba trạng thái Room, sắp room_number rồi id, empty data là mảng rỗng.
+- Projection gồm id, room_number, name, description nullable, capacity, price_per_night dạng decimal string, status và room_type gồm id/name hoặc null. RoomType lệch Property được trả null, Room thuộc cơ sở vẫn hiển thị. Tham số query bổ sung trả 422, ID không canonical hoặc cơ sở khác chủ trả 404.
+- Các lớp được bổ sung gồm HostRoomController, HostRoomListQuery, HostRoomQueryService, HostRoomResponse và các method Catalog Validator/Repository/Mapper. Mapper resolve qua container và Symfony ObjectMapper, phát sinh 0 query. Query eager-load RoomType có số query giữ ổn định khi tăng dữ liệu.
+- React dùng hostRoomApi → hostRoomService → hostRoomMapper, gắn HostRoomList vào HostPropertyDetailPage. Có loading/empty/error/retry, nhãn trạng thái tiếng Việt, giá VND, marker RoomType không hợp lệ và bỏ response muộn sau chuyển Property/unmount.
+- Phạm vi gốc 16 file được triển khai. Người dùng duyệt bổ sung đúng 1 dòng trong backend/tests/Feature/Auth/AuthenticationTest.php, đổi số route được bảo vệ từ 27 thành 28 sau khi full suite phát hiện mismatch. Các assertion auth/account.active và thứ tự middleware tiếp tục hoạt động.
+
+| Cổng | Kết quả thực tế |
+| --- | --- |
+| Test mới SQLite | HostRoomListTest 14 tests/70 assertions PASS, gồm quyền, trạng thái, exact contract, query precedence, canonical ID, privacy, order, eager loading và Symfony mapping. |
+| Test mới XAMPP MariaDB | HostRoomListTest 14 tests/70 assertions PASS trong schema riêng có guard và SELECT DATABASE(). Schema đã được dọn. |
+| Catalog regression | 227 tests/1.469 assertions PASS bằng PHP XAMPP với SQLite in-memory. |
+| Backend full suite cuối | 858 tests/5.527 assertions PASS với SQLite in-memory sau dòng test bổ sung được duyệt. Lượt đầu có 1 failure do đếm 27/28 route, được ghi riêng trong log. |
+| Frontend Node | 138 PASS, gồm 5 test mới cho transport, ID, projection, decimal/null, response lỗi, HTTP và cancellation. |
+| Frontend lint/build | PASS sau khi chuyển reset loading của retry vào event handler. Lint còn 3 warning Fast Refresh nền, build có warning chunk lớn. |
+| Edge/XAMPP API | Sanctum thật, own list 200, guest 401, Customer/Admin 403, Host khác 404, query 422, empty, ba trạng thái Room và RoomType lệch Property. |
+| Edge/React UI | Có dữ liệu thật từ API, nhãn/giá và 1440/768/390 px. Kiểm retry bằng một response 500 được fault-inject sau request thật. Response phòng thực tế bị giữ lại, sau đó chuyển Property qua React Router và release, danh sách cơ sở mới vẫn đúng. |
+| Baseline/cleanup | Hash đối chiếu đúng 17 file được duyệt, các file còn lại khớp baseline. Schema, storage/Edge tạm và cổng kiểm thử đã được dọn. |
+
+Nguồn local gồm stayhub-cat-room01-mysql-tests.txt, stayhub-cat-room01-catalog.txt, stayhub-cat-room01-full.txt (lượt đầu), stayhub-cat-room01-full-final.txt, stayhub-cat-room01-node.txt, stayhub-cat-room01-lint.txt, stayhub-cat-room01-build.txt và stayhub-cat-room01-xampp.txt trong TEMP.
+XAMPP MariaDB dùng cổng 3306. Runtime dùng origin 5173, Backend 8157, Vite 5174 và Edge CDP 9231.
+
+| AC | Trạng thái | Bằng chứng |
+| --- | --- | --- |
+| CATROOM01-AC1 | PASS | Exact API contract, thứ tự, rỗng và projection đạt trên SQLite/MariaDB. |
+| CATROOM01-AC2 | PASS | Role/account/ownership, privacy 404 và RoomType lệch Property đạt. |
+| CATROOM01-AC3 | PASS | Validator/DTO/Query/Repository/Mapper, container/Symfony và eager loading được test. |
+| CATROOM01-AC4 | PASS | React API thật, retry, responsive và response muộn được kiểm chứng. |
+| CATROOM01-AC5 | PASS | Test MariaDB, Catalog/full Backend và Frontend gates đạt. |
+| CATROOM01-AC6 | PASS | Đúng scope 16 file và 1 dòng test bổ sung đã duyệt, checklist và cleanup hoàn tất. |
+
+UC20 đã nghiệm thu phần list Room CAT-ROOM-01 và chi tiết phòng CAT-ROOM-02 ở E9.
+
+### E9 · CAT-ROOM-02 Host đọc chi tiết phòng
+
+**Kiểm chứng 2026-11-15 · IMPLEMENTED / TECHNICAL PASS / ACCEPTED trên chat.**
+
+- GET /api/host/rooms/{room} dùng Sanctum/account.active, role HOST và scope Room → Property → host_id. Hỗ trợ ba trạng thái Room và bốn trạng thái Property. Guest 401, role/account không hợp lệ 403, ID không canonical/phòng không tồn tại/khác chủ 404 với cùng thông báo Không tìm thấy phòng. Query bổ sung trả 422.
+- Response success/message/data tái sử dụng 8 trường HostRoomResponse của list, bổ sung property {id,name,status}, images là URL array và amenities {id,name,status:boolean}. RoomType lệch Property trả null. Giá giữ decimal string.
+- Gallery sắp is_primary giảm dần rồi id, URL đi qua PublicImageUrl để loại đường dẫn riêng tư/URL không hợp lệ. Tiện nghi được gán gồm cả status=false, sắp name rồi id. Quan hệ rỗng trả mảng rỗng.
+- Backend dùng HostRoomDetailQuery/HostRoomDetailResponse và các method trong Controller/Validator/QueryService/Repository/Mapper hiện có. Mapper delegate cả hai DTO qua Symfony, phát sinh 0 query. QueryService eager-load đủ bốn relation với số query giữ ổn định, tối đa 5 trong test.
+- React có liên kết Xem chi tiết từ list và route /host/rooms/:roomId trong Host guard. API/service/mapper dùng lại chuẩn hóa trường cơ bản. Trang có cơ sở, giá/trạng thái, mô tả, gallery, tiện nghi, loading/error/missing/retry và back link. Component được key theo user/room, hủy và bỏ response muộn khi điều hướng.
+- Phạm vi đúng 18 file. AuthenticationTest cập nhật 28 → 29 route được bảo vệ như đã có trong Mini Plan được duyệt. Contract list CAT-ROOM-01 được giữ và có regression.
+
+| Cổng | Kết quả thực tế |
+| --- | --- |
+| List/detail tập trung SQLite | 29 tests/139 assertions PASS, gồm 15 test mới detail và 14 test list baseline. |
+| Detail trên XAMPP MariaDB | 15 tests/69 assertions PASS trong schema riêng có guard và SELECT DATABASE(). Schema đã dọn. |
+| Catalog regression | 242 tests/1.538 assertions PASS bằng PHP XAMPP với SQLite in-memory. |
+| Backend full suite | 873 tests/5.598 assertions PASS trên SQLite in-memory. |
+| Frontend Node | 142 PASS. hostRoomService có 9 test gồm 5 test list baseline và 4 test detail mới. |
+| Frontend lint/build | PASS với 3 warning Fast Refresh nền và warning build chunk lớn. |
+| XAMPP API | Exact detail contract, thứ tự gallery/amenity, decimal/null, private URL bị loại, 401/403/404/422 và quyền Host khác được kiểm chứng bằng phiên Sanctum thật. |
+| Edge/React | List → detail → Property, mở trực tiếp, gallery hiển thị bytes ảnh từ storage tạm, tiện nghi inactive, empty/missing và marker RoomType lệch Property. Có viewport 1440/768/390 px. |
+| Retry/late response | GET 500 được fault-inject sau response thật để kiểm retry. Response detail thật bị giữ, sau đó chuyển Room qua React Router và release, dữ liệu Room mới vẫn đúng. |
+| Browser rerun | Lượt đầu harness kỳ vọng role khác được chuyển URL, trong khi ProtectedRoute hiện hiển thị Khu vực giới hạn. Đã sửa assertion harness theo baseline và chạy lại toàn bộ lượt browser đạt. |
+| Scope và cleanup | Đúng 18 file, các hash ngoài scope khớp baseline. PHPUnit schema và runtime schema, storage/Edge tạm, ảnh fixture và cổng test đã dọn. |
+
+Nguồn local gồm stayhub-cat-room02-focused.txt, stayhub-cat-room02-mysql-tests.txt, stayhub-cat-room02-catalog.txt, stayhub-cat-room02-full.txt, stayhub-cat-room02-node.txt, stayhub-cat-room02-lint.txt, stayhub-cat-room02-build.txt, stayhub-cat-room02-xampp.txt (lượt đầu) và stayhub-cat-room02-xampp-final.txt trong TEMP.
+Runtime dùng MariaDB 3306, origin 5173, Backend 8157, Vite 5174 và Edge CDP 9231. Ảnh fixture được phục vụ từ storage riêng của tiến trình kiểm thử.
+
+| AC | Trạng thái | Bằng chứng |
+| --- | --- | --- |
+| CATROOM02-AC1 | PASS | Exact contract, rỗng và thứ tự gallery/amenity đạt trên SQLite/MariaDB. |
+| CATROOM02-AC2 | PASS | Role/account/ownership, privacy 404, RoomType và URL ảnh được kiểm chứng. |
+| CATROOM02-AC3 | PASS | Phân tầng, container/Symfony, mapper 0 query và eager loading ổn định. |
+| CATROOM02-AC4 | PASS | Điểm vào từ list, direct URL, back link, responsive, retry và response muộn đạt trên Edge. |
+| CATROOM02-AC5 | PASS | Test MariaDB và regression Backend/Frontend đạt. |
+| CATROOM02-AC6 | PASS | Scope 18 file, checklist và cleanup được kiểm tra. |
+
+UC20 đã nghiệm thu list/detail/create/update CAT-ROOM-01–04; chưa đóng toàn bộ UC20. CAT-ROOM-05A đã nghiệm thu E12; CAT-ROOM-05B đã nghiệm thu E13; CAT-ROOM-AUDIT đã thực hiện E14, PARTIAL do F01.
+
+### E10 · CAT-ROOM-03 Host tạo phòng
+
+**Kiểm chứng 2026-11-15 · IMPLEMENTED / TECHNICAL PASS / ACCEPTED trên chat.**
+
+- POST /api/host/properties/{property}/rooms dùng Sanctum/account.active, role HOST và ownership Property. Không lọc trạng thái Property: ACTIVE/INACTIVE/PENDING/BLOCKED đều được tạo phòng. Room luôn được server gán ACTIVE; client không được gửi status.
+- Chỉ nhận room_type_id, room_number, name, description, capacity, price_per_night. ID loại phòng/sức chứa kiểm tra raw canonical integer trước khi cast; capacity 1..2147483647. Số phòng/name trim, tối đa 50/255 ký tự; description tùy chọn/null, chuỗi rỗng thành null, tối đa 10000 ký tự. Giá là decimal string dương tối đa 9999999999.99, nhiều nhất hai chữ số lẻ và chuẩn hóa bằng BigDecimal thành hai chữ số, không dùng float.
+- 201 giữ envelope success/message/data và 8 trường HostRoomResponse qua CatalogMapper/Symfony hiện có. Guest 401, role/account 403, Property sai/khác chủ 404, CSRF 419, raw input/query/file/trường thừa 422. RoomType thiếu/khác Property trả 422 cùng errors.room_type_id. Trùng số phòng cùng Property trả 409; Property khác được dùng cùng số.
+- Transaction khóa theo thứ tự Property → RoomType → current locking read số phòng → insert → map trước commit. Kiểm trùng tuân theo collation utf8mb4_unicode_ci của MySQL; khóa Property tuần tự hóa các writer cùng workflow. Chưa có unique index và không thay migration/schema: direct SQL không được bảo vệ bởi quy ước này, writer Room sau phải dùng cùng khóa hoặc cần task constraint riêng.
+- Room tạo mới chưa có ảnh/tiện nghi. Không đổi Room cũ hoặc Booking price snapshot. Mapping/insert thất bại rollback; success log chỉ chạy sau outer commit, không log khi rollback.
+- React mở form ngay trong HostRoomList, lấy RoomType qua service có sẵn; có trạng thái tải/rỗng/lỗi, field errors 422, conflict 409 và chống submit trùng bằng ref. Tạo thành công refresh list và liên kết detail. Khi timeout/5xx hoặc response không hợp lệ sau POST, khóa form, cho GET kiểm tra danh sách trước khi người dùng chủ động cho phép gửi lại; không tự replay POST.
+- Phạm vi đúng 15 file đã duyệt, gồm 4 file tạo và 11 file sửa. AuthenticationTest chỉ đổi đúng một dòng 29 → 30 protected routes. Không sửa mapper Backend, Model, migration, shared Axios, AppRouter hoặc ARCHITECTURE.md.
+
+| Cổng | Kết quả thực tế |
+| --- | --- |
+| Create tập trung SQLite | 51 tests/220 assertions PASS. |
+| Create trên XAMPP MariaDB 10.4.32 | 51 tests/220 assertions PASS trên schema riêng có guard và SELECT DATABASE(); đã dọn schema. |
+| Catalog regression | 293 tests/1.758 assertions PASS bằng PHP XAMPP với SQLite in-memory. |
+| Backend full suite | 924 tests/5.820 assertions PASS trên SQLite in-memory; không gọi đây là full suite MySQL. |
+| Frontend Node | 146 tests PASS; hostRoomService có 13 test, gồm 4 test create mới. |
+| Frontend lint/build | Exit 0; còn 3 warning Fast Refresh nền và warning chunk lớn của build. |
+| XAMPP API/Edge | Origin 5173, Backend 8157, Vite 5174, MariaDB 3306, CDP 9231. Phiên Sanctum/CSRF thật; 401/403/404/419, duplicate 409, field 422, POST 201 và detail ACTIVE đạt. Dataset tổng hợp được tạo riêng, không phải dữ liệu Booking production. |
+| Pending/responsive | Giữ phản hồi POST 201 đã commit, submit hai lần chỉ có một POST. Form không tràn ngang tại 1440/768/390 px; empty RoomType khóa submit. |
+| Mất phản hồi sau commit | Harness thay response 201 thật bằng 502 có kiểm soát. UI không tự gửi lại; GET reconciliation thấy phòng đã lưu, người dùng cho phép gửi lại mới phát sinh POST và nhận 409, DB chỉ có một row. Đây là fault injection, không phải lỗi server tự phát. |
+| Outer transaction InnoDB | Rollback xóa row và không log; commit giữ row và ghi success đúng sau transaction level 0. |
+| Hai connection độc lập | Quan sát INNODB_LOCK_WAITS thật: create/create khác hoa thường với snapshot cũ trả 201/409; create trước xóa RoomType trả 201/409; xóa RoomType trước create trả 200/422. Không trùng số hoặc tạo orphan. |
+| Scope/baseline/cleanup | Hash ngoài 15 file giữ nguyên; thay đổi Auth test kiểm tra đúng một dòng. Schema PHPUnit/runtime, Edge/storage tạm và cổng test được dọn; dịch vụ nền 3306/8000/5173 giữ nguyên. |
+| Whitespace baseline | Không có lỗi whitespace trong phần Task mới. Global git diff --check còn finding có trước tại InvoiceService.php:91, file được giữ nguyên hash. |
+
+Nguồn local trong TEMP: stayhub-cat-room03-mysql-tests.txt, stayhub-cat-room03-catalog.txt, stayhub-cat-room03-full.txt, stayhub-cat-room03-node.txt, stayhub-cat-room03-lint.txt, stayhub-cat-room03-build.txt, stayhub-cat-room03-xampp.txt và stayhub-cat-room03-final-check.txt. Harness và fixture tạm không thêm vào source repository.
+
+| AC | Trạng thái | Bằng chứng |
+| --- | --- | --- |
+| CATROOM03-AC1 | PASS | POST 201 exact envelope/projection, ACTIVE, decimal/null và validation raw input đạt trên SQLite/MariaDB. |
+| CATROOM03-AC2 | PASS | Auth/role/account/ownership, canonical ID và RoomType cùng Property được kiểm chứng; CSRF thật có 419. |
+| CATROOM03-AC3 | PASS | Conflict CI, rollback/mapping failure, outer commit và ba race với khóa InnoDB thật đạt. Giới hạn uniqueness theo workflow được ghi rõ. |
+| CATROOM03-AC4 | PASS | Form/create → list/detail, duplicate submit, 422/409, empty type, responsive và GET reconciliation sau fault 502 đạt trên Edge. |
+| CATROOM03-AC5 | PASS | Test mới MariaDB và hồi quy Backend/Frontend đạt; số test và engine tách rõ. |
+| CATROOM03-AC6 | PASS | Đúng 15 file, một dòng Auth test, checklist, baseline ngoài scope và cleanup được kiểm tra. |
+
+Người dùng đã nghiệm thu CAT-ROOM-03 trên chat. UC20 còn sửa phòng và quy tắc trạng thái; CAT-ROOM-04 đã triển khai, kiểm chứng và được nghiệm thu tại E11.
+
+### E11 · CAT-ROOM-04 Host cập nhật phòng
+
+**Kiểm chứng 2026-11-15 · IMPLEMENTED / TECHNICAL PASS / ACCEPTED trên chat.**
+
+- PUT /api/host/rooms/{room} dùng Sanctum/account.active, role HOST và ownership Room → Property → host_id. Route ID canonical, giữ thứ tự middleware → role/ID → payload → scope Room/Property → RoomType → duplicate.
+- Body đầy đủ room_type_id, room_number, name, capacity, price_per_night; description tùy chọn, thiếu/null/rỗng thành null. Raw integer, trim, giới hạn và decimal string dùng chung quy tắc create, giữ baseline CAT-ROOM-03. Không nhận query/file/trường ngoài sáu trường.
+- Trả 200 success/message/data với message Cập nhật phòng thành công. và tám trường HostRoomResponse qua CatalogMapper/Symfony hiện có. Room thiếu/khác chủ/ID sai cùng 404 Không tìm thấy phòng.; type thiếu/khác Property 422 errors.room_type_id; trùng số với Room khác cùng Property 409 Cơ sở đã có phòng cùng số.
+- Cho cập nhật cả ba trạng thái Room và bốn trạng thái Property, giữ nguyên status và property_id. RoomType đích bắt buộc cùng Property; có thể sửa liên kết RoomType lệch Property từ dữ liệu cũ. Giá/sức chứa mới áp dụng Catalog; không chặn theo Booking hoặc sửa snapshot/guest_count/trạng thái Booking, Invoice, Maintenance, ảnh và tiện nghi.
+- Transaction lookup Property của Room đã scope, khóa Property → Room → RoomType đích → current locking read duplicate loại trừ chính Room → update → map trước commit. Parent lock chung tuần tự hóa với create/xóa RoomType; duplicate theo collation MySQL. No-op trả 200, không save/đổi updated_at/log. Thay đổi thật chỉ log sau outer commit; persistence/mapping failure rollback.
+- Frontend thêm Sửa thông tin trên trang detail đang có, không thêm route React. Form prefill, tải/retry RoomType, lỗi/rỗng, field 422, conflict 409, guard chống submit trùng, focus và abort/bỏ response muộn khi đổi Room.
+- Kết quả PUT chưa rõ do timeout/network/5xx/malformed success giữ draft và khóa gửi; GET chi tiết đối chiếu trước khi cho phép gửi lại chủ động. Refresh giữ nguyên form đang mount và draft. Thành công tải lại detail; success và lỗi refresh có trạng thái riêng, không tự PUT lại.
+- Phạm vi đúng 15 file đã duyệt (3 tạo, 12 sửa). AuthenticationTest chỉ đổi một dòng 30 → 31 protected routes. Không đổi schema, Model, Backend Mapper/Response DTO, shared Axios, AppRouter, .env hoặc ARCHITECTURE.md.
+
+| Cổng | Kết quả thực tế |
+| --- | --- |
+| Update tập trung SQLite | 55 tests/288 assertions PASS. Có matrix 12 tổ hợp trạng thái, raw inputs, PUT required fields/query/file (kể cả file trùng tên field trong body), no-op không save, privacy/error order, CI duplicate theo engine, type/repair legacy, baseline và rollback. |
+| Update trên XAMPP MariaDB 10.4.32 | 55 tests/288 assertions PASS trên schema riêng có guard và SELECT DATABASE(); schema đã dọn. |
+| Catalog regression | 348 tests/2.046 assertions PASS bằng PHP XAMPP với SQLite in-memory, gồm toàn bộ create/list/detail baseline. |
+| Backend full suite | 979 tests/6.110 assertions PASS trên SQLite in-memory; không gọi đây là full suite MySQL. |
+| Frontend Node | 150 tests PASS; hostRoomService 17 test, giữ 13 test cũ và thêm 4 test update cho CSRF/PUT/projection/errors/no replay. |
+| Lint/build | Exit 0; còn 3 warning Fast Refresh nền và warning build chunk lớn. |
+| Edge/React/API thật | Origin 5173, Backend 8157, Vite 5174, MariaDB 3306, CDP 9231. Guard PUT 401/403/404/419, prefill/cancel, 409/422, double submit chỉ một PUT200, refresh detail/list/public giữ decimal, trả focus về nút sửa và viewport 1440/768/390 đạt. Dataset riêng là fixture tổng hợp, không phải dữ liệu production. |
+| RoomType loading/error/empty | GET RoomType thật được fault-inject thành 500/rỗng để kiểm UI, sau retry quay lại dữ liệu API thật. |
+| Mất response sau commit | Response PUT200 thật sau commit được thay bằng 502 có kiểm soát; UI giữ draft/form đang mount qua GET detail, không auto PUT; người dùng cho phép gửi lại mới có PUT no-op200. |
+| Điều hướng khi pending | Giữ response PUT đã commit rồi điều hướng qua React Router sang Property và Room khác; abort/response muộn không đổi Room mới hoặc hiển thị success cũ. |
+| Outer transaction InnoDB | Rollback giữ nguyên row và không log; outer commit giữ thay đổi và success log chỉ ở transaction level 0. |
+| Hai connection InnoDB | Quan sát lock wait thật với snapshot cũ: update/update CI 200/409; create trước update 201/409; update trước create 200/409; update đổi loại trước delete 200/409; delete type trước update 200/422. Invariant dữ liệu không trùng/orphan, trạng thái được giữ. |
+| Browser rerun | Lượt đầu harness click link detail khi list chưa tải xong. Đã bổ sung wait đúng link, không sửa source cho lỗi harness; chạy lại toàn bộ browser/DB/concurrency đạt. |
+| Scope/baseline/cleanup | Hash ngoài 15 file khớp baseline, Auth test xác minh đúng một dòng. Schema PHPUnit/runtime, Edge/storage/process và cổng fixture được dọn; giữ các PID dịch vụ nền 3306/8000/5173. |
+| Whitespace | Phần task không có lỗi whitespace. Global diff còn finding có trước InvoiceService.php:91, file được giữ nguyên hash. |
+
+Nguồn local trong TEMP: stayhub-cat-room04-focused.txt, stayhub-cat-room04-mysql-tests.txt, stayhub-cat-room04-catalog.txt, stayhub-cat-room04-full.txt, stayhub-cat-room04-node.txt, stayhub-cat-room04-lint.txt, stayhub-cat-room04-build.txt, stayhub-cat-room04-xampp.txt (lượt đầu), stayhub-cat-room04-xampp-final.txt và stayhub-cat-room04-final-check.txt.
+
+| AC | Trạng thái | Bằng chứng |
+| --- | --- | --- |
+| CATROOM04-AC1 | PASS | PUT200 exact contract, raw validation/required fields và no-op không save/đổi updated_at đạt trên SQLite/MariaDB. |
+| CATROOM04-AC2 | PASS | Auth/account/ownership, privacy 404, RoomType và CSRF thực đạt. |
+| CATROOM04-AC3 | PASS | Duplicate exclude self/CI, rollback/mapping failure, outer commit/log và 5 race InnoDB đạt. |
+| CATROOM04-AC4 | PASS | React prefill/save, pending/errors, giữ draft qua GET reconciliation, hủy/response muộn và responsive đạt. |
+| CATROOM04-AC5 | PASS | Booking/Invoice/ảnh/tiện nghi/Maintenance/Room khác/status giữ baseline; regression Backend/Frontend đạt. |
+| CATROOM04-AC6 | PASS | Đúng 15 file, một dòng Auth test, checklist và cleanup được kiểm tra. |
+
+Giới hạn đã duyệt: uniqueness vẫn theo workflow parent lock, direct SQL chưa có unique index; cập nhật cùng Room tuần tự hóa và lần ghi sau cùng thắng, chưa có version/ETag. Không mở rộng quy tắc Booking/availability hoặc trạng thái.
+
+Người dùng đã nghiệm thu CAT-ROOM-04 trên chat. UC20 còn chốt/triển khai trạng thái và audit; CAT-ROOM-05A đã nghiệm thu E12; CAT-ROOM-05B đã nghiệm thu E13; CAT-ROOM-AUDIT đã thực hiện E14, PARTIAL do F01.
+
+### E12 · CAT-ROOM-05A chốt ma trận trạng thái Room
+
+**Kiểm chứng 2026-11-15 · SPECIFIED / TECHNICAL PASS / ACCEPTED trên chat.**
+
+Nguồn quy tắc: [UC20-ROOM-STATUS-RULES.md](../TV1/UC20-ROOM-STATUS-RULES.md). Thực hiện đúng Mini Plan 2 file tài liệu, không sửa source/schema. Đây là nghiệm thu đặc tả và kỹ thuật query/lock trên fixture; không phải triển khai API/UI trạng thái.
+
+- XAMPP thực tế MariaDB 10.4.32, schema stayhub, rooms/bookings/maintenances InnoDB, REPEATABLE-READ. Timezone ứng dụng hiệu lực UTC, DB session SYSTEM. Dev metadata/data chỉ READ ONLY.
+- Dev có 13 Room, 16 Booking, 4 Maintenance. Không thấy khoảng ngày đảo/rỗng/zero trong các truy vấn tổng hợp. Ngày UTC 2026-11-15 có 2 CHECKED_IN đã tới/quá checkout và 1 IN_PROGRESS đã tới/quá end_date; ghi nhận cho owner, không tự sửa hoặc coi hoàn tất.
+- B: CHECKED_IN bất kể ngày; hoặc PENDING/CONFIRMED có ngày sai hoặc checkout > D. Terminal không chặn. M: IN_PROGRESS bất kể ngày; hoặc SCHEDULED có ngày sai hoặc start <= D < end. Lịch tương lai/terminal không chặn mở lại.
+- D lấy một lần theo timezone ứng dụng và bind vào query, khoảng [start,end). CHECKED_IN/IN_PROGRESS quá hạn vẫn cần workflow owner xử lý. MAINTENANCE là khóa vận hành thủ công, không bắt buộc/tự tạo/hủy/hoàn tất Maintenance record.
+
+| Từ → Đến | ACTIVE | INACTIVE | MAINTENANCE |
+| --- | --- | --- | --- |
+| ACTIVE | No-op | Không B | Không B |
+| INACTIVE | Không M | No-op | Không B |
+| MAINTENANCE | Không M | Không B và không M | No-op |
+
+- Contract bàn giao 05B: PATCH /api/host/rooms/{room}/status, chỉ body status đúng enum, Sanctum/account.active/HOST/ownership. 200 tái sử dụng tám trường HostRoomResponse; privacy 404, input 422, B/M 409; no-op không save/log, B ưu tiên khi cùng vướng B/M.
+- Giữ Booking/Invoice/snapshot/guest_count, Maintenance, ảnh/tiện nghi và Room khác. ACTIVE không đồng nghĩa phòng trống. Property gate và baseline create/update không đổi.
+- Quy ước tương lai: Property → Room locks, current locking fact reads, map trước commit, log sau outer commit. Writer Booking/Maintenance phải khóa/recheck cùng quy ước. FK riêng lẻ không bảo đảm business rules.
+
+| Cổng | Kết quả và giới hạn |
+| --- | --- |
+| Predicates MariaDB | 120/120 case PASS: 72 Booking, 48 Maintenance; đủ status và 12 dạng ngày, gồm biên D, quá hạn, zero component/ngày lịch sai trong session legacy riêng. Strict mode rejection được xác nhận và mode fixture được khôi phục. |
+| Matrix MariaDB | 36/36 probe PASS: 9 ô × 4 tổ hợp B/M, expected literal độc lập. Outcome 200/409 là quyết định harness, không phải HTTP API mới. |
+| Invariant/rollback | SQL transaction fixture giữ snapshot/relations/Room khác, no-op/reject không đổi row; rollback phục hồi fixture. Không thay thế test Service/no-op/log/mapper của 05B. |
+| Scope/timezone | Record Room khác không ảnh hưởng, nhiều record đúng EXISTS; UTC/Bangkok qua ngày và bound DATE giữ kết quả khi DB session +07:00. |
+| Hai connection | 4 probe có lock wait InnoDB thật: Booking/Maintenance fact mới không thấy qua snapshot cũ nhưng thấy qua current read; cooperating Booking writer thấy INACTIVE và chặn; writer bỏ recheck vẫn insert sau FK wait. |
+| Negative control | Fixture xác nhận holding Booking trên Room INACTIVE khi bỏ business recheck. Đây là giới hạn được chứng minh, không phải lỗi dữ liệu dev; schema đã dọn. |
+| Catalog regression | 348 tests/2.046 assertions PASS bằng PHP XAMPP với SQLite in-memory. |
+| Backend full suite | 979 tests/6.110 assertions PASS trên SQLite in-memory. |
+| Frontend | Node 150 PASS, lint/build exit 0; còn 3 warning Fast Refresh nền và warning chunk lớn. |
+| Source/route/UI | Registry có GET/PUT host Room và Public Property GET; source giữ list/detail/create/update, chưa có PATCH status hoặc module route Booking/Maintenance. Không mở browser hoặc giả lập endpoint status trong 05A. |
+| Baseline/cleanup | Source hash ngoài 2 tài liệu khớp; fingerprint 10 bảng dev trước/sau khớp. Schema fixture đã DROP, không tạo listener tạm; PID nền 3306/8000/5173 giữ nguyên. |
+| Harness rerun | Metadata dùng @@tx_isolation của MariaDB; race đầu lỗi escape newline IPC, đã sửa harness và chạy lại toàn bộ đạt. Source không đổi cho các lỗi harness. |
+| Whitespace | Hai tài liệu đạt; global diff còn finding cũ InvoiceService.php:91, giữ nguyên source. |
+
+Nguồn local trong TEMP: stayhub-cat-room05a-dev-before.json, stayhub-cat-room05a-dev-after.json, stayhub-cat-room05a-predicate-cases.json, stayhub-cat-room05a-matrix-cases.json, stayhub-cat-room05a-xampp.txt (lượt đầu), stayhub-cat-room05a-xampp-final.txt, stayhub-cat-room05a-catalog.txt, stayhub-cat-room05a-full.txt, stayhub-cat-room05a-node.txt, stayhub-cat-room05a-lint.txt, stayhub-cat-room05a-build.txt, route registry JSON và stayhub-cat-room05a-final-check.txt.
+
+| AC | Trạng thái | Bằng chứng |
+| --- | --- | --- |
+| CATROOM05A-AC1 | PASS | Source/schema/route registry/owner và phần chưa tích hợp đã đối chiếu. |
+| CATROOM05A-AC2 | PASS | Đủ 9 ô, B/M, biên ngày/timezone, no-op và 120 predicate cases. |
+| CATROOM05A-AC3 | PASS | Contract 05B, ownership/error order và invariant được ghi rõ. |
+| CATROOM05A-AC4 | PASS | 36 matrix + 4 lock probes, expected độc lập và negative control; giới hạn concurrency thật được ghi rõ. |
+| CATROOM05A-AC5 | PASS | Regression, đúng 2 tài liệu, checklist, source/data baseline và cleanup. |
+
+Người dùng đã nghiệm thu CAT-ROOM-05A trên chat. Tại mốc05A API/UI status chưa triển khai; kết quả triển khai mới xem E13. Race toàn workflow Booking/Maintenance vẫn NOT VERIFIED. CAT-ROOM-05B đã nghiệm thu E13; CAT-ROOM-AUDIT đã thực hiện E14, PARTIAL do F01; chưa đóng UC20.
+
+### E13 · CAT-ROOM-05B Host đổi trạng thái phòng
+
+**Kiểm chứng 2026-11-15 · IMPLEMENTED / TECHNICAL PASS / ACCEPTED trên chat.**
+
+Giữ [quy tắc 05A đã nghiệm thu](../TV1/UC20-ROOM-STATUS-RULES.md), phần triển khai/evidence mới ở mục 10 của tài liệu đó.
+
+- PATCH /api/host/rooms/{room}/status chỉ nhận status enum, Sanctum/account.active/HOST/ownership. Raw JSON không bị ép thành enum; thiếu/sai/query/file/extra trả422; 401/403/419 baseline; canonical/Room thiếu/khác chủ cùng404. 200 success/message/data, tám trường HostRoomResponse qua Symfony hiện có, legacy RoomType null/decimal giữ nguyên.
+- Transaction Property → Room, current raw Booking/Maintenance facts theo transition, ngày D một lần theo UTC sau locks. Validator thuần dùng checkdate để giữ đúng ngày sai/zero/calendar invalid. B trước M, message409 đúng05A. Không query facts/save/updated_at/log khi no-op.
+- Ghi whitelist status, map trước commit, persistence/map failure rollback; log safe IDs chỉ sau outer commit. Không tự tạo/hủy/hoàn tất Booking/Maintenance, không sửa snapshot/giá/sức chứa/ảnh/tiện nghi hoặc Room khác.
+- React có form trạng thái và xác nhận trên detail; loại trừ với form sửa thông tin. Có field422/global409, pending ref chống submit trùng, cancel/focus, abort/late response guard. Unknown PATCH giữ lựa chọn/form, GET đối chiếu trước gửi lại chủ động, không auto replay.
+- Đúng16file (3 tạo/13 sửa), AuthenticationTest đúng một dòng31→32. Không sửa Model/enum/schema/mapper Backend/ResponseDTO/AppRouter/Axios chung/ARCHITECTURE hoặc module Booking/Maintenance.
+
+| Cổng | Kết quả và giới hạn |
+| --- | --- |
+| Focused SQLite | 177 tests/505 assertions PASS |
+| Focused XAMPP MariaDB10.4.32 | 177 tests/505 assertions PASS trong schema owned có guard/SELECT DATABASE, đã dọn |
+| Matrix/date thật | 36 tổ hợp matrix và120 case ngày/trạng thái qua endpoint/guard production PASS; SQL mode legacy chỉ fixture và khôi phục |
+| No-op/security/invariant | No save/facts/updated_at/log; permissions/privacy/raw enum/query/file/extra, type null/decimal, liên quan giữ baseline |
+| Transaction | Feature failure sau UPDATE và mapper rollback; InnoDB outer rollback/commit, success log chỉ level0 |
+| Catalog SQLite | 525 tests/2.551 assertions PASS |
+| Backend full SQLite | 1.156 tests/6.617 assertions PASS; không gọi full MySQL |
+| Frontend Node/lint/build | Node154 PASS (hostRoomService21, giữ17cũ+4status), lint/build exit0; còn3FastRefresh warning và chunk lớn |
+| Edge/API thật | Session/CSRF 401/403/404/419, B/M409 quá hạn, no-op/mutation200, list/public projection, focus và viewport1440/768/390 đạt |
+| UI422 | Option enum sai được harness thêm vào DOM để kiểm request thật/field error; không phải option production |
+| Double submit/unknown result | Giữ committed PATCH200 chỉ một request; fault200→502 giữ form/lựa chọn qua GET, không autoPATCH, explicit replay no-op200 |
+| Baseline04/late response | PUT sửa thông tin thật vẫn đạt, hai form loại trừ; chuyển Room trong React Router khi response giữ không đổi Room mới/success cũ |
+| Six InnoDB races | Fact Booking/Maintenance mới → actual status409; status → cooperating writer từ chối; status/status đọc state mới và M409; status/update info giữ INACTIVE; negative control bỏ recheck vẫn insert sau FK wait |
+| Dev/source/cleanup | Hash ngoài16file và fingerprint10bảng dev giữ nguyên; schema PHPUnit/runtime, storage/Edge/process/cổng tạm dọn; PID3306/8000/5173 giữ nguyên |
+| Whitespace | Task không có lỗi mới; global diff còn finding nền InvoiceService.php:91, giữ nguyên source |
+
+Runtime fixture: origin5173, Backend8157, Vite5174, CDP9231, DB3306. Source React/API thật với dataset tổng hợp riêng. Phía status trong race dùng Service production; writer Booking/Maintenance là harness. Race toàn workflow API của các module chưa tích hợp vẫn NOT VERIFIED, không tự sửa ngoài scope.
+
+Nguồn local trong TEMP: stayhub-cat-room05b-focused.txt, stayhub-cat-room05b-mysql-tests.txt, stayhub-cat-room05b-catalog.txt, stayhub-cat-room05b-full.txt, stayhub-cat-room05b-node.txt, stayhub-cat-room05b-lint.txt, stayhub-cat-room05b-build.txt, stayhub-cat-room05b-xampp.txt, stayhub-cat-room05b-dev-before.json, stayhub-cat-room05b-dev-after.json và stayhub-cat-room05b-final-check.txt.
+
+| AC | Trạng thái | Bằng chứng |
+| --- | --- | --- |
+| CATROOM05B-AC1 | PASS | Exact contract/input, auth/account/ownership/privacy/error order và CSRF thật |
+| CATROOM05B-AC2 | PASS | Matrix/B/M/ngày/timezone đúng05A qua production guard, no-op không write/log/fact query |
+| CATROOM05B-AC3 | PASS | Current reads, rollback/outer commit/log, sáu race và invariant |
+| CATROOM05B-AC4 | PASS | React thật, mutual exclusion/pending/errors/focus/GET reconciliation/late response/responsive |
+| CATROOM05B-AC5 | PASS | MariaDB và regression Backend/Frontend, baseline01–04/05A |
+| CATROOM05B-AC6 | PASS | Đúng16file/1dòngAuth, docs/checklist, source/data fingerprint và cleanup; TV2 dependency ghi rõ |
+
+Người dùng đã nghiệm thu CAT-ROOM-05B trên chat. CAT-ROOM-AUDIT đã thực hiện E14, PARTIAL do F01; không tự đóng UC20. Evidence E13 vẫn là lượt05B; E14 có bằng chứng chạy mới.
+
+### E14 · CAT-ROOM-AUDIT rà UC20 sau01–05B
+
+**Kiểm chứng 2026-11-15 · EXECUTED / PARTIAL · F01 OPEN · CHƯA CHỐT TECHNICAL PASS.**
+
+Đã thực hiện toàn bộ lượt audit theo Mini Plan. Chỉ checklist này thay đổi; source/tests, đặc tả05A/05B, ARCHITECTURE và skills giữ nguyên. Giữ lịch sử nghiệm thu01–05B, không dùng nghiệm thu cũ thay kết quả audit mới hoặc tự đóng UC20.
+
+#### Phạm vi đã rà
+
+| API | Kết quả |
+| --- | --- |
+| GET /api/host/properties/{property}/rooms | Exact list, order/empty, ba trạng thái Room/bốn trạng thái Property, ownership/error order, mapper/eager loading đạt |
+| GET /api/host/rooms/{room} | Exact detail, property/images/amenities, private URL loại bỏ, order/null/empty, role/privacy/canonical/query đạt |
+| POST /api/host/properties/{property}/rooms | Luồng chuẩn201/ACTIVE/type/decimal/duplicate/transaction/recovery đạt; **file multipart trùng key name vi phạm contract — F01** |
+| PUT /api/host/rooms/{room} | Full update, field validation/conflict, giữ status/property/snapshot, no-op/transaction/GET reconciliation đạt |
+| PATCH /api/host/rooms/{room}/status | Raw enum/ma trận B/M/ngàyUTC/no-op/current read/log, role/privacy và UI recovery đạt |
+
+- Đã trace route/middleware → Controller → Validator/typed Request → QueryService/Service → Repository/Model → CatalogMapper/EloquentObjectMapper/Symfony/ResponseDTO. DI/container được kiểm bằng test hiện có trên engine MariaDB. Catalog giữ envelope success/message/data.
+- QueryService eager-load, list tối đa3query/detail tối đa5query trong test và không tăng theo số Room; mapper không query/mutate. Validator domain không tự query. Giá giữ decimal string/BigDecimal.
+- Property/list → create → detail → edit/status → back/direct URL, loading/empty/missing/retry, gallery/amenities, focus, pending/mutual exclusion, cancellation/late response được chạy trên React/API thật.
+- Source store ghép body/files bằng array union thiên trái. Đây là chỗ bỏ sót validation được HTTP probe mới phát hiện; các suite hiện có chưa có case cùng key body/file.
+
+#### Finding F01 — P2 — create bỏ qua file trùng tên field hợp lệ
+
+**Trạng thái lịch sử lượt audit 2026-11-15: OPEN, chặn CATROOMAUDIT-AC2. Cập nhật2026-11-16: FIX-01 đã nghiệm thu E15; F01 CLOSED sau tái kiểm E16.**
+
+Vị trí: [HostRoomController.php:44](../../backend/app/Http/Controllers/Catalog/HostRoomController.php#L44), method store.
+
+Tái hiện trên phiên HOST owner/Sanctum/CSRF thật, schema fixture owned:
+1. POST multipart tới /api/host/properties/1/rooms với sáu trường hợp lệ: room_type_id=1, room_number=FILE-COLLISION, name=Collision file ignored, description rỗng, capacity=2, price_per_night=100.00.
+2. Cùng FormData thêm file text fixture.txt dưới key name, trùng key scalar name.
+3. Expected: 422 và không tạo Room, vì contract create không nhận file.
+4. Actual: **201**, response data.id=8 trong fixture, status ACTIVE, name vẫn Collision file ignored; DB xác nhận row FILE-COLLISION đã được lưu.
+5. Negative control: cùng payload/file nhưng key photo không trùng trả422 errors.photo đúng baseline.
+
+Nguyên nhân: body + request.allFiles dùng array union, key bên body được giữ nên UploadedFile cùng key bị bỏ trước Validator. Whitelist DTO không phát hiện request có file bị cấm khi file đã bị loại khỏi input.
+
+Ảnh hưởng đã quan sát: tạo Room thành công trên request lẽ ra phải bị từ chối. Không có bằng chứng vượt ownership/role hoặc ghi file vào storage; đây là lỗi validation/contract. Không sửa source trong audit.
+
+Row fixture F01 đã được kiểm chứng rồi xóa trong schema owned trước các invariant/race probes; schema và upload temp cuối cùng được dọn. Không tác động dữ liệu dev. Hướng xử lý riêng: không để file trùng key bị bỏ khi dựng input, bổ sung regression cho cùng key body/file và control khác key. Đề xuất Mini Plan CAT-ROOM-FIX-01, chưa triển khai.
+
+Bằng chứng: stayhub-cat-room-audit-create-runtime.txt và stayhub-cat-room-audit-F01.json trong TEMP. Harness exit0 nghĩa các assertion tái hiện finding/luồng chuẩn đã chạy xong, **không có nghĩa gate F01 PASS**.
+
+#### Kết quả test mới của lượt audit
+
+| Cổng | Kết quả thực tế |
+| --- | --- |
+| HostRoomListTest — MariaDB | 14 tests/70 assertions PASS |
+| HostRoomDetailTest — MariaDB | 15 tests/69 assertions PASS |
+| HostRoomCreateTest — MariaDB | 51 tests/220 assertions PASS; chưa bao phủ F01 |
+| HostRoomUpdateTest — MariaDB | 55 tests/288 assertions PASS |
+| HostRoomStatusTest — MariaDB | 177 tests/505 assertions PASS |
+| Tổng focused MariaDB10.4.32 | **312 tests/1.152 assertions PASS**, năm schema owned riêng đúng guard/SELECT DATABASE, không nới test guard |
+| Catalog SQLite | 525 tests/2.551 assertions PASS bằng PHP XAMPP |
+| Backend full SQLite | 1.156 tests/6.617 assertions PASS; không báo là full MySQL |
+| Frontend Node | 154 PASS |
+| Lint/build | Exit0, còn3FastRefresh warning nền và warning build chunk lớn |
+| HTTP probe F01 mới | **FAIL contract: expected422/không write, actual201/Room persisted**; control photo422 |
+| Source/data/cleanup | Chỉ1checklist đổi, source hash khớp; 10bảng dev fingerprints giữ nguyên; fixture schemas/storage/Edge/process/cổng tạm dọn |
+
+Năm focused suite chạy nguyên source, mỗi schema có GUID32 và prefix/biến guard tương ứng đã ghi trong Mini Plan. Không sửa source/test để đạt kết quả.
+
+#### Runtime mới trên XAMPP và Edge
+
+Bốn phase fixture riêng read/create/update/status; scripts được kế thừa từ checkpoint nhưng đã thực thi mới trên source hiện tại. Tên checkpoint trong một số caption log là tên harness, không phải tái sử dụng kết quả cũ.
+
+- Session/CSRF thật: guest401, Customer/Admin403, Host khác404 và own200; mutation419; field/query/canonical422/404/409 đúng baseline ngoài F01.
+- List/detail: exact projection, giá decimal, RoomType lệch Property trảnull và không lộ type khác; gallery primary/secondary đúng thứ tự, bytes PNG thật từ storage tạm, amenities gồm inactive/tie ordering; private avatar/unassigned amenities không lộ.
+- UI loading/empty/missing/directURL/retry sau GET500 fault injection; chuyển qua React Router trong khi giữ response thật không bị dữ liệu Room cũ ghi đè.
+- Create: POST201 thật, duplicate409, price field422, empty RoomType khóa submit, double submit một POST, lost response sau commit được thay502 có kiểm soát; GET list đối chiếu không tự replay, explicit resend nhận409.
+- Update: PUT200 thật, prefill/type error/empty/retry, duplicate409/field422, double submit một PUT, refresh list/detail/public, focus; lost committed response502 giữ form/draft qua GET, explicit no-op200; điều hướng khi response giữ không đổi Room mới.
+- Status: PATCH200/no-op, B/M409 với record quá hạn, raw enum422, hai form edit/status loại trừ, focus; giữ committed200 và fault502 kiểm duplicate/GET reconciliation/lựa chọn/no auto replay, explicit no-op200. Option sai trong test được harness thêm vào DOM, không phải option production.
+- Viewports1440/768/390, gallery/amenities/empty states và các form không tràn ngang.
+- Public projection ACTIVE/cùng Property được kiểm sau mutation; không gọi đây là availability theo ngày.
+- Outer transaction InnoDB của create/update/status: rollback giữ baseline, commit lưu thay đổi, success log chỉ sau transaction level0. FeatureTest xác minh lỗi sau persistence/mapping rollback; no-op không save/log và status không đọc facts.
+
+#### 14 race InnoDB có wait thật
+
+Ba phase mutations dùng hai connection/tiến trình độc lập, prime snapshot trước lock và quan sát information_schema.INNODB_LOCK_WAITS. Catalog side gọi Service production.
+
+| Nhóm | Cases/kết quả |
+| --- | --- |
+| Create —3cases | create/create CI201/409; create trước RoomType delete201/409; delete trước create200/422 |
+| Update —5cases | update/update CI200/409; create trước update201/409; update trước create200/409; update đổi loại trước delete200/409; delete trước update200/422 |
+| Status —6cases | Booking/Maintenance fact commit trước status →409; status trước cooperating writer200/409; status/status200/409 theo current MAINTENANCE; status/update200/200 giữ INACTIVE; negative-control bypass writer200/201 |
+
+Kết quả và row cuối đạt expected ở14cases. Writer Booking/Maintenance là harness; chưa có route/workflow production tương ứng được tích hợp, nên race toàn workflow đó giữ NOT VERIFIED. Negative-control bypass writer vẫn tạo Booking trên Room INACTIVE sau FK wait là giới hạn đã chốt05A/05B, không phải finding mới.
+
+#### Baseline và dependencies
+
+- READ ONLY metadata/dev: MariaDB10.4.32/InnoDB/REPEATABLE-READ, appUTC/DBsessionSYSTEM. Fingerprint properties, room_types, rooms, bookings, booking_services, invoices, invoice_items, maintenances, room_images, room_amenities trước/sau khớp.
+- 2 CHECKED_IN đã tới/quá checkout và1IN_PROGRESS đã tới/quá end_date giữ nguyên, ghi cho owner rà workflow; không tự sửa.
+- D01: uniqueness vẫn theo workflow parent lock; schema chưa có unique(property_id,room_number). Fixture SQL trực tiếp tạo duplicate được rồi rollback, không xem đây là regression so với scope đã duyệt.
+- D02: Booking/Maintenance writers phải tuân thủ Property→Room/recheck; API integration/race thật chưa xác nhận.
+- D03: DELETE Room chưa có route và ngoài năm luồng được giao; Booking FK hiện RESTRICT. Không tự bổ sung hoặc tuyên bố UC20 trọn vẹn đã đóng.
+- UC21/22/23 chỉ audit projection/dependency, không triển khai quản lý ảnh/tiện nghi/bảo trì.
+- Runtime giữ3306/8000/5173, dùng Backend8157/Vite5174 qua origin5173/CDP9231. Bốn schema runtime, năm schema focused, ảnh/storage/Edge/process owned đã dọn; PID nền giữ nguyên.
+- Global diff còn whitespace nền InvoiceService.php:91, các source/tài liệu khác giữ nguyên hash. Hai file rules/architecture chỉ đọc; không tự đồng bộ trạng thái hoặc sửa findings vào source.
+
+Nguồn local trong TEMP:
+- stayhub-cat-room-audit-mysql.txt và stayhub-cat-room-audit-mysql-HostRoom{List,Detail,Create,Update,Status}Test.txt.
+- stayhub-cat-room-audit-catalog.txt, stayhub-cat-room-audit-full.txt, stayhub-cat-room-audit-node.txt, stayhub-cat-room-audit-lint.txt, stayhub-cat-room-audit-build.txt.
+- stayhub-cat-room-audit-read-runtime.txt, stayhub-cat-room-audit-create-runtime.txt, stayhub-cat-room-audit-update-runtime.txt, stayhub-cat-room-audit-status-runtime.txt.
+- stayhub-cat-room-audit-F01.json, stayhub-cat-room-audit-evidence-summary.json, stayhub-cat-room-audit-routes.json.
+- stayhub-cat-room-audit-dev-before.json, stayhub-cat-room-audit-dev-after.json, stayhub-cat-room-audit-final-check.txt.
+
+#### Checklist audit
+
+| AC | Trạng thái | Bằng chứng |
+| --- | --- | --- |
+| CATROOMAUDIT-AC1 | PASS | Đủ5API/UI, route/contract/architecture/mapper/projection đã đối chiếu; sai lệch input tách F01 ởAC2 |
+| CATROOMAUDIT-AC2 | **FAIL** | Auth/account/ownership/privacy/canonical đạt, nhưng POST file cùng key vi phạm validation: F01 |
+| CATROOMAUDIT-AC3 | PASS | Các luồng payload hợp lệ, matrix05A, snapshots/no-op/rollback/outer commit/log đạt; input F01 vẫn FAIL ởAC2 |
+| CATROOMAUDIT-AC4 | PASS | MariaDB collation/locks/current reads/14races và dependency/negative control ghi đúng |
+| CATROOMAUDIT-AC5 | PASS | React/API thật, loading/empty/error/retry/focus/viewport/pending/reconciliation/late response đạt |
+| CATROOMAUDIT-AC6 | PASS | Năm focused MariaDB + Catalog/full/Node/lint/build chạy mới có count/engine/evidence |
+| CATROOMAUDIT-AC7 | PASS | Đúng1checklist thay đổi, source/data baseline, cleanup và findings/acceptance được ghi rõ |
+
+**Kết luận lịch sử lượt audit 2026-11-15: PARTIAL.** Evidence201/AC2FAIL ở E14 giữ nguyên để tra cứu. F01 đã sửa và được nghiệm thu tại E15, CLOSED sau tái kiểm E16 ngày2026-11-16. Kết luận hiện hành xem E16; không tự đóng toàn UC20.
+
+### E15 · CAT-ROOM-FIX-01 xử lý F01
+
+**2026-11-16 (Asia/Bangkok) · IMPLEMENTED / TECHNICAL PASS / ACCEPTED theo xác nhận trên chat.**
+
+Đúng Mini Plan3file đã duyệt: HostRoomController.php, HostRoomCreateTest.php và checklist này. Không đổi contract, Service/Repository/Validator/DTO/mapper, route/Auth count, Frontend, schema hoặc các quy tắc01–05B.
+
+- Controller store chỉ đổi biểu thức ghép body/files từ union thiên trái sang array_replace(body,files), để UploadedFile/array file trùng key không bị scalar body che mất. Validator hiện có trả422 theo field, không thêm business logic vào Controller.
+- Regression mới kiểm đủ sáu key được phép, file-only/unknown-key và nested/multiple; mọi request bị từ chối không tạo Room/log success. Multipart không có file giữ exact201/eight-field/ACTIVE/decimal/null contract.
+- Đã chạy RED trước sửa Controller: **7 failed,53passed/239assertions**, gồm6case trùng key và test nested/multiple nhận201 thay422. Không coi expected RED là lỗi còn tồn tại sau fix.
+- Sau đổi đúng một biểu thức, giữ toàn bộ51test create cũ và thêm9case test mới; không xóa/sửa test cũ hoặc nới DB guard.
+
+| Cổng | Kết quả thực tế |
+| --- | --- |
+| Focused SQLite | 60 tests/271 assertions PASS |
+| Focused XAMPP MariaDB10.4.32 | 60 tests/271 assertions PASS; schema stayhub_room03_test_GUID32, STAYHUB_ROOM_CREATE_TEST_DATABASE/SELECT DATABASE guard giữ nguyên; có xác nhận tables thực sự migrate trên schema owned, đã dọn |
+| Catalog regression SQLite | 534 tests/2.602 assertions PASS bằng PHP XAMPP |
+| Backend full SQLite | 1.165 tests/6.668 assertions PASS, không gọi đây là full MySQL |
+| Frontend Node/lint/build | Node154 PASS, lint/build exit0; còn3FastRefresh warnings nền, chunk lớn và build timing diagnostic, không sửa Frontend |
+| HTTP multipart thật | 10/10case trả422 đúng field:6collision keys, unknown photo, file-only name, nested name[child], multiple name[] |
+| Không ghi sai dữ liệu | GET list trước valid control và DB probe xác nhận không có Room REJECT-* nào, không tăng count do10case bị từ chối |
+| Positive controls | React JSON create201 và multipart không có file201, tám trường, trim/null, ACTIVE, RoomType và decimal99.90 đúng; fixture DB xác nhận |
+| Browser/regression | Session/CSRF401/403/404/419, duplicate409/price422, empty RoomType, double submit mộtPOST, list/detail, recovery sau controlled502 qua GET không autoPOST, viewport1440/768/390 đạt |
+| InnoDB baseline | Create Service outer rollback/commit và success log chỉ sau commit vẫn đạt trên fixture |
+| Source/data/cleanup | Đúng3file; Controller reverse-expression hash khớp baseline; source ngoài scope/fingerprint10bảng dev khớp; schema/storage/Edge/process/cổng tạm dọn, PID3306/8000/5173 giữ nguyên |
+| Whitespace | Ba file đạt; global diff vẫn có finding nền InvoiceService.php:91, source đó không đổi |
+
+HTTP runtime dùng DB3306, origin5173, Backend8157, Vite5174, CDP9231; dataset tổng hợp nằm trong schema/storage owned. Invalid requests gửi FormData/file thật qua fetch với phiên Sanctum/CSRF, không giả lập response422. Fault502 chỉ dùng kiểm regression recovery sau create đã commit, ghi rõ riêng.
+
+Harness runtime được kế thừa từ create03 và chạy mới trên code sau fix. Lúc chuẩn bị harness tạm có lỗi đọc UTF-8 bằng encoding mặc định Windows; đã sửa encoding harness trước khi chạy, không cần sửa source vì lỗi này. Caption checkpoint cũ trong log không phải tái sử dụng kết quả cũ.
+
+Artifacts local trong TEMP: stayhub-room-fix01-red.txt, stayhub-room-fix01-focused.txt, stayhub-room-fix01-mysql-tests.txt, stayhub-room-fix01-catalog.txt, stayhub-room-fix01-full.txt, stayhub-room-fix01-node.txt, stayhub-room-fix01-lint.txt, stayhub-room-fix01-build.txt, stayhub-room-fix01-xampp.txt, stayhub-room-fix01-http-cases.json, stayhub-room-fix01-dev-before.json, stayhub-room-fix01-dev-after.json, stayhub-room-fix01-final-check.txt.
+
+| AC | Trạng thái | Bằng chứng |
+| --- | --- | --- |
+| ROOMFIX01-AC1 | PASS | Sáu scalar/file key collisions và nested/multiple trả422, file không bị bỏ trước validation |
+| ROOMFIX01-AC2 | PASS | Regression không thêm Room/log success;10HTTP rejected requests không có row persisted |
+| ROOMFIX01-AC3 | PASS | JSON/multipart hợp lệ giữ201/eightfields/ACTIVE/decimal, toàn bộ51test cũ và baseline01–05B đạt |
+| ROOMFIX01-AC4 | PASS | RED trước fix, GREEN SQLite/MariaDB, multipart HTTP/Sanctum thật chứng minh F01 không còn tái hiện |
+| ROOMFIX01-AC5 | PASS | Regression, đúng3file, source/data hash/fingerprint, checklist và cleanup |
+
+**CAT-ROOM-FIX-01: ACCEPTED theo chat ngày2026-11-16. F01: CLOSED sau tái kiểm E16.** Giữ kết luận lịch sử AC2FAIL của E14; kết luận audit hiện hành ở E16. Chưa đóng toàn UC20. Dependencies writer Booking/Maintenance, workflow uniqueness/direct SQL và DELETE Room giữ nguyên như E14.
+
+Bước tái kiểm/chốt kỹ thuật CAT-ROOM-AUDIT đã được người dùng giao riêng và thực hiện tại E16; không tự chuyển module.
+
+### E16 · CAT-ROOM-AUDIT tái kiểm sau FIX-01
+
+**2026-11-16 (Asia/Bangkok) · TECHNICAL PASS / ACCEPTED cho kết quả audit theo xác nhận trên chat. F01 CLOSED.**
+
+Người dùng đã nghiệm thu CAT-ROOM-FIX-01 và giao tái kiểm/chốt audit. Phạm vi giữ nguyên năm luồng UC20 đã triển khai: list, detail, create, update, status. Lượt này chỉ sửa checklist; không sửa source/test, contract, schema, rules hoặc dữ liệu dev. E14 giữ nguyên bằng chứng lịch sử finding201 và AC2FAIL; E16 là kết luận hiện hành sau sửa.
+
+#### Bằng chứng chạy mới
+
+| Cổng | Kết quả thực tế ngày2026-11-16 |
+| --- | --- |
+| HostRoomListTest — XAMPP MariaDB | 14 tests/70 assertions PASS |
+| HostRoomDetailTest — XAMPP MariaDB | 15 tests/69 assertions PASS |
+| HostRoomCreateTest — XAMPP MariaDB | 60 tests/271 assertions PASS, gồm regression F01 |
+| HostRoomUpdateTest — XAMPP MariaDB | 55 tests/288 assertions PASS |
+| HostRoomStatusTest — XAMPP MariaDB | 177 tests/505 assertions PASS |
+| Tổng focused MariaDB10.4.32 | **321 tests/1.203 assertions PASS**, cả5command exit0 |
+| Catalog SQLite qua PHP XAMPP | **534 tests/2.602 assertions PASS**, exit0 |
+| Backend full SQLite qua PHP XAMPP | **1.165 tests/6.668 assertions PASS**, exit0; không gọi là full MySQL |
+| HTTP multipart/Sanctum/CSRF thật | **10/10case422**, DB/list xác nhận không tạo Room:6collision keys, photo, file-only name, nested name[child], multiple name[] |
+| Positive controls | React JSON create201 và multipart không file201; exact8field, ACTIVE, trim/null, RoomType/decimal99.90 giữ nguyên |
+| React/API regression chạy mới | Guards401/403/404/419; duplicate409/inline422/empty type; double submit mộtPOST; committed response bị fault502 có kiểm soát, GET reconcile không autoPOST, explicit replay409; viewport1440/768/390 đạt |
+| Create transaction InnoDB chạy mới | Outer rollback/commit và success log sau real commit đạt |
+| Baseline/data/cleanup | 656path baseline đối chiếu, chỉ checklist đổi; metadata/fingerprint10bảng dev trước/sau khớp;5schema focused và1schema runtime owned đã dọn |
+
+Focused suite giữ nguyên prefix/biến guard từng class, SELECT DATABASE và xác nhận rooms/bookings/maintenances thực sự được migrate trên từng schema riêng. Dùng DB3306 XAMPP, origin5173, backend tạm8157/Vite5174/CDP9231; giữ service gốc3306/8000/5173 và PID21044/11996/11944. Schema fixture runtime tổng hợp, storage/Edge/process tạm đã cleanup; không seed hoặc migrate database dev.
+
+#### Bằng chứng kế thừa, không gọi là chạy mới
+
+- E15: Node154 PASS, lint/build exit0; Frontend không đổi hash. Còn3FastRefresh warnings nền, warning chunk lớn và build timing diagnostic.
+- E14: rà kiến trúc/route/mapper/projection, gallery/privacy, UI list/detail/update/status, late response và14race InnoDB có wait thật. Các source liên quan giữ baseline; FIX-01 chỉ đổi cách ghép input create và thêm regression.
+- 14race chỉ chứng minh Catalog Service với cooperating harness writers; workflow Booking/Maintenance production chưa tích hợp nên vẫn NOT VERIFIED.
+- Không chạy lại Node/lint/build hoặc14race trong lượt tái kiểm này; các gate tương ứng dùng bằng chứng đã ghi ở E14/E15 cùng đối chiếu hash, không cộng lại thành test mới.
+
+#### Checklist chốt audit hiện hành
+
+| AC | Trạng thái | Bằng chứng |
+| --- | --- | --- |
+| CATROOMAUDIT-AC1 | PASS | Phạm vi5API/UI và kiến trúc/contract đã rà E14; hash giữ baseline,5suite MariaDB chạy lại đạt |
+| CATROOMAUDIT-AC2 | PASS | F01 không còn tái hiện: regression60/271 và10HTTP multipart422/no write; guards/ownership/privacy đạt theo bằng chứng mới và E14 |
+| CATROOMAUDIT-AC3 | PASS | Valid JSON/multipart201 giữ contract/ACTIVE; create outer rollback/commit chạy mới, update/status matrix/no-op đạt suite mới và runtime E14 |
+| CATROOMAUDIT-AC4 | PASS | Focused MariaDB321/1203;14race/locks E14 kế thừa trên Service/Repository không đổi, limits writer production ghi riêng |
+| CATROOMAUDIT-AC5 | PASS | Create React/API thật, recovery/pending/viewport chạy mới; các luồng UI còn lại kế thừa E14 trên source không đổi |
+| CATROOMAUDIT-AC6 | PASS | Năm focused XAMPP + Catalog/full SQLite mới; Node154/lint/build kế thừa E15, engine và thời điểm phân biệt rõ |
+| CATROOMAUDIT-AC7 | PASS | Chỉ1checklist đổi, source/data giữ baseline, cleanup đạt; FIX-01 ACCEPTED/F01 CLOSED và acceptance audit tách riêng |
+
+**Kết luận: CAT-ROOM-AUDIT TECHNICAL PASS trong phạm vi5luồng; F01 CLOSED.** Người dùng đã nghiệm thu kết quả tái kiểm trên chat ngày2026-11-16; checkpoint audit được đánh dấu [x]. Không còn finding bắt buộc mở trong phạm vi audit; không đồng nghĩa nghiệm thu toàn bộ UC20.
+
+Giới hạn giữ nguyên: chưa có unique(property_id,room_number) ở DB, uniqueness dựa workflow lock; Booking/Maintenance writers phải tuân thủ lock/recheck và chưa được kiểm chứng workflow production; DELETE Room chưa có và ngoài phạm vi5luồng. Dữ liệu dev2CHECKED_IN/1IN_PROGRESS quá mốc vẫn giữ nguyên. Global diff còn whitespace nền InvoiceService.php:91, file này không đổi; scoped checklist diff-check đạt.
+
+Bằng chứng local trong TEMP: stayhub-room-audit-recheck-mysql.txt và5log class tương ứng; stayhub-room-audit-recheck-catalog.txt; stayhub-room-audit-recheck-full.txt; stayhub-room-audit-recheck-runtime.txt; stayhub-room-audit-recheck-dev-before.json; stayhub-room-audit-recheck-dev-after.json; stayhub-room-audit-recheck-final-check.txt. Scripts tái dùng harness FIX-01 nhưng thực thi mới, caption checkpoint cũ trong log không phải kết quả tái sử dụng.
+
+Task kế tiếp đề xuất: lập Mini Plan kiểm kê Host quản lý ảnh phòng UC21, chờ phạm vi/duyệt riêng. Dừng sau báo cáo lượt này.
+
+### E17 · CLEANUP-ARCH-01 — lịch sử lượt chuyển helper, gate dọn chưa đạt
+
+**2026-11-16 (Asia/Bangkok) · Kết quả lịch sử PARTIAL.** Plan P2 đã được người dùng duyệt; kết quả tái kiểm hiện hành xem E18. Không tự triển khai UC21.
+
+#### Kết quả và phạm vi thực tế
+
+- Di chuyển Http/Requests/Auth/CredentialRules.php sang Validators/Auth/CredentialRules.php, đổi namespace sang App\Validators\Auth.
+- AuthValidator và ProfileValidator chỉ đổi đúng import tới lớp mới. Thân helper và2consumer sau reverse-namespace/import khớp file trước task (chuẩn hóa LF/CRLF); không đổi rule/regex/messages/closure/business logic.
+- File nguồn cũ không còn, class mới autoload được, class namespace cũ không resolve; không còn old namespace trong app/routes/tests/config/bootstrap.
+- Chỉ5đường dẫn được duyệt thay đổi (rename tính2đường dẫn,2consumer và checklist). Không sửa tests, guard, routes/protected count, dependencies/lock, schema, Frontend, ARCHITECTURE hoặc skills.
+- **12thư mục app vẫn tồn tại và rỗng**: Mapping; Http/Resources cùng Auth/Catalog/Invoice/Review; Http/Requests cùng Auth/Catalog/Invoice/Profile/Review. Không đánh dấu là đã xóa.
+
+#### Kết quả kiểm chứng chạy mới
+
+| Cổng | Kết quả |
+| --- | --- |
+| PHP syntax | php -l3file PHP PASS |
+| Composer | composer dump-autoload --no-scripts exit0,7045classes; không update/install dependency |
+| Autoload/static | Class mới có/class cũ không có; body/reverse-import comparison PASS |
+| Route parity |43route entries trước/sau giống nhau, gồm method/URI/middleware; không sửa route count test |
+| RegistrationTest — MariaDB10.4.32 | **90tests/501assertions PASS**, exit0; nguyên guard stayhub_auth01c_test_GUID32/STAYHUB_REGISTRATION_TEST_DATABASE; xác nhận migrated users/sessions/migrations; schema đã DROP |
+| Auth/Profile focused SQLite | **265tests/1662assertions PASS**, exit0: RegistrationTest, AuthenticationTest, ProfileTest, AvatarTransactionTest |
+| Full Backend SQLite | **1165tests/6668assertions PASS**, exit0; không gọi là full MySQL |
+| HTTP XAMPP MariaDB thật | **33requests PASS**, origin5173/backend8157, không mock response; chi tiết case/status trong artifact |
+| Dev baseline | **55file** dưới datadir stayhub khớp SHA256 trước/sau giai đoạn chuyển helper/test; đây là offline file fingerprints, **không phải SQL row fingerprints** |
+| Scope/whitespace |657baseline paths (gồm đích rename chưa có ban đầu); chỉ5đường dẫn thay đổi; scoped checks đạt. Global InvoiceService.php:91 whitespace nền giữ nguyên |
+| Frontend | Không đổi source; không chạy Node/lint/build hoặc browser UI mới, HTTP session được kiểm bằng client cookie thật |
+| Dọn app dirs | **BLOCKED** bởi automatic approval review, cả lệnh kiểm tra rỗng và danh sách literal không recursive; reason trả về “blocked by policy” |
+| Runtime fixture cleanup | Schema registration/runtime và storage runtime đã dọn; backend8157 và isolated MySQL owned đã dừng |
+| Datadir server tạm | **BLOCKED cleanup** bởi automatic approval review; datadir còn tại TEMP, không chứa dữ liệu dev |
+
+HTTP kiểm chứng: guest401, CSRF419, account BLOCKED403; register email sai/confirmation thiếu hoặc lệch/password yếu/vượt72byte UTF8/null/whitespace trả422, users fingerprint không đổi; valid register201 đúng message, duplicate422 và throttle429. Login200 với13field user; update profile200 và cấm email422/no-write; password wrong-current/confirmation/UTF8/weak422 không đổi hash; valid change200, phiên hiện tại200/phiên fingerprint cũ401, logout xóa phiên, old-password login422/new-password login200. Probe DB xác nhận đúng1user đăng ký thêm, profile và hashed password đúng, không có row ngoài dự kiến.
+
+#### Môi trường XAMPP và sai khác phải ghi rõ
+
+Đầu lượt không có listener3306/8000/5173. Khởi động MySQL theo my.ini XAMPP hiện hữu thất bại; log xác nhận **Fatal error: Can't open and lock privilege tables: Incorrect file format 'proxies_priv'**. Không sửa/repair/replace bảng quyền hoặc dữ liệu dev, không dùng skip-grant-tables.
+
+Để vẫn có bằng chứng MariaDB, dùng **binary mysql_install_db/mysqld/php của XAMPP**, tạo data directory server riêng trong TEMP và chạy127.0.0.1:3306 khi trống. SQL SELECT @@datadir xác nhận target tạm; focused/runtime dùng schema owned riêng trên server đó. Không mô tả đây là test trên instance/data directory dev bị lỗi. SQL fingerprints dev không thực hiện được;55offline application-data file fingerprints được chụp sau lần startup lỗi, trước chuyển helper, và so sánh sau test.
+
+Đã dừng isolated server owned PID19188 bằng mysqladmin sau xác nhận listener PID/@@datadir và0schema fixture còn lại. Sau đó quan sát MySQL khác PID9884, parent4836, dùng my.ini XAMPP; không thuộc tiến trình test owned nên không dừng/can thiệp. Không khẳng định toàn bộ trạng thái3306 cuối lượt giống ban đầu khi có tiến trình ngoài task khởi động.
+
+Datadir test còn lại do lệnh dọn bị chặn: C:\Users\HOANGN~1\AppData\Local\Temp\stayhub-cleanup01-mysql-f323306ab6e14e7897e3489b8be49e4c. Các schema dữ liệu ứng dụng fixture bên trong đã DROP trước shutdown, không chứa database dev.
+
+#### Checklist lượt triển khai — lịch sử
+
+| AC | Trạng thái | Bằng chứng/việc còn lại |
+| --- | --- | --- |
+| CLEANUP01-AC1 | PASS | Helper mới/autoload, old namespace/path không còn, body và2imports giữ nguyên ý nghĩa |
+| CLEANUP01-AC2 | BLOCKED |12app dirs rỗng chưa xóa vì automatic approval review từ chối; chưa đạt gate này |
+| CLEANUP01-AC3 | PASS |90/501 MariaDB và33HTTP thật trên instance XAMPP binary/datadir cô lập; dev instance lỗi được ghi riêng |
+| CLEANUP01-AC4 | PASS |265/1662focused,1165/6668full SQLite và43route parity; không nới guard |
+| CLEANUP01-AC5 | PARTIAL | Scope/hash và offline dev files đạt; SQL dev fingerprint NOT VERIFIED, datadir server tạm chưa dọn do policy |
+
+**Kết luận lịch sử PARTIAL; kết quả hiện hành xem E18.** Code relocation và regression đạt, nhưng task cleanup chưa hoàn tất. Bước tiếp theo chỉ đề xuất dọn thủ công12thư mục app rỗng và datadir tạm đã dừng, sau đó tái kiểm gate cleanup; xử lý lỗi XAMPP dev là việc môi trường riêng, không tự sửa trong task này. Không commit/push/merge, không triển khai UC21.
+
+Artifacts local trong TEMP: stayhub-cleanup01-baseline.json; stayhub-cleanup01-autoload.txt; stayhub-cleanup01-registration.txt và registration-tests.txt; stayhub-cleanup01-focused.txt; stayhub-cleanup01-full.txt; stayhub-cleanup01-runtime.txt; stayhub-cleanup01-http-cases.json; stayhub-cleanup01-routes-before.json/routes-after.json; stayhub-cleanup01-dev-offline-before.json/dev-offline-after.json; stayhub-cleanup01-mysql-err.txt; stayhub-cleanup01-mysql-datadir.txt; stayhub-cleanup01-final-check.txt. Dev-before.json từ SQL attempt thất bại không được dùng làm evidence PASS.
+
+### E18 · CLEANUP-ARCH-01 tái kiểm sau người dùng dọn thủ công
+
+**2026-11-16 (Asia/Bangkok) · TECHNICAL PASS / ACCEPTED theo xác nhận người dùng trên chat.** Gate dọn thư mục/datadir đã đạt; checkpoint CLEANUP-ARCH-01 được nghiệm thu. UC21 chưa triển khai.
+
+Người dùng gửi transcript PowerShell dọn12thư mục app và datadir test, bảng cuối13dòng ConLai=False. Transcript có lỗi preflight “Đường dẫn datadir test không hợp lệ”; vì dán từng khối vào interactive console, các khối sau vẫn chạy. Không coi toàn bộ script là PASS, không suy đoán nguyên nhân chuẩn hóa path hoặc khẳng định preflight đã đạt. Kết luận dựa vào kiểm tra filesystem/source/dev thực tế bên dưới; không chạy thêm lệnh xóa.
+
+#### Kiểm chứng chạy mới của lượt chốt
+
+| Kiểm tra | Kết quả |
+| --- | --- |
+|12app dirs | Tất cả không tồn tại: Mapping; Http/Resources cùng Auth/Catalog/Invoice/Review; Http/Requests cùng Auth/Catalog/Invoice/Profile/Review |
+| Datadir test | Đúng stayhub-cleanup01-mysql-f323306ab6e14e7897e3489b8be49e4c không còn, kiểm cả path profile ngắn HOANGN~1 và dài HoangNguyen |
+| Scope từ baseline triển khai | Chỉ đúng5đường dẫn đã duyệt thay đổi; các path/hash ngoài scope giữ nguyên; không thêm file repo |
+| Source lượt tái kiểm | Không đổi helper hoặc consumer; chỉ cập nhật checklist. Không cần chạy lại suite vì chỉ dọn thư mục rỗng/datadir fixture ngoài source |
+| Dev baseline |55file dưới E:/App/xampp/mysql/data/stayhub khớp SHA256 với snapshot trước chuyển helper; không thay bằng dữ liệu test |
+| PHP syntax |3file helper/AuthValidator/ProfileValidator PASS |
+| Autoload | Class mới App\Validators\Auth\CredentialRules có, old namespace không có sau dọn |
+| Route parity |43entries chạy mới khớp trước cleanup, giữ method/URI/middleware |
+| Runtime processes | Không thấy listener3306/8000/5173/8157/5174/9231 ở thời điểm kiểm; không khởi động/dừng service trong lượt chốt |
+| SQL dev | Kết nối3306 bị refused, **NOT VERIFIED**; không repair hoặc khởi động lại XAMPP trong lượt này |
+
+#### Bằng chứng kế thừa nguyên source E17
+
+- RegistrationTest **90tests/501assertions PASS** trên MariaDB10.4.32 bằng binary XAMPP/datadir server cô lập, schema đúng guard đã DROP.
+- Auth/Profile focused **265tests/1662assertions PASS**, full Backend **1165tests/6668assertions PASS**, đều SQLite; không gọi là full MySQL.
+- **33HTTP requests PASS** qua Laravel/Sanctum/CSRF thật trên MariaDB fixture; runtime schema/storage đã dọn, server owned đã dừng ở E17.
+- Helper body/reverse-import comparison và unchanged source hashes giữ nguyên. Frontend không đổi, không chạy mới Node/lint/build/browser UI.
+- Phân biệt rõ các lượt chạy: test counts trên là E17 kế thừa, syntax/autoload/route/hash/filesystem là E18 mới; không báo là đã chạy lại full suite.
+
+#### Checklist chốt kỹ thuật
+
+| AC | Trạng thái | Bằng chứng |
+| --- | --- | --- |
+| CLEANUP01-AC1 | PASS | Helper/import unchanged; fresh syntax/autoload đạt, vị trí cũ không còn |
+| CLEANUP01-AC2 | PASS |12app dirs đã được người dùng dọn; filesystem xác nhận trực tiếp đều không tồn tại |
+| CLEANUP01-AC3 | PASS | MariaDB90/501 và33HTTP E17 trên source không đổi; engine/isolated datadir được ghi rõ |
+| CLEANUP01-AC4 | PASS | SQLite265/1662 và1165/6668 E17 kế thừa; route43entries mới khớp, guard không đổi |
+| CLEANUP01-AC5 | PASS | Đúng5đường dẫn, hash ngoài scope/dev55file giữ nguyên, app dirs/datadir không còn; nguồn SQL dev vẫn NOT VERIFIED và không được nâng thành PASS |
+
+**Kết luận TECHNICAL PASS / ACCEPTED trong phạm vi CLEANUP-ARCH-01 theo chat ngày2026-11-16.** Phần bảo toàn dữ liệu dev sử dụng bằng chứng55offline file fingerprints; giới hạn SQL dev và lỗi bảng quyền XAMPP là vấn đề môi trường riêng, không khẳng định database dev đã hoạt động hoặc từng query SQL đã được xác nhận. Không còn vật cản cleanup của E17. Không sửa source, không commit/push/merge và chưa triển khai UC21.
+
+Chỉ đề xuất bước tiếp theo: người dùng nghiệm thu kết quả cleanup, sau đó đóng gói baseline để bàn giao theo task riêng. Không tự sửa XAMPP hoặc triển khai module.
+
+Artifacts mới local TEMP: stayhub-cleanup01-close-baseline.json; stayhub-cleanup01-close-routes.json; stayhub-cleanup01-close-dev-offline.json; stayhub-cleanup01-close-final-check.txt. Transcript người dùng lưu trong attachment d63cd5aa-2858-4a1d-99a4-8551403798a7/Pasted text.txt; artifacts E17 giữ nguyên để tra cứu lịch sử.
+
+### E19 · HANDOVER-BASELINE-01 — gói baseline bàn giao TV1/TV2
+
+**2026-11-16 (Asia/Bangkok) · TECHNICAL PASS / PACKAGE VERIFIED / OWNER ACCEPTANCE PENDING. MERGE APPROVAL PENDING.** Người dùng duyệt P3 đúng5đường dẫn; task chỉ chuẩn bị source package/docs và kiểm tra local, không tạo PR thật, stage/commit/push/merge hoặc triển khai UC21.
+
+#### Phạm vi hoàn thành
+
+- Tạo docs/TV3/BASELINE_HANDOVER.md và docs/TV3/BASELINE_PR_CHECKLIST.md: scope đã nghiệm thu, TV1/TV2 nhận tiếp,10UC hiện hữu/8UC TODO, contract và dependencies, hướng dẫn nhận gói, các gate trước merge và draft PR local.
+- ARCHITECTURE.md chỉ sửa đúng ô Auth/Profile trong bảng14.2 theo Validator/typed Request DTO/Repository hiện hành.
+- InvoiceService.php chỉ xóa4space trên dòng trống91, so sánh trước/sau không có thay đổi logic.
+- Checklist này ghi results/evidence; các source ngoài5đường dẫn giữ hash baseline. Không đổi tests/guard/routes/env/dependencies/Frontend.
+
+#### Kết quả mới của lượt bàn giao
+
+| Gate | Kết quả thực tế |
+| --- | --- |
+| Full Backend SQLite | **1165tests/6668assertions PASS**, exit0 |
+| RegistrationTest MariaDB |90/501PASS |
+| HostRoomListTest MariaDB |14/70PASS |
+| HostRoomDetailTest MariaDB |15/69PASS |
+| HostRoomCreateTest MariaDB |60/271PASS |
+| HostRoomUpdateTest MariaDB |55/288PASS |
+| HostRoomStatusTest MariaDB |177/505PASS |
+| Tổng targeted XAMPP | **411tests/1704assertions PASS**,6suite/schema riêng, SELECT DATABASE guard/migration proof, không nới guard |
+| Frontend Node22.23.4 | **154PASS**, node --experimental-test-module-mocks --test tests/*.test.js |
+| Node invocation đầu |76pass/4fail do thiếu cờ module mocks; giữ log failed invocation, không đổi code/test; rerun đúng cờ PASS |
+| Lint/build | Exit0;3FastRefresh warnings nền; chunk>500kB và plugin timing diagnostic còn nguyên |
+| PHP syntax/autoload | **215PHPfiles PASS**, adapter/helper mới resolve, old namespaces không còn |
+| Route/skills/links |43route entries giữ nguyên;5skill frontmatter và links của docs được rà đạt |
+| Global whitespace | git diff --check exit0 sau đúng1dòng whitespace được duyệt |
+| Target dev | Fetch thành công origin/dev951f62e; merge-base cùng target, ahead2/behind0; target-changed paths0/overlap0, không gọi đây là mergeability proof |
+| Dev/index/HEAD |55offline dev file fingerprints giữ nguyên; HEAD7dac999 và staged content giữ nguyên, git diff --cached rỗng |
+| Package | **643file source** trong ZIP, gồm117untrackedfile sau thêm2docs;14deletedpaths không xuất hiện lại;1envtracked loại rõ khỏi snapshot |
+
+XAMPP dùng binary E:/App/xampp/mysql/bin/mysqld.exe10.4.32 tại127.0.0.1:3306 với datadir server tạm riêng khi port trống; không dùng/repair instance dev lỗi bảng quyền. Cả6schema, server và datadir tạm đã cleanup. Không gọi targeted suites là full MySQL; SQL dev vẫn NOT VERIFIED, bảo toàn dev dùng55offline hashes.
+
+Git index content541entries vẫn giống HEAD và staged diff rỗng trước/sau. Git refresh stat-cache có thể thay bytes/index hash trong khi git status/diff kiểm tra; không có git add hoặc thay staged blobs. Không restore/reset index để làm giả binary hash không đổi.
+
+#### Gói và exclusions
+
+Artifact root: .agent-workspace/handover-baseline-3dbd49fe4a3d4410882f7c7efad786ed/, đã ignored.
+
+- source.zip: snapshot643file hiện hữu cuối lượt, không chỉ HEAD archive/patch.
+- manifest.json: relative path/domain/action/tracked/bytes/SHA256, ZIP hash và exclusions.
+- deleted-paths.txt:14file tracked đã xóa.
+- git-state.json: HEAD/fetched dev/merge-base/working tree và các gate PR còn mở.
+- checks/: test/static/inventory/package verification và baseline data hashes; không chứa raw dev rows/secrets.
+- Extract vào thư mục tạm riêng, kiểm path/count/bytes/SHA256/file thừa/deletions rồi dọn. Không ghi đè checkout hoặc database dev.
+
+**Exclusion công khai:** frontend/.env đã track sẵn trên HEAD và fetched dev, không đổi và chỉ có3key cấu hình Vite công khai. Pattern scan không thấy token/private-key; ZIP vẫn loại file env thật, giữ .env.example sau rà. Không tự git rm/sửa ignore ngoài scope. Các env thật/secrets/dependencies/build/upload/datadir/local artifacts không có trong ZIP. Pattern scan không được coi là bảo đảm phát hiện mọi loại secret.
+
+#### Checklist task hiện hành
+
+| AC | Trạng thái | Bằng chứng |
+| --- | --- | --- |
+| HANDOVER01-AC1 | PASS | Inventory tracked/untracked/deleted, HEAD/target/merge-base đầy đủ, nhận đủ lớp mới và không phục hồi lớp cũ |
+| HANDOVER01-AC2 | PASS | ZIP643entries, extract/hash/size/path/exclusions/deletions khớp manifest; envtracked được khai báo loại rõ |
+| HANDOVER01-AC3 | PASS |2docs bàn giao/PR phân completed refactor, owner,10UC hiện hữu/8TODO và UC21 chưa triển khai |
+| HANDOVER01-AC4 | PASS |2sửa nhỏ đúng giới hạn, global whitespace/syntax/autoload/route/skills/links đạt |
+| HANDOVER01-AC5 | PASS | Full SQLite/Node/lint/build và6suite XAMPP chạy mới, failed invocation/engine/datadir/limits ghi rõ |
+| HANDOVER01-AC6 | PASS | Đúng5path, source/dev hashes và index content/HEAD giữ baseline, tài nguyên owned dọn; không stage/commit/push/merge |
+
+**Kết luận PACKAGE VERIFIED, chờ người dùng nghiệm thu gói.** Chưa có GitHub mergeability/CI/review trên commit cuối hoặc approval merge. Nếu source/target đổi thì regenerate/reverify package và kiểm lại PR/integration gates theo BASELINE_PR_CHECKLIST.md. Browser/HTTP/14race cũ chỉ kế thừa trên code logic không đổi; không gọi là lượt runtime mới.
+
+Bước tiếp theo đề xuất: người dùng kiểm gói/tài liệu và nghiệm thu; thao tác commit/push/tạo PR/merge cần task/ủy quyền riêng. Không tự sửa hygiene frontend/.env hoặc triển khai UC21.
+
+## P1 · Mini Plan CAT-ROOM-IMG-00 — kiểm kê UC21
+
+**2026-11-16 (Asia/Bangkok) · PLANNED / APPROVAL PENDING. Chưa thực hiện task.** Theo chốt bàn giao, UC21 là phần tiếp theo của TV1; giữ kế hoạch tham khảo, không tự triển khai.
+
+Lượt chuẩn bị chỉ đọc source và ghi nhận nghiệm thu CAT-ROOM-AUDIT. UC21 thuộc TV1, tiếp tục theo phạm vi liên module được giao. Mục tiêu sau duyệt là kiểm kê API/UI/schema/storage/test và khoảng trống, không tạo API/UI quản lý ảnh.
+
+### Hiện trạng đọc source để lập kế hoạch
+
+- RoomImage và bảng room_images đã có id, room_id, image_path500, is_primary mặc định false, timestamps; FK rooms cascade. Chưa thấy ràng buộc chỉ một ảnh chính mỗi Room trong migration này.
+- GET /api/host/rooms/{room} qua HostRoomQueryService/Repository/CatalogMapper/Symfony ObjectMapper trả images là list URL string, không trả image ID/is_primary. Repository sort is_primary DESC, id ASC; PublicImageUrl lọc URL/path.
+- React /host/rooms/:roomId có gallery và empty state; hostRoomApi/service/mapper có luồng đọc, chưa có thao tác ảnh riêng. Public GET /api/public/properties/{property} cũng có rooms[].images.
+- Source catalog routes chưa có RoomImage list/upload/primary/delete API riêng. Room create/update không nhận file; không dùng làm API upload ảnh.
+- HostPropertyImageController/Service/Manager quản lý ảnh cơ sở qua property_images; là nguồn tham khảo, không phải UC21 đã triển khai.
+- Các nhận định trên là source inspection chuẩn bị plan, chưa thay thế kiểm chứng route/runtime/XAMPP của task.
+
+### Phạm vi file sau khi duyệt — đúng2file tài liệu
+
+| File | Hành động | Nội dung |
+| --- | --- | --- |
+| docs/TV1/UC21-ROOM-IMAGE-INVENTORY.md | Tạo | Ma trận API/UI/schema/storage/test hiện hữu; contract và ownership; gap/open decisions; bằng chứng thực thi và checkpoint đề xuất |
+| docs/TV3/TV3_CHECKLIST.md | Sửa | Cập nhật tiến độ/bằng chứng/AC và acceptance, giữ lịch sử audit |
+
+Source, migrations/seeders, .env, router, shared Axios, ARCHITECTURE và skills chỉ đọc. Không thêm test repo hoặc sửa guard. Harness/log/fixture tạm ngoài repo, chỉ dọn tài nguyên owned.
+
+### Checklist/AC chờ thực hiện
+
+| AC | Trạng thái đầu | Bằng chứng cần có sau duyệt |
+| --- | --- | --- |
+| ROOMIMG00-AC1 | NOT RUN | route:list đối chiếu code và UI navigation; phân biệt RoomImage/PropertyImage, endpoint thiếu không gọi là đã có |
+| ROOMIMG00-AC2 | NOT RUN | Schema XAMPP thực tế: columns/default/index/FK/engine; thống kê tổng hợp path/primary/orphan, không đổi dữ liệu dev |
+| ROOMIMG00-AC3 | NOT RUN | Contract gallery Host/Public, filter/order/empty/privacy; vai trò/account/ownership và response lỗi thực tế |
+| ROOMIMG00-AC4 | NOT RUN | React gallery/API thật, PNG local qua isolated storage, empty/error/retry và viewport1440/768/390; dữ liệu fixture được ghi rõ |
+| ROOMIMG00-AC5 | NOT RUN | Gap matrix upload/primary/delete, limit/MIME/size/count, cleanup/transaction/shared path/legacy URL và quyết định chưa chốt |
+| ROOMIMG00-AC6 | NOT RUN | Focused tests XAMPP đúng guard, regression SQLite/Node/lint/build tách engine và kết quả thật; không báo PASS trước khi chạy |
+| ROOMIMG00-AC7 | NOT RUN | Chỉ2file tài liệu đổi, baseline/dev fingerprints giữ nguyên, schema/storage/process owned dọn; báo cáo đúng7phần |
+
+### Kiểm chứng dự kiến sau duyệt
+
+- Giữ DB XAMPP127.0.0.1:3306, backend8000/frontend5173 hiện hữu; runtime fixture dùng backend8157/Vite5174/CDP9231 nếu trống, giữ origin5173. Nếu cổng bận không dừng service của người dùng.
+- MySQL read-only kiểm schema/data aggregate trước/sau. Runtime dùng schema stayhub_roomimg00_GUID32 riêng và storage tạm; migrate chỉ schema owned, không seed/migrate/refresh dev.
+- Chạy HostRoomDetailTest trên MariaDB với schema stayhub_room02_test_GUID32 và STAYHUB_ROOM_DETAIL_TEST_DATABASE; HostPropertyImagesTest (control ảnh cơ sở) dùng schema stayhub_mgmt06a_test_GUID32 và STAYHUB_PROPERTY_IMAGE_TEST_DATABASE. Mỗi suite/schema riêng; APP_ENV=testing, DB_URL rỗng, cache/session array, SELECT DATABASE xác nhận, giữ nguyên guard.
+- Catalog và full Backend chạy cấu hình SQLite :memory: hiện có bằng PHP XAMPP, không gọi là full MySQL. Frontend node --test tests/*.test.js, npm run lint, npm run build.
+- HTTP/React thật: owner200, guest401, Customer/Admin403, Host khác/missing404 và account không active theo middleware thực tế; projection/order/empty/invalid-private paths, không lộ ID/path nội bộ ngoài contract. Kiểm content ảnh PNG local200/image MIME; URL ngoài chỉ kiểm projection, không phụ thuộc provider bên ngoài.
+- Không upload/chọn chính/xóa qua API RoomImage chưa có; không bịa status contract cho mutation. Không chạy lại toàn bộ14race UC20, không sửa F01 hoặc dependency Booking/Maintenance.
+- Hash source và fingerprint10bảng dev trước/sau; cleanup chỉ schema/path/process được tạo bởi task. Global whitespace nền InvoiceService.php:91 ghi riêng nếu còn, không sửa ngoài scope.
+
+### Kết quả và thứ tự dự kiến
+
+1. Xác nhận baseline/route/schema và ma trận API/UI.
+2. Chạy focused XAMPP, fixture gallery/runtime và regression.
+3. Ghi inventory, gap/decision matrix, thứ tự checkpoint đề xuất.
+4. Self-review2file, cleanup và báo cáo Task Result7phần rồi dừng.
+
+Ước lượng60–90phút. Quy tắc chưa chốt: endpoint/payload ảnh riêng, có hiển thị image ID/primary trong contract quản lý không, MIME/size/count, primary khi upload/xóa, trạng thái Room/Property nào cho mutation, quản lý path/local/URL và cleanup sau commit/rollback. Không mặc nhiên dùng giới hạn ảnh cơ sở hoặc tự chốt nghiệp vụ. Finding cần sửa phải mở Mini Plan riêng; UC21 vẫn chưa triển khai/chưa nghiệm thu.
+
+## P2 · Mini Plan CLEANUP-ARCH-01 — dọn trước bàn giao
+
+**2026-11-16 (Asia/Bangkok) · PLAN APPROVED / TECHNICAL PASS / ACCEPTED sau tái kiểm E18.** Người dùng duyệt đúng5đường dẫn trên chat; helper đã chuyển, thư mục/datadir đã được người dùng dọn và kiểm tra lại. E17 giữ lịch sử bị chặn. Các AC NOT RUN dưới đây là trạng thái đầu của kế hoạch. UC21 chưa triển khai.
+
+### 1. Mục tiêu và baseline
+
+Dọn các thư mục app rỗng còn lại sau refactor và đưa CredentialRules (helper dùng chung, không phải Form Request) về Validators/Auth. Nhánh refactor/stayhub-layered-architecture, HEAD7dac999 cùng toàn bộ working tree đã nghiệm thu là baseline. Đây là task cleanup bổ sung, không mở lại các checkpoint refactor đã hoàn thành.
+
+Source inspection: Mapping và Http/Resources hiện rỗng; Http/Requests chỉ còn Auth/CredentialRules.php. Hai consumer trực tiếp là AuthValidator và ProfileValidator. Không tìm thấy namespace13lớp cũ trong source/routes/config/tests/database ở lượt rà trước. Kiểm tra lại ngay trước khi thực hiện, không dựa duy nhất vào kết quả cũ.
+
+### 2. Cách thực hiện và ranh giới
+
+Di chuyển nguyên thân CredentialRules, chỉ đổi namespace sang App\Validators\Auth; cập nhật đúng2import. Không thay email regex, password rules/byte limits/closure, messages hoặc dependency RegistrationService. So sánh hash nội dung sau chuẩn hóa namespace và reverse-import để chứng minh thay đổi chỉ là vị trí.
+
+Sau khi chuyển, kiểm tra lại file ẩn và file con; chỉ dọn thư mục rỗng được chỉ định. Nếu có file mới ngoài baseline trong thư mục đích dọn, không xóa file đó hoặc mở rộng scope. Xác minh đường dẫn tuyệt đối nằm trong backend/app; dọn từ thư mục con lên, không xóa đệ quy nội dung chưa kiểm tra. Không sửa code tương thích Resource trong Common, không xóa model nền.
+
+### 3. Contract và dữ liệu giữ nguyên
+
+Giữ nguyên login/register/profile/password/avatar contracts, HTTP status/field errors/messages/thứ tự validation; session/CSRF/account/ownership/throttle, hashing và transaction. Không thêm schema/seed, alias cũ hoặc dependency mới. Không đổi ARCHITECTURE: quy tắc Validators/domain hiện có đã bao phủ helper này; Requests trong sơ đồ là vị trí Form Request nếu module khác cần, không phải thư mục bắt buộc phải hiện diện trên disk.
+
+### 4. Test và kiểm chứng sau duyệt
+
+- Static: rg old namespace, class/autoload new namespace; php -l trên3file PHP sau chuyển; so sánh nội dung chỉ namespace/import đổi; route:list và signature method/URI/middleware giữ nguyên. composer dump-autoload --no-scripts để cập nhật generated autoload, không composer update/install hoặc sửa lock/dependency.
+- XAMPP: chạy toàn RegistrationTest trên schema stayhub_auth01c_test_GUID32, guard STAYHUB_REGISTRATION_TEST_DATABASE giữ nguyên; APP_ENV=testing, DB_CONNECTION=mysql,127.0.0.1:3306,DB_URL rỗng,cache/session array, SELECT DATABASE và actual migration proof trước khi báo PASS.
+- Runtime Laravel thật trên schema stayhub_cleanup01_GUID32/storage owned: Sanctum/session/CSRF, đăng ký hợp lệ/duplicate email/email sai, password thiếu xác nhận/không đủ độ mạnh/vượt72byte UTF8/null/whitespace; login, profile update, đổi password với current-password sai/password_confirmation sai/hợp lệ; verify persist/no-write, old-password fail/new-password login thành công và hành vi session baseline. Không log password/cookie/token.
+- Giữ3306/8000/5173 hiện hữu; runtime tạm backend8157/Vite5174/CDP9231 nếu cần và còn trống, origin5173. Không dừng service người dùng; không đổi frontend source.
+- Focused SQLite :memory: RegistrationTest, AuthenticationTest, ProfileTest, AvatarTransactionTest; sau đó full php artisan test theo phpunit.xml hiện có. Authentication/Profile/AvatarTransaction bị guard SQLite-only, không sửa guard và không báo là full MySQL.
+- Frontend không đổi nên không bắt buộc chạy lại Node/lint/build; nếu browser smoke dùng UI hiện hữu thì ghi đúng case chạy, không coi các test Frontend cũ là lượt mới.
+- Kiểm fingerprint dữ liệu dev trước/sau (gồm users và sessions nếu có cùng các bảng baseline liên quan), scope/hash/path, links/whitespace; dọn đúng schema/storage/cache/session/process fixture. Không migrate/seed/refresh database dev.
+
+### 5. Phạm vi file — đúng5đường dẫn,4file logic
+
+| File tính từ repository root | Hành động | Lý do |
+| --- | --- | --- |
+| backend/app/Http/Requests/Auth/CredentialRules.php | Di chuyển khỏi vị trí cũ | Không còn thuộc Http/Requests |
+| backend/app/Validators/Auth/CredentialRules.php | Nhận file chuyển, đổi namespace | Helper quy tắc credentials của domain Auth, Profile tái dùng |
+| backend/app/Validators/Auth/AuthValidator.php | Sửa đúng import | Tham chiếu namespace mới |
+| backend/app/Validators/Profile/ProfileValidator.php | Sửa đúng import | Tham chiếu namespace mới |
+| docs/TV3/TV3_CHECKLIST.md | Sửa | Ghi kế hoạch/kết quả/test/AC/acceptance |
+
+Thư mục vật lý được phép dọn sau khi xác nhận rỗng:
+
+- backend/app/Mapping.
+- backend/app/Http/Resources và4thư mục con Auth/Catalog/Invoice/Review.
+- backend/app/Http/Requests và5thư mục con Auth/Catalog/Invoice/Profile/Review; Auth chỉ rỗng sau khi chuyển helper.
+
+Tổng12thư mục vật lý hiện hữu (3root+9con), không phải12file. Git không theo dõi thư mục rỗng;13file cũ trạng thái D là baseline, không xóa thêm hoặc báo là thay đổi mới của task này. Temp harness/log và generated autoload chỉ là artifact kiểm chứng; không đưa vào PR.
+
+Không sửa test repo, routes, Controller/Service/DTO/Mapper/Model, bootstrap, .env, schema/seeders, Common, ARCHITECTURE, skills hoặc Frontend. Nếu cần thay ngoài5đường dẫn, báo scope cụ thể trước khi sửa.
+
+### 6. Checklist nghiệm thu
+
+| AC | Trạng thái đầu | Bằng chứng sau thực hiện |
+| --- | --- | --- |
+| CLEANUP01-AC1 | NOT RUN | Helper mới autoload được, thân lớp không đổi; old class/path không còn;2consumer đúng import |
+| CLEANUP01-AC2 | NOT RUN | Chỉ dọn12thư mục rỗng cho phép, path absolute đã kiểm; Controllers/Middleware và file nền giữ nguyên |
+| CLEANUP01-AC3 | NOT RUN | Registration suite MariaDB/HTTP XAMPP chứng minh email/password/contract/persistence/session không đổi |
+| CLEANUP01-AC4 | NOT RUN | Focused SQLite/full suite và route parity đạt; không nới DB guard hoặc đổi protected-route count |
+| CLEANUP01-AC5 | NOT RUN | Đúng5đường dẫn, hash ngoài scope/dev fingerprints giữ nguyên, cleanup tài nguyên owned và checklist chính xác |
+
+### 7. Thứ tự và thời lượng
+
+Chụp baseline/source/data/routes → chuyển helper và2import → dọn đúng thư mục rỗng → lint/autoload/static → XAMPP focused/runtime → SQLite focused/full → scope/data/cleanup → Task Result7phần và dừng. Ước lượng45–90phút.
+
+Rủi ro chính là bỏ sót consumer, autoload cũ và xóa nhầm khi thư mục xuất hiện file mới. Gặp failure thì báo kết quả thực tế, không sửa test/contract để đạt PASS. Global whitespace nền InvoiceService.php:91 được ghi riêng nếu còn; không sửa ngoài scope. Không commit/push/merge và không triển khai UC21.
+
+## P3 · Mini Plan HANDOVER-BASELINE-01 — đóng gói bàn giao và kiểm tra trước PR dev
+
+**2026-11-16 (Asia/Bangkok) · PLAN APPROVED / TECHNICAL PASS / PACKAGE VERIFIED E19.** Người dùng duyệt đúng5đường dẫn trên chat. Trạng thái NOT RUN ở bảng kế hoạch là trạng thái đầu; kết quả hiện hành xem E19. Chưa stage/commit/push/merge hoặc triển khai UC21.
+
+### 1. Mục tiêu và hiện trạng
+
+Tạo bản snapshot source đầy đủ của baseline đã nghiệm thu, manifest/hash/deletions, tài liệu bàn giao TV1/TV2 và draft nội dung PR. Phân biệt gói đã kiểm chứng với PR đã được phép merge.
+
+Tại lượt lập plan: nhánh refactor/stayhub-layered-architecture, HEAD7dac999;188đường dẫn Git thay đổi mở rộng gồm59modified/14deleted/115untracked. Local dev và origin/dev cùng đứng951f62e (metadata local); ahead/behind hiện0/2theo dev...HEAD. Chưa fetch nên không gọi đây là trạng thái dev mới nhất trên server. Không dùng git archive HEAD hoặc diff tracked đơn lẻ làm gói duy nhất vì bỏ sót115file untracked.
+
+### 2. Cách đóng gói và ranh giới
+
+- Chốt inventory từ git ls-files + untracked không ignored, phân nhóm domain, action added/modified/deleted và SHA256 của từng file hiện hữu. Rà tên/nội dung nhạy cảm mà không in giá trị secret ra log.
+- Source ZIP là snapshot file hiện hữu thuộc allowlist đã rà, gồm file untracked cần chạy và lockfiles; không phải chỉ patch. Có manifest, deleted-paths và mô tả base/target/working tree đi cùng.
+- Loại .git, .env thật, credentials/auth.json/private keys, vendor, node_modules, builds, public/storage link, upload, DB dumps/datadir, TEMP harness/log và artifact local. .env.example chỉ được đưa vào khi đã kiểm không chứa secret thật.
+- Artifact đặt trong .agent-workspace/handover-baseline-<GUID32>/ đã ignored: source.zip, manifest.json, deleted-paths.txt, git-state.json và checks/log đã lọc. Không thêm archive/binary/generated artifact vào PR. Manifest/hash ZIP lưu ngoài ZIP để tránh tự hash chính nó.
+- Extract vào thư mục tạm riêng rồi đối chiếu path/hash/count, absence các file deleted và blacklist; không ghi đè checkout/DB dev, không áp patch vào working tree để thử.
+- Không git add vào index thật, stash/reset/checkout/rebase/commit/push/merge. Không gửi thông báo/email cho team. Nội dung bàn giao và PR chỉ tạo draft local.
+
+### 3. Baseline/contract và hai sửa nhỏ trước gói
+
+1. InvoiceService.php:91 có một dòng trống chứa4space; chỉ bỏ whitespace, không đổi logic/cấu trúc transaction. So sánh diff bỏ qua whitespace phải không có thay đổi mới.
+2. ARCHITECTURE.md14.2 đang ghi Profile mutations còn Form Request, trái baseline đã nghiệm thu; chỉ sửa ô ví dụ Auth/Profile thành Validator + typed Request DTO + Repository. Không ghi tiến độ/count/checklist vào kiến trúc hoặc viết lại tài liệu.
+
+Các luồng nghiệp vụ/contract đã nghiệm thu khác giữ nguyên. Manifest ghi rõ phạm vi Invoice/Review/Auth/Profile/Catalog,10UC TV3 đã có luồng chính so với8UC TODO; phần bàn giao TV1/TV2, QA/tích hợp Booking và giới hạn XAMPP/uniqueness/writers giữ nguyên. UC21 là chưa thực hiện, không đóng như đã tích hợp.
+
+### 4. Cổng kiểm tra trước PR/merge
+
+**Chạy được trong task sau duyệt, chưa commit:**
+- Git inventory đầy đủ tracked/untracked/deleted; secret/artifact exclusion; git diff --check toàn working tree phải đạt sau sửa đúng whitespace. Syntax/autoload/namespace cũ, route count/signature, links và kỹ năng frontmatter nếu nằm trong gói.
+- Full Backend theo phpunit.xml SQLite :memory:; Frontend node --test tests/*.test.js, npm run lint, npm run build. Ghi cảnh báo nền thực tế, không tự sửa ngoài scope nếu phát sinh failure.
+- XAMPP targeted: RegistrationTest và5HostRoom{List,Detail,Create,Update,Status}Test, mỗi class/schema/guard riêng hiện có; APP_ENV testing, DB_URL rỗng/cache-session array, SELECT DATABASE và migration proof; không nới guards. Không gọi đây là full MySQL.
+- Nếu instance XAMPP dev còn lỗi mysql.proxies_priv: không repair/replace/skip-grants; dùng binary XAMPP với datadir server tạm riêng khi cổng3306 trống. Nếu3306 đang được instance khác giữ nhưng không dùng được thì ghi BLOCKED, không dừng service để giành cổng. Báo đúng engine/datadir thay thế và không claim SQL dev PASS.
+- Runtime14race/HTTP/browser cũ chỉ kế thừa nếu source tương ứng giữ hash; không báo là lượt mới. Test lại runtime khi có thay đổi/failure mới có liên quan; không mở rộng workflow ngoài baseline.
+- Thu thập trạng thái branch/target và có thể git fetch origin dev sau duyệt; không checkout/merge. Rà đường dẫn trùng thay đổi từ merge-base trên target dev mới với188path hiện tại, đánh dấu conflict risks. So sánh path/diff không chứng minh GitHub mergeable.
+- Verify ZIP bằng extract/hash, nhận đủ mapper/DTO/validators và xóa đúng lớp cũ; fingerprint dev trước/sau (offline nếu SQL không khả dụng), cleanup tài nguyên owned và scope.
+
+**Gate cuối trước merge, chưa được phép thực hiện trong task này:**
+- Người dùng commit/push đúng inventory đã duyệt, PR target dev; đối chiếu PR diff thực tế với manifest.
+- Xác nhận GitHub mergeability/conflicts, CI bắt buộc và review/approval team trên commit cuối.
+- Nếu dev thay đổi/resolve conflict hoặc code PR khác snapshot: chạy lại checks và integration cần thiết trên code kết hợp trước merge.
+- Merge rehearsal/CI trên kết quả tích hợp phải giữ ownership/session/file cleanup/route và hợp đồng Booking/Maintenance. Chưa tích hợp module TV2 thì ghi dependency mở, không báo availability/workflow production đã được xác nhận.
+- Chỉ owner merge sau khi duyệt riêng. Task này chỉ có thể chốt PACKAGE VERIFIED khi gate local/package đạt; MERGE APPROVAL vẫn PENDING.
+
+### 5. Phạm vi file — đúng5đường dẫn repo sau duyệt
+
+| File | Hành động | Nội dung giới hạn |
+| --- | --- | --- |
+| docs/TV3/BASELINE_HANDOVER.md | Tạo | Bản bàn giao TV1/TV2, phạm vi nghiệm thu/cấu trúc/contract, việc owner tiếp tục, cách nhận snapshot và restore source |
+| docs/TV3/BASELINE_PR_CHECKLIST.md | Tạo | Gate local/package/PR/merge, kết quả engine/date, exclusions, dependencies và draft title/body PR |
+| docs/TV3/TV3_CHECKLIST.md | Sửa | Task/result/evidence/acceptance, không tự đóng các UC chưa làm |
+| ARCHITECTURE.md | Sửa đúng1ô bảng14.2 | Bỏ mô tả Profile Form Request lỗi thời, mô tả lớp thực tế đã nghiệm thu; không ghi tiến độ |
+| backend/app/Services/Invoice/InvoiceService.php | Sửa whitespace đúng1dòng91 | Xóa4space trên dòng trống, không đổi logic |
+
+Không sửa .gitignore, env/dependencies/lock, test/guard, routes/protected count, bootstrap, Frontend hoặc code module khác. Artifact/checks trong .agent-workspace ignored không phải source thêm vào PR. Nếu inventory phát hiện file nhạy cảm tracked hoặc failure cần thay ngoài5đường dẫn, ghi blocker và đề xuất scope cụ thể; không tự sửa/xóa/loại âm thầm file đang cần chạy.
+
+### 6. Checklist nghiệm thu
+
+| AC | Trạng thái đầu | Bằng chứng cần có |
+| --- | --- | --- |
+| HANDOVER01-AC1 | NOT RUN | Inventory đầy đủ tracked/untracked/deleted và HEAD/target rõ; không bỏ lớp mới hoặc đưa lại lớp cũ |
+| HANDOVER01-AC2 | NOT RUN | Source ZIP/manifest/extract SHA256 khớp, không chứa secrets/env/build/dependencies/data local |
+| HANDOVER01-AC3 | NOT RUN | Tài liệu bàn giao/PR phân rõ completed refactor, TV1/TV2,10UC hiện hữu/8TODO, integration và UC21 chưa triển khai |
+| HANDOVER01-AC4 | NOT RUN | Whitespace/doc correction đúng giới hạn, diff-check/syntax/autoload/routes/links đạt |
+| HANDOVER01-AC5 | NOT RUN | Full SQLite/Frontend và targeted XAMPP có kết quả mới, guard/engine/datadir/limits minh bạch |
+| HANDOVER01-AC6 | NOT RUN | Đúng5file scope, data/source baseline và cleanup; không stage/commit/push/merge hoặc tự đóng gate PR tương lai |
+
+### 7. Thứ tự, rủi ro và thời lượng
+
+Chụp baseline/target → rà inventory và exclusions → sửa đúng whitespace/ô doc, viết2tài liệu → chạy gates → chốt docs/checklist → tạo ZIP/manifest từ source cuối, extract kiểm hash → final review/cleanup/report7phần rồi dừng.
+
+Không sửa file đã đóng gói sau khi kiểm manifest; nếu cần sửa phải regenerate và verify gói. Ước lượng60–90phút, phụ thuộc XAMPP/network/CI; báo thực tế nếu blocked. Không gộp xử lý CI/conflict/schema hoặc triển khai UC mới vào task đóng gói. Trạng thái đầu là chưa kiểm chứng package/PR, không dùng các counts E17/E18 để tự đánh dấu gate mới PASS.
+
+## Nguồn code hiện hành
+
+- [Billing routes](../../backend/routes/api/billing.php), [Invoice services](../../backend/app/Services/Invoice) và [Invoice frontend service](../../frontend/src/services/invoiceService.js).
+- [Review routes](../../backend/routes/api/reviews.php), [Review backend mapper](../../backend/app/Mappers/Review/ReviewMapper.php), [Review frontend mapper](../../frontend/src/mappers/reviewMapper.js) và [Review modal](../../frontend/src/components/reviews/ReviewCreateModal.jsx).
+- [React routes](../../frontend/src/routes/AppRouter.jsx), [Host Dashboard](../../frontend/src/pages/host/HostDashboardPage.jsx) và [Admin Dashboard](../../frontend/src/pages/admin/AdminDashboardPage.jsx).
+- [Schema migration](../../backend/database/migrations/2026_10_08_000000_create_stayhub_schema.php) và [models](../../backend/app/Models) cho nền dữ liệu FAQ/Chat.
+- [Profile routes](../../backend/routes/api/profile.php), [Profile services](../../backend/app/Services/Profile), [Profile Validator](../../backend/app/Validators/Profile/ProfileValidator.php) và [Profile Repository](../../backend/app/Repositories/Profile/ProfileRepository.php).
+- [Catalog routes](../../backend/routes/api/catalog.php), [Catalog Repository](../../backend/app/Repositories/Catalog/CatalogRepository.php) và [Host property frontend](../../frontend/src/pages/host/HostPropertyDetailPage.jsx).
+- [Host Room controller](../../backend/app/Http/Controllers/Catalog/HostRoomController.php), [Host Room query](../../backend/app/Services/Catalog/HostRoomQueryService.php), [Host Room frontend](../../frontend/src/components/catalog/HostRoomList.jsx) và [Host Room test](../../backend/tests/Feature/Catalog/HostRoomListTest.php).
+- [Host Room detail DTO](../../backend/app/DTOs/Catalog/Responses/HostRoomDetailResponse.php), [Host Room detail page](../../frontend/src/pages/host/HostRoomDetailPage.jsx) và [Host Room detail test](../../backend/tests/Feature/Catalog/HostRoomDetailTest.php).
+- [Host Room create DTO](../../backend/app/DTOs/Catalog/Requests/CreateHostRoomRequest.php), [Host Room service](../../backend/app/Services/Catalog/HostRoomService.php), [Create form](../../frontend/src/components/catalog/HostRoomCreateForm.jsx) và [Create test](../../backend/tests/Feature/Catalog/HostRoomCreateTest.php).
+- [Host Room update DTO](../../backend/app/DTOs/Catalog/Requests/UpdateHostRoomRequest.php), [Edit form](../../frontend/src/components/catalog/HostRoomEditForm.jsx) và [Update test](../../backend/tests/Feature/Catalog/HostRoomUpdateTest.php).
+- [Host Room status Request](../../backend/app/DTOs/Catalog/Requests/ChangeHostRoomStatusRequest.php), [Status form](../../frontend/src/components/catalog/HostRoomStatusForm.jsx) và [Status feature tests](../../backend/tests/Feature/Catalog/HostRoomStatusTest.php).

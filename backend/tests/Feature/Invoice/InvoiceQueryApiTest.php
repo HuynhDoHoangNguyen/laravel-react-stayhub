@@ -617,7 +617,7 @@ class InvoiceQueryApiTest extends TestCase
     public function test_service_checks_role_before_repository_queries_outside_http(): void
     {
         $repository = $this->app->make(\App\Repositories\Invoice\InvoiceRepository::class);
-        $service = new \App\Services\Invoice\InvoiceQueryService($repository, new \App\Mappers\Invoice\InvoiceMapper);
+        $service = new \App\Services\Invoice\InvoiceQueryService($repository, $this->app->make(\App\Mappers\Invoice\InvoiceMapper::class));
         $filters = new \App\DTOs\Invoice\Requests\InvoiceFilterRequest;
         \Illuminate\Support\Facades\DB::flushQueryLog();
         \Illuminate\Support\Facades\DB::enableQueryLog();

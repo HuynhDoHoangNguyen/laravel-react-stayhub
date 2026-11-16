@@ -1,822 +1,697 @@
 # Kiến trúc hệ thống StayHub
 
-Tài liệu này mô tả kiến trúc kỹ thuật của StayHub, ranh giới giữa frontend và backend, cấu trúc thư mục của từng ứng dụng, luồng dữ liệu, quy tắc nghiệp vụ và định hướng mở rộng khi triển khai các module tiếp theo.
-
-> **Trạng thái tài liệu:** quy ước hiện hành sau SIMPLIFY-01A/B nằm ở mục 4, 13 và 14. Inventory khởi tạo được đánh dấu lịch sử; target toàn dự án không có nghĩa mọi module đã migrated. Code và contract thực tế được ưu tiên khi triển khai task.
+Tài liệu này mô tả cấu trúc và quy chuẩn kỹ thuật dùng chung cho TV1, TV2 và TV3.
+Cập nhật tài liệu khi cấu trúc hoặc quy chuẩn kiến trúc thay đổi.
+Ghi tiến độ, kiểm thử và nghiệm thu vào checklist của phạm vi tương ứng.
 
 ## 1. Tổng quan hệ thống
 
-StayHub được tổ chức theo mô hình monorepo gồm hai ứng dụng độc lập:
+StayHub gồm hai ứng dụng triển khai độc lập trong cùng repository:
 
-- `frontend/`: Single Page Application (SPA) viết bằng React và Vite;
-- `backend/`: REST API viết bằng Laravel, đồng thời quản lý xác thực session bằng Sanctum;
-- MySQL: nơi lưu dữ liệu nghiệp vụ và session;
-- dịch vụ AI/LLM: thành phần tùy chọn cho chatbot, chỉ được gọi thông qua backend.
+- **Frontend** — React 19, Vite, React Router, JavaScript/JSX và Tailwind CSS.
+- **Backend** — Laravel 12, PHP 8.2+, Sanctum, Eloquent và PHPUnit.
+- **Database** — MySQL hoặc MariaDB trong môi trường XAMPP, dùng InnoDB cho các bảng nghiệp vụ.
+- **Chatbot** — tích hợp provider qua Backend khi triển khai tính năng. Backend xác định dữ liệu được phép đưa vào ngữ cảnh.
 
-Ở mức triển khai, đây là kiến trúc **client-server tách biệt**. Ở mức mã nguồn backend, hệ thống đi theo hướng **modular monolith có phân lớp**: các module nghiệp vụ cùng chạy trong một ứng dụng Laravel nhưng được tách theo trách nhiệm.
+Backend là một ứng dụng Laravel tổ chức theo domain và phân lớp. Frontend tích hợp qua HTTP/JSON. Các endpoint file có contract stream hoặc multipart tương ứng.
 
-```mermaid
+~~~mermaid
 flowchart LR
-    UI[React Page / Component] --> FS[Domain Service / Mapper]
-    FS --> API[Domain API / Shared Axios]
-    API --> R[Route / Middleware]
+    P[React Page / Component] --> F[Domain Service]
+    F --> FM[Frontend Mapper]
+    F --> A[Domain API / Shared Axios]
+    A --> R[Route / Middleware]
     R --> C[Controller]
-    C --> V[Input / Authorization Validator]
-    C --> D[Request Mapper / DTO]
+    C --> V[Input Validator / Request DTO]
     C --> S[Service / QueryService]
-    S --> RP[Concrete Repository]
-    RP --> M[Eloquent Model / MySQL]
-    S --> OUT[Response Mapper / DTO]
-    OUT --> COMMON[ApiResponse / PageResponse]
-    COMMON --> UI
-```
+    S --> RP[Repository]
+    RP --> M[Eloquent Model]
+    M --> DB[(MySQL / InnoDB)]
+    S --> RM[Response Mapper / DTO]
+    RM --> C
+    C --> O[HTTP Response]
+    O --> F
+~~~
 
-Sơ đồ mô tả target đã áp dụng cho Invoice read/create. Validator được gọi trước mapper/service; business validator có thể được Service sử dụng. Module legacy được liệt kê ở mục 14; sơ đồ không cấp quyền tự chuyển chúng.
+| Thành phần | Trách nhiệm |
+| --- | --- |
+| React | Điều hướng, nhập liệu, trình bày dữ liệu và trạng thái của request |
+| Laravel | Xác thực, phân quyền, kiểm tra đầu vào, quyết định nghiệp vụ và bảo toàn giao dịch |
+| Database | Dữ liệu bền vững, khóa, quan hệ, unique constraint và chỉ mục |
+| Provider bên ngoài | Xử lý yêu cầu theo dữ liệu và quyền do Backend giới hạn |
 
-### Ranh giới trách nhiệm
+### Ranh giới nhóm
 
-| Thành phần | Chịu trách nhiệm | Không chịu trách nhiệm |
+| Owner | Domain | Điểm tích hợp |
 | --- | --- | --- |
-| Frontend | hiển thị UI, điều hướng, thu thập input, trạng thái giao diện, gọi API | quyết định quyền truy cập, tính giá cuối cùng, xác nhận phòng trống |
-| Backend | xác thực, phân quyền, validation, nghiệp vụ, transaction, chuẩn hóa response | phụ thuộc vào việc frontend đã ẩn/hiện nút đúng hay chưa |
-| Database | lưu dữ liệu, khóa ngoại, unique/index, tính toàn vẹn cơ bản | thay thế validation và authorization ở backend |
-| AI/LLM | sinh câu trả lời từ ngữ cảnh backend cung cấp | truy cập trực tiếp database hoặc tự ý tạo/hủy booking |
+| TV1 | Identity, Profile, Property Catalog | Session, User, Property, Room và điều kiện hiển thị công khai |
+| TV2 | Availability, Booking, Operations, dịch vụ phát sinh | Trạng thái Booking, lịch phòng và snapshot giá |
+| TV3 | Invoice, Review, Reporting, FAQ và Chat | Billing sau Booking, đánh giá theo quyền và báo cáo theo dữ liệu đã xác nhận |
+
+Chi tiết giao việc nằm trong [tài liệu phân công](docs/stayhub-team-work-assignment.md).
+Thống nhất contract với owner khi task phụ thuộc dữ liệu hoặc endpoint của domain khác.
 
 ## 2. Cấu trúc repository
 
-```text
+~~~text
 stayhub/
-├── backend/                         # Ứng dụng Laravel 12 (REST API & Sanctum)
-├── frontend/                        # Ứng dụng React 19 + Vite (SPA chính thức của StayHub)
-├── docs/                            # Tài liệu phân tích, thiết kế & template UI
-│   ├── stayhub-erd.md               # ERD và data dictionary mục tiêu
-│   ├── stayhub-screen-mockups.md    # Danh sách màn hình và thiết kế UI
-│   ├── stayhub-usecase-system.md    # Actor, use case và luồng nghiệp vụ
-│   ├── stayhub-team-work-assignment.md # Phân công trách nhiệm 3 thành viên (TV1, TV2, TV3)
-│   ├── seed-data.md                 # Dữ liệu mẫu khởi tạo hệ thống
-│   ├── ai-frontend-development-guide.md # Hướng dẫn AI phát triển Frontend & tái sử dụng template
-│   └── StayNest-Frontend-template/  # Template giao diện tham khảo (React 19 + Tailwind v4)
-├── ARCHITECTURE.md                  # Tài liệu kiến trúc này
-└── README.md                        # Giới thiệu và cách chạy dự án
-```
+├── backend/
+│   ├── app/                         # Laravel application
+│   ├── routes/                      # Web và API
+│   ├── database/                    # Migrations, factories và seeders
+│   └── tests/                       # Unit và Feature
+├── frontend/
+│   ├── src/                         # SPA
+│   └── tests/                       # Node tests cho logic và HTTP adapter
+├── docs/                            # Use case, ERD, hướng dẫn và checklist
+├── .agents/skills/                  # Hướng dẫn thực thi theo trách nhiệm
+├── ARCHITECTURE.md
+└── README.md
+~~~
 
-Hai thư mục `frontend/` và `backend/` có dependency, lệnh build và tiến trình chạy riêng. Không import mã nguồn trực tiếp qua lại giữa hai ứng dụng; hợp đồng tích hợp là HTTP/JSON.
+Hai ứng dụng có dependency, lệnh chạy và quy trình build riêng.
+Contract tích hợp xác định URL, method, input, output, lỗi, quyền và hướng tương thích.
+Khi tài liệu hoặc template mô tả một endpoint, kiểm tra route và consumer thực tế trước khi dựa vào endpoint đó.
 
 ## 3. Kiến trúc frontend
 
-### 3.1 Công nghệ và kiểu kiến trúc
+### 3.1 Cấu trúc và chiều phụ thuộc
 
-- React 19 xây dựng giao diện theo component;
-- Vite 8 cung cấp dev server và đóng gói production;
-- React Router DOM 7 điều hướng phía client;
-- Axios làm HTTP client;
-- JavaScript/JSX;
-- ESLint kiểm tra chất lượng mã nguồn.
+~~~text
+frontend/src/
+├── main.jsx
+├── App.jsx
+├── routes/AppRouter.jsx
+├── context/                         # Auth và trạng thái toàn ứng dụng
+├── layouts/                         # Public, Customer, Host, Admin
+├── pages/                           # Màn hình theo route và vai trò
+├── components/                      # UI primitives và component theo feature
+├── hooks/                           # Logic React tái sử dụng
+├── services/                        # Điều phối request, mapping và workflow UI
+├── api/                             # Domain API, shared Axios và chuẩn hóa lỗi
+├── mappers/                         # Projection và normalization theo domain
+├── utils/                           # Helper dùng chung
+├── assets/
+└── mocks/                           # Fixture DEV có điều kiện kích hoạt tường minh
+~~~
 
-Frontend đi theo kiến trúc **component-based kết hợp route/layout và service layer**:
+~~~text
+Route và Layout
+  → Page / Component / Hook
+    → Domain Service
+      → Domain API → Shared Axios → Laravel
+      ← Response JSON
+      → Mapper → Dữ liệu cho UI
+~~~
 
-```text
-main.jsx
-  -> BrowserRouter
-    -> App.jsx
-      -> AppRouter.jsx
-        -> Layout theo nhóm người dùng
-          -> Page
-            -> Feature/Common Component
-              -> Service
-                -> Axios Client
-                  -> Laravel API
-```
+Các module đã có lớp Domain API giữ URL, method và cấu hình transport tại đó.
+Module đang chuyển đổi có thể còn gọi shared Axios từ service. Kiểm tra contract và scope trước khi tách lớp.
 
-### 3.2 Cấu trúc frontend khởi tạo (inventory lịch sử)
+### 3.2 Trách nhiệm từng lớp
 
-Cây/route dưới đây là snapshot khởi tạo, không phải inventory runtime hiện hành. Invoice API/error/service chung create-read/mapper hiện có được ghi tại mục 13.4 và 14; kiểm tra AppRouter thực tế trước task.
+#### Routes, layouts và context
 
-```text
-frontend/
-├── public/                          # Static assets phục vụ nguyên trạng (khi có)
-├── src/
-│   ├── api/
-│   │   └── axios.js                 # Axios instance dùng chung
-│   ├── assets/                      # Ảnh, font, icon được bundler xử lý
-│   ├── components/
-│   │   ├── admin/                   # Component riêng cho Admin
-│   │   ├── common/                  # Component tái sử dụng toàn hệ thống
-│   │   ├── customer/                # Component riêng cho Customer
-│   │   └── host/                    # Component riêng cho Host
-│   ├── hooks/                       # Custom React hooks
-│   ├── layouts/
-│   │   ├── AdminLayout.jsx
-│   │   ├── CustomerLayout.jsx
-│   │   ├── HostLayout.jsx
-│   │   └── PublicLayout.jsx
-│   ├── pages/
-│   │   ├── admin/
-│   │   │   └── AdminDashboardPage.jsx
-│   │   ├── customer/
-│   │   │   └── CustomerDashboardPage.jsx
-│   │   ├── host/
-│   │   │   └── HostDashboardPage.jsx
-│   │   └── public/
-│   │       ├── ApiTestPage.jsx
-│   │       ├── HomePage.jsx
-│   │       └── LoginTestPage.jsx
-│   ├── routes/
-│   │   └── AppRouter.jsx            # Khai báo route và layout
-│   ├── services/                    # Đang trống, dành cho API theo module
-│   ├── utils/                       # Đang trống, helper thuần
-│   ├── App.jsx                      # Root component
-│   ├── index.css                    # CSS toàn cục
-│   └── main.jsx                     # Entry point, mount React
-├── .env                             # Biến môi trường local, không commit
-├── eslint.config.js
-├── index.html
-├── package.json
-└── vite.config.js
-```
+- AppRouter gắn page vào layout theo vai trò. Layout sở hữu navigation, outlet và khung giao diện.
+- Route guard dùng Auth state để điều hướng. Laravel thực thi quyền trên mọi request và resource.
+- Context xử lý restore session và trạng thái người dùng. Request cũ phải tôn trọng baseline phiên khi đăng xuất hoặc đổi tài khoản.
+- Chỉ thay đổi router, layout hoặc context dùng chung khi task cần và phạm vi file được xác nhận.
 
-Các route hiện có:
+#### Pages, components và hooks
 
-| URL | Layout | Page | Trạng thái bảo vệ |
-| --- | --- | --- | --- |
-| `/` | `PublicLayout` | `HomePage` | public |
-| `/api-test` | `PublicLayout` | `ApiTestPage` | public, dùng kiểm tra kết nối |
-| `/login-test` | `PublicLayout` | `LoginTestPage` | public, dùng kiểm tra Sanctum |
-| `/customer` | `CustomerLayout` | `CustomerDashboardPage` | chưa có route guard frontend |
-| `/host` | `HostLayout` | `HostDashboardPage` | chưa có route guard frontend |
-| `/admin` | `AdminLayout` | `AdminDashboardPage` | chưa có route guard frontend |
+- Page giữ state màn hình và điều phối data loading. Component trình bày props, thu thập input và phát sự kiện.
+- Hook dùng cho logic React có vòng đời hoặc state. Dùng AbortSignal hoặc request identity để tránh response muộn khi đổi filter, page, resource hoặc session.
+- Xử lý loading ban đầu, refresh, empty thật, error và success. Giữ nội dung tiếng Việt, responsive và thao tác bàn phím.
+- Mutation cần guard gửi trùng. Với kết quả chưa rõ do timeout hoặc mất phản hồi, dùng trạng thái phục hồi phù hợp để người dùng xác nhận trước khi gửi lại.
 
-### 3.3 Trách nhiệm từng lớp frontend
+#### Domain service, API và mapper
 
-#### `pages/`
+- Service giữ signature dùng bởi UI, chuẩn hóa query/payload, gọi API và map kết quả. Giữ cùng module service cho các thao tác liên quan khi cùng chia sẻ contract.
+- Domain API gọi shared Axios với URL, method, query, body và signal. Tôn trọng cơ chế Auth và lỗi của adapter.
+- Mapper đặt tại src/mappers, thuần và có thể test bằng fixture độc lập. Mapper bảo toàn null, trường được lược bỏ, decimal string, ngày, links và meta theo contract.
+- Kiểm tra response thành công ở điểm tiêu thụ. Dữ liệu rỗng hợp lệ, response sai cấu trúc và lỗi HTTP dẫn đến các trạng thái rõ ràng.
+- UI chỉ format tiền bằng Intl.NumberFormat. Nguồn giá, phí và tổng thanh toán là Backend.
 
-Page đại diện cho một màn hình gắn với URL. Page được phép điều phối dữ liệu và trạng thái của màn hình, nhưng không nên chứa chi tiết cấu hình Axios hoặc lặp lại logic gọi API.
+#### Shared Axios và lỗi
 
-#### `layouts/`
+- Shared client đọc VITE_BACKEND_URL. Dùng origin như http://localhost:8000 để gọi cả route Web và route /api.
+- Giữ Accept: application/json, cookie, XSRF và cơ chế phân biệt lỗi session/account với lỗi quyền domain.
+- Giữ nguyên rejection identity và nhận diện cancellation nếu caller dựa vào chúng. Chuẩn hóa lỗi khi chuyển sang dữ liệu hiển thị.
+- Chỉ gửi lại mutation khi workflow đã xác định cách retry. Các request GET có thể retry bằng trạng thái UI tương ứng.
 
-Layout định nghĩa khung giao diện dùng chung cho từng vùng public, customer, host và admin. `Outlet` là vị trí render page con. Layout có thể chứa navbar, sidebar và footer, nhưng kiểm tra quyền thật sự vẫn phải diễn ra tại backend.
+### 3.3 Tái sử dụng template và mock
 
-#### `components/`
+Dùng [StayNest template](docs/StayNest-Frontend-template/) làm nguồn tham khảo giao diện.
+Chọn layout, card, form, dialog, bảng và design tokens phù hợp với theme StayHub.
+Dữ liệu, quyền, route, tên trạng thái và luồng nghiệp vụ lấy từ StayHub.
 
-- `common/`: button, modal, table, pagination, loading, error state;
-- `customer/`, `host/`, `admin/`: component chỉ dùng trong phạm vi vai trò tương ứng.
-
-Component nên nhận dữ liệu qua props và phát sự kiện; không nên tự biết quá nhiều về URL API nếu logic đó có thể đặt trong service.
-
-#### `services/`
-
-Đây là lớp giao tiếp với backend theo module. Kiến trúc mục tiêu:
-
-```text
-services/
-├── authService.js
-├── propertyService.js
-├── roomService.js
-├── bookingService.js
-├── invoiceService.js
-├── reviewService.js
-└── chatbotService.js
-```
-
-Page gọi hàm nghiệp vụ như `bookingService.create(payload)` thay vì gọi `axios.post(...)` rải rác. Service chịu trách nhiệm endpoint và tham số; page chịu trách nhiệm trạng thái loading/success/error.
-
-#### `api/axios.js`
-
-Axios instance hiện đọc `VITE_BACKEND_URL`, gửi header `Accept: application/json`, cookie (`withCredentials`) và XSRF token (`withXSRFToken`). Vì `/login` và `/sanctum/csrf-cookie` nằm ngoài `/api`, base URL nên là origin backend, ví dụ `http://localhost:8000`; các API nghiệp vụ phải gọi với tiền tố `/api/...`.
-
-#### `hooks/` và `utils/`
-
-- hook chứa logic React có thể tái sử dụng, ví dụ `useAuth`, `usePagination`;
-- utility là hàm thuần, ví dụ format tiền/ngày hoặc ánh xạ trạng thái;
-- không đặt business rule quan trọng chỉ ở hai thư mục này vì backend mới là source of truth.
-
-### 3.4 Cấu trúc frontend mục tiêu khi mở rộng
-
-Dưới đây là cấu trúc mở rộng hoàn chỉnh của `frontend/src/` cho toàn bộ các use cases và 3 vai trò:
-
-```text
-frontend/
-├── public/                          # Static assets phục vụ nguyên trạng
-├── src/
-│   ├── api/                         # Giao tiếp HTTP với Laravel REST API
-│   │   ├── axios.js                 # Axios instance (baseURL, withCredentials, XSRF token)
-│   │   ├── authApi.js               # /login, /register, /logout, /api/me
-│   │   ├── propertyApi.js           # /api/public/properties, /api/host/properties, rooms
-│   │   ├── bookingApi.js            # /api/customer/bookings, search, availability
-│   │   ├── invoiceApi.js            # /api/host/invoices, /api/customer/invoices
-│   │   ├── reviewApi.js             # /api/customer/bookings/{id}/review
-│   │   └── chatbotApi.js            # /api/customer/chat/sessions, messages
-│   │
-│   ├── assets/                      # Ảnh banner, logo, icon tĩnh
-│   │
-│   ├── components/                  # Thư viện component phân tách theo domain
-│   │   ├── common/                  # Component dùng chung (Navbar, Footer, Pagination, Modal, Loading, ErrorState)
-│   │   ├── ui/                      # UI primitives tái sử dụng (Button, Input, Dialog, Calendar, Table, Badge, Card...)
-│   │   ├── customer/                # Component dành cho khách (SearchForm, RoomCard, BookingSummary, InvoiceCard...)
-│   │   ├── host/                    # Component dành cho Host (PropertyEditor, RoomTable, MaintenanceDialog, ServiceManager...)
-│   │   ├── admin/                   # Component dành cho Admin (UserManagementTable, PropertyAuditCard, RevenueChart...)
-│   │   └── chatbot/                 # Khung chat AI, bong bóng tin nhắn, danh sách gợi ý
-│   │
-│   ├── contexts/                    # React Contexts
-│   │   └── AuthContext.jsx          # Trạng thái đăng nhập toàn cục & thông tin User hiện tại
-│   │
-│   ├── hooks/                       # Custom React Hooks
-│   │   ├── useAuth.js               # Hook truy xuất AuthContext tiện lợi
-│   │   ├── useAvailability.js       # Hook tính ngày trống và kiểm tra overlap
-│   │   └── useDebounce.js           # Hook tối ưu tìm kiếm theo thời gian thực
-│   │
-│   ├── layouts/                     # Khung sườn layout theo nhóm quyền
-│   │   ├── AdminLayout.jsx          # Sidebar Admin + Header + Outlet
-│   │   ├── HostLayout.jsx           # Sidebar Host + Header + Outlet
-│   │   ├── CustomerLayout.jsx       # Header Customer + Footer + Outlet
-│   │   └── PublicLayout.jsx         # Header công khai cho khách chưa đăng nhập
-│   │
-│   ├── pages/                       # Màn hình gắn liền với các route
-│   │   ├── public/                  # HomePage, SearchResultsPage, PropertyDetailPage, RoomDetailPage, LoginPage, RegisterPage
-│   │   ├── customer/                # CustomerDashboardPage, MyBookingsPage, BookingDetailPage, CustomerInvoicesPage, CustomerProfilePage
-│   │   ├── host/                    # HostDashboardPage, HostPropertiesPage, HostRoomsPage, HostBookingsPage, HostInvoicesPage, HostServicesPage
-│   │   └── admin/                   # AdminDashboardPage, AdminUsersPage, AdminPropertiesPage, AdminBookingsPage, AdminInvoicesPage
-│   │
-│   ├── routes/                      # Bộ định tuyến React Router DOM
-│   │   ├── AppRouter.jsx            # Định nghĩa toàn bộ route cây của ứng dụng
-│   │   ├── ProtectedRoute.jsx       # Chặn chuyển trang nếu chưa đăng nhập
-│   │   └── RoleRoute.jsx            # Chặn chuyển trang nếu không đúng role (ADMIN, HOST, CUSTOMER)
-│   │
-│   ├── services/                    # Tầng xử lý logic nghiệp vụ phía client (chuẩn hóa dữ liệu trước/sau khi gọi API)
-│   ├── utils/                       # Hàm tiện ích thuần (formatVND, formatDate, validateHelper)
-│   ├── App.jsx                      # Root Application component
-│   ├── index.css                    # Toàn cục stylesheet & typography
-│   └── main.jsx                     # Entry point React 19 mount vào #root
-├── .env                             # VITE_BACKEND_URL=http://localhost:8000
-├── eslint.config.js
-├── index.html
-├── package.json
-└── vite.config.js
-```
-
-`ProtectedRoute` chỉ cải thiện trải nghiệm điều hướng. Nó không thay thế `auth:sanctum`, middleware role, policy và ownership check ở backend.
-
-### 3.5 Mối quan hệ với template tham khảo `StayNest-Frontend-template`
-
-Thư mục `docs/StayNest-Frontend-template/` chứa mã nguồn giao diện mẫu hoàn chỉnh (React 19, Tailwind CSS v4, shadcn/ui components, animations) được tích hợp làm nguồn tham khảo thị giác cho toàn bộ giao diện:
-
-#### Cấu trúc thư mục của template mẫu:
-
-```text
-docs/StayNest-Frontend-template/
-├── src/
-│   ├── assets/                      # Ảnh mẫu, hero banners, logos
-│   ├── components/
-│   │   ├── auth/                    # Form Auth mẫu (LoginForm, SignupForm, ResetPassword)
-│   │   ├── bookings/                # BookingCard, BookingStatusBadge, CancelBookingDialog
-│   │   ├── guests/                  # GuestSelector, SavedGuestsPreview
-│   │   ├── hotel/                   # HotelHeader, RoomsList, ReviewList, AmenityGrid
-│   │   ├── landing/                 # HeroSection, FeaturedHotels, SearchBar
-│   │   ├── manager/                 # Bảng điều khiển quản lý của Host / Manager
-│   │   │   ├── tabs/                # OverviewTab, RoomsTab, InventoryTab, BookingsTab, ReportsTab, SettingsTab
-│   │   │   ├── HotelProfileForm.jsx # Form thông tin cơ sở
-│   │   │   ├── InventoryCalendar.jsx# Lịch phòng trống trực quan
-│   │   │   ├── PhotoUploader.jsx    # Component upload ảnh
-│   │   │   ├── RequireManager.jsx   # Route guard cho vai trò Manager
-│   │   │   └── RoomFormDialog.jsx   # Dialog thêm/sửa phòng
-│   │   ├── profile/                 # ProfileHeader, PersonalInfoCard, EditProfileDialog, MyReviewsSection
-│   │   ├── search/                  # AssistantPanel (AI chatbot), ConversationalSearchBox, FilterSidebar, ResultsGrid, SearchHotelCard
-│   │   ├── ui/                      # 40+ shadcn/ui primitives (button, dialog, calendar, table, popover, sheet, tabs, sonner...)
-│   │   └── RootLayout.jsx           # Layout shell với Navbar & session watcher
-│   ├── hooks/
-│   │   ├── queries/                 # React Query data fetching hooks (useHotelSearch, useMyBookings...)
-│   │   │   └── manager/             # useRooms, useManagerHotel, useReservations...
-│   │   ├── useAuth.js
-│   │   └── use-mobile.jsx
-│   ├── lib/
-│   │   ├── api/                     # API client layer mẫu (client.js, hotels.js, bookings.js, admin.js...)
-│   │   └── utils.js                 # Helper hàm `cn()` (clsx + tailwind-merge)
-│   ├── routes/                      # Màn hình định tuyến phẳng theo file
-│   │   ├── index.jsx                # Landing page
-│   │   ├── search.jsx               # Kết quả tìm kiếm + AI assistant panel
-│   │   ├── hotels.$hotelId.jsx      # Chi tiết khách sạn & danh sách phòng
-│   │   ├── checkout.$bookingId.jsx  # Đặt phòng & thanh toán
-│   │   ├── bookings.index.jsx       # Danh sách booking cá nhân
-│   │   ├── bookings.$bookingId.jsx  # Chi tiết booking
-│   │   ├── profile.jsx              # Hồ sơ cá nhân
-│   │   └── manage.jsx               # Manager console (Hotels, Rooms, Bookings, Reports)
-│   ├── styles.css                   # Tailwind CSS v4 design tokens & CSS variables
-│   ├── App.jsx                      # App root router
-│   └── main.jsx                     # Entry point
-├── package.json
-└── vite.config.js
-```
-
-#### Bảng ánh xạ tái sử dụng từ template sang `frontend/`:
-
-| Module StayHub | Thành phần tham khảo từ StayNest template | Vị trí chuyển đổi trong `frontend/src/` |
-| --- | --- | --- |
-| **UI Primitives** | `components/ui/` (button, dialog, calendar, input, table, badge, sheet...) | `components/ui/` hoặc `components/common/` |
-| **Tìm kiếm & Availability** | `components/search/` (FilterSidebar, SearchHotelCard, ResultsGrid) | `pages/public/SearchResultsPage.jsx`, `components/customer/` |
-| **Quản lý của Host** | `components/manager/` (ManagerShell, InventoryCalendar, RoomFormDialog, tabs) | `pages/host/`, `components/host/` |
-| **Booking & Checkout** | `components/bookings/`, `routes/checkout.$bookingId.jsx` | `pages/customer/BookingDetailPage.jsx`, `components/customer/` |
-| **Hồ sơ & Đánh giá** | `components/profile/` (PersonalInfoCard, MyReviewsSection, EditProfileDialog) | `pages/customer/CustomerProfilePage.jsx` |
-| **Chatbot AI** | `components/search/AssistantPanel.jsx` | `components/chatbot/AssistantPanel.jsx` |
-
-#### Nguyên tắc làm việc với template:
-1. **Ranh giới thực thi**: Không chạy hoặc import trực tiếp từ `docs/StayNest-Frontend-template/` trong runtime của `frontend/`.
-2. **Cách kế thừa**: Khi xây dựng màn hình trong `frontend/`, sao chép component cần thiết từ template sang `frontend/src/`, điều chỉnh styling và nối với API endpoint thật của Laravel backend StayHub.
-3. **Chi tiết chỉ dẫn**: Tuân thủ nghiêm ngặt theo tài liệu [ai-frontend-development-guide.md](docs/ai-frontend-development-guide.md).
+Mock chỉ chạy khi có điều kiện DEV tường minh và phải được nhận diện ở UI khi cần.
+Giữ guard chặn mutation dùng ID của mock. Kiểm thử tích hợp cần truy cập Laravel thật trên schema fixture.
+Đối chiếu [hướng dẫn Frontend](docs/ai-frontend-development-guide.md) khi sửa giao diện hoặc dùng lại template.
 
 ## 4. Kiến trúc backend
 
-### 4.1 Công nghệ và kiểu kiến trúc
+### 4.1 Cấu trúc và trách nhiệm
 
-PHP 8.2+, Laravel 12, Sanctum session/cookie, Eloquent, MySQL, Composer và PHPUnit. Backend là modular monolith phân lớp. Quyết định SIMPLIFY-01A/B đơn giản hóa target Repository + DTO + Mapper toàn dự án; Invoice read/create đã chuyển qua các checkpoint 01/02; module khác chuyển theo scope riêng, parent refactor vẫn chờ nghiệm thu tổng hợp.
+~~~text
+backend/
+├── app/
+│   ├── Common/                      # ApiResponse, PageResponse, constants
+│   ├── DTOs/<Domain>/               # Requests và Responses
+│   ├── Enums/
+│   ├── Exceptions/
+│   ├── Http/
+│   │   ├── Controllers/<Domain>/
+│   │   ├── Middleware/
+│   │   └── Requests/               # Form Request cho luồng hiện có
+│   ├── Mappers/                     # Shared adapter và mapper theo domain
+│   ├── Models/
+│   ├── Providers/
+│   ├── Repositories/<Domain>/
+│   ├── Services/<Domain>/
+│   └── Validators/
+│       ├── AttributeValidator.php
+│       ├── Constraints/
+│       └── <Domain>/
+├── bootstrap/app.php
+├── routes/
+│   ├── web.php
+│   ├── api.php
+│   └── api/                         # File route theo domain đã tích hợp
+└── tests/
+~~~
 
-```text
-Route -> Middleware -> Controller
-                         -> Input/Authorization Validator
-                         -> Request Mapper -> Request DTO
-                         -> Service/QueryService -> Concrete Repository -> Eloquent/MySQL
-Service result -> Response Mapper -> Response DTO (JsonSerializable)
-               -> Controller -> Common ApiResponse/PageResponse -> JSON
-```
+| Lớp | Trách nhiệm chính | Điểm ghép |
+| --- | --- | --- |
+| Route | Ánh xạ method/URI, middleware và tên route | Controller |
+| Middleware | Session, trạng thái tài khoản, role, throttle và CSRF theo route | Request đã qua kiểm soát truy cập chung |
+| Controller | Lấy actor/input, gọi lớp thích hợp và trả HTTP response | Validator, Request DTO, Service, Common |
+| Validator | Kiểm tra input hoặc quy tắc domain trên dữ liệu đã được cung cấp | DTO hoặc fact đã lấy qua Repository |
+| Service / QueryService | Quyền theo workflow, thứ tự nghiệp vụ, transaction và điều phối | Repository, domain validator, mapper |
+| Repository | Query scope, projection, eager load, pagination, lock và persistence | Eloquent Model và database |
+| Model | Mapping DB, relationship, casts, fillable, scope và hành vi gắn với entity | Schema và domain |
+| Mapper / Response DTO | Dựng output theo allowlist, serialize rõ kiểu và trường | Common response hoặc envelope đang dùng |
 
-### 4.2 Cấu trúc backend hiện có
+Endpoint read và mutation có thể dùng QueryService và Service riêng khi khác trách nhiệm.
+Dùng constructor DI cho cộng tác viên bắt buộc. Container có thể tự resolve concrete class.
+Chỉ thêm interface hoặc binding khi có nhiều implementation hoặc cần một điểm thay thế rõ ràng.
 
-Inventory tập trung vào boundary refactor hiện hành, không liệt kê mọi module:
+### 4.2 Validation, authorization và Request DTO
 
-```text
-backend/app/
-├── Common/{ApiResponse,PageResponse,Constants}.php
-├── Http/
-│   ├── Controllers/
-│   │   ├── Controller.php
-│   │   ├── Auth/AuthController.php
-│   │   ├── Profile/ProfileController.php
-│   │   ├── Invoice/{HostInvoiceController,CustomerInvoiceController}.php
-│   │   └── Review/{CustomerReviewController,HostReviewController,PublicReviewController}.php
-│   ├── Requests/{Auth,Profile,Review}/     # Legacy consumers, giữ nguyên
-│   └── Resources/{Auth,Review}/           # Legacy consumers ngoài Invoice
-├── DTOs/Invoice/
-│   ├── Requests/{InvoiceFilterRequest,InvoiceCreateInputRequest,InvoiceIdInputRequest,InvoiceQueryInputRequest,CreateInvoiceRequest}.php
-│   └── Responses/{InvoiceResponse,InvoiceItemResponse}.php
-├── Mappers/Invoice/InvoiceMapper.php
-├── Repositories/Invoice/InvoiceRepository.php
-├── Services/Invoice/{InvoiceQueryService,InvoiceService,InvoiceCalculationService}.php
-├── Validators/
-│   ├── AttributeValidator.php
-│   ├── Constraints/{CanonicalPositiveId,CanonicalPositiveIdValidator}.php
-│   ├── Invoice/{InvoiceValidator,InvoiceCalculationValidator}.php
-│   └── Review/ReviewCreationValidator.php
-├── Exceptions/{AppException,ErrorCode,GlobalExceptionHandler}.php
-├── Exceptions/Invoice/DuplicateInvoiceException.php
-├── Mapping/EloquentObjectMapper.php
-├── Models/                              # Eloquent, relationships/casts/scopes
-└── Providers/AppServiceProvider.php
-```
+- Một root app/Validators. AttributeValidator bọc Symfony Validator, Constraints chứa constraint dùng chung, thư mục domain chứa quy tắc riêng.
+- Kiểm tra input raw trước khi cast nếu cần giữ lỗi canonical ID, kiểu dữ liệu hoặc field-specific errors.
+- Typed Request DTO mô tả input đã chuẩn hóa, không giữ Http Request, container hoặc trạng thái session. Actor truyền qua tham số riêng.
+- Form Request hiện có tiếp tục xử lý HTTP validation ở các luồng đang dùng. Khi thay lớp, đối chiếu middleware và thứ tự lỗi, gồm cả content negotiation nếu có.
+- Kiểm tra ownership tại ranh giới thích hợp, bằng policy hoặc quyền trong Service và query đã scope. Quyền theo resource được kiểm chứng phía Backend.
+- Validator dùng fact đã truyền vào, giữ thuần và tránh query/lazy loading. Lấy fact cần khóa hoặc lookup trong Repository thông qua Service.
+- Khi gọi Symfony Validator cho candidate trước lưu, truyền group tường minh. Kiểm tra nhóm nào active và tác động lên Model chưa hoặc đã lưu.
 
-Invoice read/create không còn Http/Requests hoặc Http/Resources riêng; Invoice Resources đã xóa ở 02C.1. Auth/Profile/Review giữ Request/Resource hiện hữu theo consumer thực tế. Base Controller phải tồn tại khi lớp con còn extends Controller. Routes/URL không đổi, không tự thêm /api/v1 hoặc chuyển namespace Controller.
+Ví dụ về vai trò của DTO đầu vào:
 
-### 4.3 Cấu trúc backend mục tiêu (Tổ chức theo cụm chức năng / Domain Modules)
+| Bước | Dữ liệu | Việc cần kiểm tra |
+| --- | --- | --- |
+| Trước validation | Raw route, query hoặc body | Phân biệt kiểu nguyên thủy, trường thiếu và giá trị không hợp lệ |
+| Sau validation | Request DTO đã định kiểu | Chỉ chứa giá trị đã kiểm tra và đúng phạm vi workflow |
+| Trong Service | Request DTO, actor và facts | Quyền, trạng thái, xung đột và điều kiện thay đổi theo dữ liệu |
+| Trước persistence | Candidate model hoặc payload đã dựng | Constraints và validation group áp dụng cho thao tác cụ thể |
 
-Các thư mục Controllers, Services, Validators, DTOs, Mappers và Repositories tổ chức theo domain. Với module mới hoặc migration được duyệt:
+Tách raw DTO và typed DTO khi từng bước có ý nghĩa với contract, chẳng hạn cần báo lỗi ID trước khi dữ liệu bị ép kiểu.
+Với endpoint đơn giản, dùng input hiện có nếu vẫn biểu đạt rõ ranh giới kiểm tra và workflow.
 
-```text
-app/
-├── Http/Controllers/<Domain>/*Controller.php
-├── DTOs/<Domain>/
-│   ├── Requests/*Request.php
-│   └── Responses/*Response.php          # JsonSerializable, explicit public fields
-├── Validators/<Domain>/*Validator.php
-├── Mappers/<Domain>/*Mapper.php
-├── Repositories/<Domain>/*Repository.php # Concrete, một file mặc định/domain
-├── Services/<Domain>/*Service.php
-├── Common/{ApiResponse,PageResponse,Constants}.php
-├── Exceptions/{AppException,ErrorCode,GlobalExceptionHandler}.php
-└── Providers/AppServiceProvider.php
-```
+### 4.3 Mapping và serialization
 
-Không tự sinh interface/implementation đôi, Contracts/Eloquent, module provider hoặc generic CRUD BaseRepository. Concrete class được inject qua constructor và Laravel tự resolve khi dependencies resolve được. Interface/binding/factory chỉ đề xuất khi có nhu cầu thay implementation hoặc cấu hình không tự resolve, trong scope được duyệt. Không new Repository bên trong Service.
+- [EloquentObjectMapper](backend/app/Mappers/EloquentObjectMapper.php) nằm dưới app/Mappers cùng các mapper domain.
+- Service/Repository cung cấp thuộc tính và relation đã tải. Mapper dùng allowlist và giữ casts, xử lý giá trị lồng nhau theo đúng projection cần trả.
+- Symfony ObjectMapper phù hợp cho DTO projection khi nguồn và đích xác định. DTO phản hồi chỉ gồm dữ liệu tự định nghĩa như ID đã xóa có thể được dựng trực tiếp.
+- Output DTO serialize tường minh, bảo toàn decimal string, thời gian ISO theo contract, nullable, trường bị lược bỏ và collection rỗng.
+- Phân biệt projection Public, Customer, Host và Admin. Dữ liệu nội bộ có thể cần ẩn danh như tên tác giả Review trên Public.
+- Mapper không gọi DB, kiểm tra quyền, thực hiện transaction hoặc tự tính lại nghiệp vụ.
+- AppServiceProvider cấu hình engine Validator và ObjectMapper. Domain dùng lại adapter và cấu hình hiện có.
 
-Không thêm Form Request/Resource song song với DTO theo target mới. Legacy classes được giữ đến task chuyển tương ứng; không xóa cả Http/Requests hoặc Http/Resources. Naming chung không cấp quyền sửa code TV1/TV2 hoặc thay schema.
+### 4.4 Service, Repository và log
 
-### 4.4 Trách nhiệm từng lớp backend
-
-#### Route
-
-Route ánh xạ HTTP method/URI tới controller và gắn middleware. Không đặt business logic trong closure khi triển khai module thật. Có thể nhóm endpoint theo prefix và vai trò:
-
-```text
-/api/public/*
-/api/customer/*     auth:sanctum + CUSTOMER
-/api/host/*         auth:sanctum + HOST
-/api/admin/*        auth:sanctum + ADMIN
-```
-
-#### Middleware
-
-Middleware xử lý yêu cầu cắt ngang như đăng nhập, role, trạng thái tài khoản và rate limit. Middleware role chỉ xác nhận nhóm quyền; quyền trên một bản ghi cụ thể do Policy hoặc service kiểm tra.
-
-#### Controller (phân theo cụm chức năng)
-
-Controller điều phối input -> validator -> mapper/DTO -> service -> Common response/status. Không chứa rules validation, business query, tính tiền hoặc transaction. Constructor injection dùng cho validator/mapper/service. Namespace hiện có là Http/Controllers/<Domain>, không tự chuyển Api/V1.
-
-#### Validator (`app/Validators/`)
-
-VAL-STRUCT-01 thống nhất một root Validators: App\Validators\AttributeValidator là adapter Symfony dùng chung; App\Validators\Constraints giữ CanonicalPositiveId và CanonicalPositiveIdValidator; Invoice/Review giữ validator nghiệp vụ. Constraint và validator cùng namespace theo convention validatedBy(), không cần provider/binding mới. DI/methods/attributes/groups và public errors không đổi; không tạo alias/forwarding class ở namespace cũ. Tests/Feature/Validation giữ tên nhóm kiểm chứng, không phải root ứng dụng thứ hai.
-
-InvoiceValidator nhận array/scalar/actor/Model candidate, không nhận Http Request/Response và không query/lazy-load hoặc log. Input Invoice dùng Symfony attributes qua AttributeValidator: raw IDs được kiểm tra trước cast; query validation vẫn ném Laravel ValidationException với field errors đã nghiệm thu. Read authorize trước malformed query/ID, giữ privacy-404; guest 401 do middleware. Create giữ raw-ID validation trước actor branch trong Controller; Service kiểm tra role/ownership/status trước duplicate lookup, rồi snapshot/financial validation. Không áp thứ tự read một cách máy móc lên create.
-
-Service lấy fact duplicate từ Repository và truyền bool vào Validator; Validator không inject Repository hoặc callback query. Snapshot validation yêu cầu relations đã load; unloaded relation là lỗi sử dụng nội bộ, loaded-null giữ lỗi nghiệp vụ. InvoiceCalculationValidator vẫn riêng cho số/tiền; không thay luật tài chính bằng DTO type hoặc Model attributes.
-
-#### Request/Response DTO và Mapper
-
-Raw InvoiceCreateInputRequest/InvoiceIdInputRequest/InvoiceQueryInputRequest giữ mixed input để attributes kiểm tra trước normalize; CreateInvoiceRequest(int bookingId) và InvoiceFilterRequest là application DTO typed. Actor truyền riêng từ session. Request DTO là application input, không chứa Http Request/container; không tạo DTO rỗng khi endpoint không có payload. Mapper chuyển input/model thành DTO, không query/lazy-load, authorize, tính giá hoặc mutate. Response DTO implements JsonSerializable và jsonSerialize() xuất rõ fields/nested items; giữ decimal string/date/null, phân biệt omitted/null/empty theo contract. Không serialize Model raw.
-
-#### Repository (`app/Repositories/<Domain>/`)
-
-Concrete Repository giữ Eloquent queries, scoped ownership, eager loading, pagination và persistence. Service nhận qua constructor, không cần interface/binding mặc định. Service sở hữu transaction trên cùng connection; Repository không commit hoặc quyết định workflow. Không trả Builder cho Controller tự nối query.
-
-#### Service (`app/Services/`)
-
-Service triển khai use case nghiệp vụ và giữ ranh giới giao dịch (transaction boundary). Các service được phân chia theo từng cụm chức năng:
-- Tách biệt rõ ràng giữa **Service tính toán thuần (Pure Calculation Service)** và **Service điều phối nghiệp vụ/database (Workflow Service)**. Ví dụ: `InvoiceCalculationService` hoàn toàn độc lập với database, chỉ nhận snapshot và tính tiền chính xác bằng BCMath; trong khi `InvoiceService` quản lý nghiệp vụ/transaction; theo target ARCH-01, truy cập Eloquent chuyển vào Repository. Invoice workflow đã chuyển query/persistence vào InvoiceRepository; điều này không chứng minh các module khác đã migrate.
-- Đảm bảo an toàn tài chính: không tin giá frontend gửi lên, không dùng kiểu `float/double`, kiểm tra tính toàn vẹn dữ liệu trước khi commit.
-
-#### Service Provider (`app/Providers/`)
-
-Provider giữ registration/config thực sự cần. AppServiceProvider không có binding Repository Invoice; container tự resolve concrete Repository. Provider vẫn cấu hình Symfony ValidatorInterface và ObjectMapperInterface cho engine/adapters; các bindings này có vai trò khác binding Repository. Không xóa provider và không tạo provider/domain theo thói quen. Binding/singleton/factory bổ sung phải có lý do và scope rõ; bỏ binding dư không làm mất constructor DI.
-
-#### Model
-
-Model chứa relationship, casts, fillable/guarded, scope và hành vi nhỏ gắn chặt với entity. Không dồn toàn bộ workflow vào model. Các model mục tiêu gồm:
-
-```text
-User, Property, PropertyImage, RoomType, Room, RoomImage,
-Amenity, Maintenance, Service, Booking, BookingService,
-Invoice, InvoiceItem, Review, Faq, ChatSession, ChatMessage
-```
-
-#### API Resource (legacy compatibility)
-
-Invoice read/create đã chuyển projection sang Response DTO.jsonSerialize() và envelope sang Common helpers; hai Invoice Resources đã xóa. Resources Auth/Review và Form Requests Auth/Profile/Review giữ consumer hiện tại. Giữ chúng và nhánh Resource compatibility trong Common đến task được duyệt; không tự thêm Resource cho code theo target mới.
-
-#### Policy
-
-Policy thực thi role kết hợp ownership. Ví dụ Host A có role `HOST` nhưng không được cập nhật Property của Host B.
+- Service chọn thứ tự đọc, kiểm tra, khóa và ghi. Repository thực hiện Eloquent trên đúng connection và query scope.
+- Lock đúng resource và thống nhất thứ tự lock giữa các workflow cạnh tranh. Đọc lại fact sau khi khóa nếu snapshot cũ có thể dẫn tới kết luận sai.
+- Mapper chuẩn bị output cần thiết trước khi mutation commit nếu lỗi mapping phải rollback cùng dữ liệu.
+- Với success log của mutation, dùng ranh giới commit thực tế. Log chỉ gồm thông tin cần để điều tra như ID kỹ thuật.
+- Laravel báo lỗi ngoài dự kiến. Khi bắt exception, cần một mục đích như phân loại lỗi constraint, bù file hoặc chuyển lỗi nghiệp vụ theo contract.
+- Giữ nguyên status, error code, field errors, privacy 404, conflict 409 và HTTP headers theo endpoint.
 
 ## 5. Hợp đồng API
 
-API nghiệp vụ dùng JSON và prefix `/api`. Endpoint session của Sanctum/Laravel nằm ở root.
+### 5.1 URL, operation và response
 
-Response thành công theo contract Common hiện hành: detail `{ "data": {} }`; list `{ "data": [], "meta": {}, "links": {} }`. Giữ summary/additional fields của consumer legacy khi có. Không bắt buộc thêm success/message vào mọi API; Auth giữ envelope user/message hiện hữu.
+API nghiệp vụ dùng tiền tố /api. Session và CSRF dùng Web routes ở root.
+Tên route phục vụ routing, middleware, exception renderer và các công cụ kiểm chứng.
+Dùng route registry và feature test để xác nhận URL/method trước khi đổi consumer.
 
-Response lỗi validation mặc định:
-
-```json
-{
-  "message": "The given data was invalid.",
-  "errors": {
-    "check_in": ["The check in field is required."]
-  }
-}
-```
-
-Quy ước status code:
-
-| Mã | Ý nghĩa |
+| Endpoint nền tảng | Mục đích |
 | --- | --- |
-| `200` | đọc/cập nhật thành công |
-| `201` | tạo resource thành công |
-| `204` | xóa thành công, không có body |
-| `401` | chưa đăng nhập |
-| `403` | đã đăng nhập nhưng không có quyền |
-| `404` | không tìm thấy resource |
-| `409` | xung đột nghiệp vụ, ví dụ phòng vừa được đặt |
-| `422` | validation hoặc chuyển trạng thái không hợp lệ |
-| `500` | lỗi ngoài dự kiến; không trả stack trace ở production |
+| GET /api/test | Kiểm tra kết nối Laravel |
+| GET /sanctum/csrf-cookie | Khởi tạo CSRF cookie |
+| POST /login | Xác thực và tạo session |
+| POST /register | Đăng ký theo contract hiện hành |
+| GET /api/me | Restore identity từ session ACTIVE |
+| POST /logout | Xóa session theo contract Web |
+| GET /api/profile | Đọc thông tin user hiện tại |
 
-Endpoint session/nền tảng tiêu biểu (không phải inventory toàn bộ API):
+Common response hiện có cho JSON:
 
-| Method | Endpoint | Mục đích | Bảo vệ |
-| --- | --- | --- | --- |
-| `GET` | `/api/test` | kiểm tra API | public |
-| `GET` | `/sanctum/csrf-cookie` | nhận CSRF cookie | public |
-| `POST` | `/login` | đăng nhập bằng session | public |
-| `GET` | `/api/me` | lấy user hiện tại | `auth:sanctum` |
-| `POST` | `/logout` | đăng xuất, hủy session | hiện chưa gắn `auth:sanctum` |
+~~~json
+{"data":{"id":10}}
+~~~
 
-Lưu ý trạng thái hiện tại: `ApiTestPage.jsx` đang gọi `/test` trong khi route backend thật là `/api/test`. Nếu `VITE_BACKEND_URL` chỉ là origin `http://localhost:8000`, frontend cần gọi đúng `/api/test`; tài liệu này không coi route thử nghiệm đang lệch đó là hợp đồng API chính thức.
+~~~json
+{
+  "data": [],
+  "links": {"first": "/api/resource?page=1", "last": "/api/resource?page=1", "prev": null, "next": null},
+  "meta": {"current_page": 1, "last_page": 1, "per_page": 10, "total": 0}
+}
+~~~
+
+Ví dụ dùng URL minh họa. Endpoint thật có thể trả additional fields như summary.
+GET detail và POST create thường có một data envelope. GET list giữ meta và links khi API phân trang.
+Catalog có các response success/message/data theo action. Auth và Profile có response user/message theo route đang dùng.
+Endpoint trả file giữ MIME, cache và disposition theo contract.
+
+ApiResponse/PageResponse phục vụ các JSON DTO và giữ nhánh tương thích cho Resource collection hiện có.
+Giữ HTTP status và metadata khi chuyển từ Resource sang DTO.
+DTO có thể phân biệt ba trường hợp sau:
+
+- Field bị lược bỏ khi endpoint chưa load dữ liệu mở rộng.
+- Field nullable khi giá trị đã được xác định và không có.
+- Danh sách rỗng khi collection thực sự rỗng.
+
+### 5.2 Lỗi và exception boundary
+
+| HTTP | Ý nghĩa phổ biến | Nội dung cần giữ |
+| --- | --- | --- |
+| 200 | Đọc, cập nhật hoặc xóa có kết quả | Shape và message đã công bố |
+| 201 | Tạo thành công | Projection mới và header nếu có |
+| 204 | Thành công không có body | Giữ response trống theo contract |
+| 401 | Chưa xác thực | Contract session của Laravel |
+| 403 | Sai role, không có quyền hoặc tài khoản bị chặn | Mã lỗi và hành vi của Auth UI theo endpoint |
+| 404 | Không tìm thấy hoặc privacy scope | Cùng response cho các trường hợp mà contract yêu cầu che giấu |
+| 409 | Trùng dữ liệu hoặc workflow bị xung đột | Message/code đủ cho UI phục hồi |
+| 419 | Lỗi CSRF | Giữ middleware, cookie và phản hồi theo Web contract |
+| 422 | Input không hợp lệ | Thông báo và field errors hiện hành |
+| 429 | Rate limit | Status và Retry-After nếu có |
+| 500 | Lỗi ngoài dự kiến | Response an toàn ở môi trường production |
+
+~~~json
+{
+  "message": "Dữ liệu không hợp lệ.",
+  "errors": {"name": ["Tên là trường bắt buộc."]}
+}
+~~~
+
+Laravel giữ framework errors, content negotiation và headers.
+GlobalExceptionHandler hiện áp dụng theo allowlist route có tên của Invoice và Review. AppException sử dụng code/status/errors ở các route được hỗ trợ.
+Các luồng dùng lỗi message-only hoặc validation mặc định vẫn giữ contract của chúng.
+Khi refactor, kiểm tra thứ tự giữa middleware, role, định dạng ID, payload, ownership, trạng thái và kiểm tra trùng.
+Cùng một status có thể kích hoạt các hành vi UI khác nhau. Cần đối chiếu error code, body và trạng thái session.
 
 ## 6. Xác thực và phân quyền
 
-StayHub dùng **Sanctum SPA authentication**, không dùng JWT cho frontend first-party.
+### 6.1 Sanctum SPA session
 
-```mermaid
+Ứng dụng first-party dùng Sanctum với cookie và session.
+Frontend chỉ dùng thông tin user để hiển thị và điều hướng, Backend kiểm tra quyền cho request thực tế.
+
+~~~mermaid
 sequenceDiagram
     participant B as Browser / React
     participant L as Laravel
-    participant D as MySQL session store
+    participant D as Session store
 
     B->>L: GET /sanctum/csrf-cookie
     L-->>B: XSRF-TOKEN cookie
     B->>L: POST /login + credentials + X-XSRF-TOKEN
     L->>D: Tạo session
-    L-->>B: Session cookie + user
+    L-->>B: Session cookie và user
     B->>L: GET /api/me + cookies
     L->>D: Xác minh session
-    L-->>B: User JSON
-```
+    L-->>B: User JSON theo allowlist
+~~~
 
-Yêu cầu cấu hình local:
+Yêu cầu cấu hình:
 
-- Axios bật `withCredentials` và `withXSRFToken`;
-- CORS cho phép origin frontend và `supports_credentials=true`;
-- `SANCTUM_STATEFUL_DOMAINS` phải chứa host/port frontend, ví dụ `localhost:5173`;
-- `SESSION_DOMAIN` và `APP_URL` phải phù hợp môi trường;
-- không trộn `localhost` và `127.0.0.1` tùy tiện vì cookie theo host.
+- Axios gửi credentials và XSRF theo cấu hình dùng chung.
+- CORS cho phép đúng origin Frontend và hỗ trợ credentials.
+- SANCTUM_STATEFUL_DOMAINS chứa host/port Frontend, ví dụ localhost:5173.
+- SESSION_DOMAIN và APP_URL phù hợp với các origin đang chạy.
+- Cookie gắn theo host. Dùng cùng cách gọi localhost hoặc IP trong suốt luồng xác thực.
 
-Authorization có ba lớp:
+### 6.2 Kiểm tra quyền theo tầng
 
-1. `auth:sanctum`: người dùng đã đăng nhập chưa;
-2. role middleware/gate: người dùng thuộc `ADMIN`, `HOST` hay `CUSTOMER`;
-3. Policy/ownership: người dùng có quyền trên đúng resource này không.
+1. Middleware xác thực session với auth:sanctum trên route yêu cầu đăng nhập.
+2. Middleware trạng thái tài khoản kiểm tra user ACTIVE tại các route được bảo vệ.
+3. Role hoặc gate xác định nhóm ADMIN, HOST hoặc CUSTOMER.
+4. Policy, Service và scoped query xác nhận quyền trên resource cụ thể theo use case.
+5. Với mutation cạnh tranh, kiểm tra lại điều kiện cần thiết trong transaction trước khi ghi.
+
+Host A chỉ thấy dữ liệu thuộc Host A trong luồng quản lý của mình.
+Customer ID cho luồng sở hữu lấy từ actor đã xác thực.
+Các endpoint Public chọn field theo audience và lọc theo visibility; ẩn dữ liệu cá nhân trước khi serialize.
+Giữ rate limit theo route và chính sách session hiện hành khi thay đổi lớp validation hoặc service.
 
 ## 7. Kiến trúc dữ liệu
 
-### 7.1 Trạng thái hiện tại
+### 7.1 Nguồn schema và dữ liệu tham chiếu
 
-Repository có migrations/models nghiệp vụ, gồm Invoice/InvoiceItem/Booking/Review, ngoài các bảng nền Laravel. File migration không chứng minh schema đang chạy hoặc migration đã được apply; task này không kiểm tra/chạy database. Đối chiếu migrations/models thực tế khi triển khai persistence.
+Đối chiếu schema đang chạy với migration trước khi đưa ra quyết định persistence.
+Dùng [ERD](docs/stayhub-erd.md) để xác định quan hệ mục tiêu và dùng Eloquent casts/relations để hiểu cách ứng dụng đọc dữ liệu.
+Migrations, factories và seeders tương ứng nằm trong backend/database.
+Luôn xác nhận schema đang chạy mà Laravel thực sự kết nối khi kiểm thử trên MySQL/XAMPP.
 
-### 7.2 Nhóm dữ liệu mục tiêu
+| Nhóm | Bảng nghiệp vụ chính |
+| --- | --- |
+| Identity | users |
+| Catalog | properties, property_images, room_types, rooms, room_images, amenities, room_amenities |
+| Operations | maintenances, services, bookings, booking_services |
+| Billing | invoices, invoice_items |
+| Engagement | reviews |
+| Chat | faqs, chat_sessions, chat_messages |
 
-```text
-Identity
-└── users
+### 7.2 Constraints, index và dữ liệu lịch sử
 
-Property catalog
-├── properties
-├── property_images
-├── room_types
-├── rooms
-├── room_images
-├── amenities
-└── room_amenities
+- FK bảo toàn quan hệ. Xem đầy đủ hành vi RESTRICT/CASCADE trước khi xóa.
+- Dùng unique/index theo business key và query thực tế. Đối chiếu collation khi xác định tên trùng.
+- Xem dữ liệu cũ, nullability, default, cast và consumer trước khi đổi field hoặc constraint.
+- Lưu và truyền số tiền ở dạng chính xác theo schema/contract. Giá từ client chỉ là input tham chiếu khi use case cho phép.
+- Snapshot tên và giá dịch vụ, giá phòng và số đêm để các cập nhật danh mục sau này không đổi lịch sử.
+- Kiểm tra query plan, scope, order ổn định và eager loading với dữ liệu đại diện khi task liên quan hiệu năng.
 
-Operations
-├── maintenances
-├── services
-├── bookings
-└── booking_services
+### 7.3 Transaction và tài nguyên ngoài DB
 
-Billing
-├── invoices
-└── invoice_items
+- Các bước đọc/kiểm tra/ghi của cùng mutation dùng connection và transaction nhất quán.
+- Cập nhật nhiều bản ghi liên quan trong một transaction khi nghiệp vụ yêu cầu atomicity.
+- Kiểm tra retry, duplicate và read-after-write. Khóa bản ghi theo một thứ tự nhất quán.
+- Ghi log hoặc hoàn thành tác vụ phụ cần success sau outer commit thực tế.
+- File storage có ranh giới riêng. Xác định lúc tạo file, cập nhật DB, xóa file cũ và bù khi lỗi.
+- Test cả rollback và commit, gồm lỗi giữa chừng, dữ liệu còn lại và cleanup đúng tài nguyên.
 
-Engagement
-└── reviews
+### 7.4 Test isolation
 
-Chatbot
-├── faqs
-├── chat_sessions
-└── chat_messages
-```
-
-Chi tiết field, khóa và quan hệ nằm trong `docs/stayhub-erd.md`. Migration là nguồn sự thật của schema chạy thực tế; tài liệu ERD phải được cập nhật đồng bộ khi schema thay đổi.
-
-### 7.3 Tính toàn vẹn và transaction
-
-- dùng foreign key cho quan hệ bắt buộc;
-- unique index cho email và các mã định danh nghiệp vụ;
-- index các cột thường lọc như status, property/room, check-in/check-out;
-- dùng decimal, không dùng float cho tiền;
-- không tin giá/tổng tiền do client gửi lên;
-- các thao tác booking, check-out và tạo invoice phải chạy trong transaction;
-- kiểm tra availability cần chiến lược khóa/chống race condition, không chỉ kiểm tra ở UI.
+Tách XAMPP development khỏi schema test. Fixture phải có owner và vòng đời rõ ràng.
+Các thao tác migrate/reset trong test chỉ trỏ vào DB được cấp riêng và đã đối chiếu cấu hình hiệu lực.
+SQLite in-memory kiểm chứng được nhiều contract và rollback. Kiểm thử cạnh tranh, collation và FK theo engine thực tế dùng MySQL/MariaDB.
+Thử nghiệm trình duyệt thật có thể dùng schema fixture riêng và session thật mà vẫn để nguyên schema làm việc.
 
 ## 8. Kiến trúc module nghiệp vụ
 
-### 8.1 Property và Room
+### 8.1 Identity và Profile
 
-Host quản lý Property, Room Type, Room, ảnh, tiện nghi và bảo trì. Mọi thao tác cập nhật phải kiểm tra ownership. Xóa dữ liệu đã có booking nên dùng trạng thái `INACTIVE` hoặc quy tắc xóa mềm thay vì làm mất lịch sử.
+Auth xác thực bằng Sanctum và duy trì contract của Web routes.
+Đăng nhập và đăng ký sử dụng AuthValidator, input DTO và service tương ứng.
+AuthRepository giữ phần truy vấn và persistence đăng ký.
+Đọc user hiện tại, đăng nhập, đọc/cập nhật Profile và upload avatar dùng AuthUserMapper với allowlist response chung khi trả đối tượng user.
+Thay đổi mật khẩu có contract riêng. Giữ fingerprint phiên, throttle và thông báo theo luồng hiện hành.
+Các mutation Profile hiện dùng Form Request. Mỗi luồng là một phạm vi chuyển đổi riêng.
 
-### 8.2 Availability
+Avatar là dữ liệu file theo quyền của user hiện tại. URL response có version để client refresh.
+Giữ stream, cache headers và kiểm tra đường dẫn managed. Xử lý rollback/cleanup file theo kết quả ghi dữ liệu chính.
 
-Availability là kết quả tính toán, không phải một cờ `AVAILABLE/BOOKED` cố định trên phòng:
+### 8.2 Property Catalog
 
-```text
-Room đang ACTIVE
-+ đủ capacity
-+ không có maintenance giao nhau
-+ không có booking giữ phòng giao nhau
-= available
-```
+Public Catalog chỉ đưa ra Property và Room đủ điều kiện hiển thị.
+Repository lọc ownership và quan hệ giữa Property, Room và RoomType.
+Các DTO công khai dùng allowlist. Trang chi tiết dựng ảnh, tiện nghi, phòng, giá tham khảo và tích hợp Review qua contract riêng.
 
-Hai khoảng ngày giao nhau khi:
+Host Catalog điều phối theo quyền sở hữu Property.
+Các thao tác trên ảnh kiểm soát dung lượng, kiểu file, ảnh đại diện và cleanup file cùng workflow persistence.
+RoomType giữ định danh theo Property. Khi thêm/sửa tên, kiểm tra xung đột theo collation hiện hành trong phạm vi Property.
+Khi xóa RoomType, khóa Property và RoomType rồi kiểm tra mọi Room tham chiếu. Chỉ xóa khi tập tham chiếu rỗng.
+Database đang có FK cascade từ RoomType xuống Room. Kiểm tra phạm vi và khóa bảo vệ cả những Room cũ có liên kết lệch Property.
+Room management, public room detail độc lập và các luồng Admin cần xuất phát từ contract và schema đã được owner xác nhận.
 
-```text
+### 8.3 Availability và Booking
+
+Quy tắc tích hợp do TV2 xác nhận khi triển khai. Availability kết hợp phòng ACTIVE, sức chứa, lịch bảo trì và booking giữ phòng.
+Kiểm tra giao nhau theo khoảng nửa mở khi contract dùng check-in bao gồm và check-out loại trừ:
+
+~~~text
 existing_check_in < requested_check_out
 AND existing_check_out > requested_check_in
-```
+~~~
 
-Các trạng thái dự kiến giữ phòng: `PENDING`, `CONFIRMED`, `CHECKED_IN`. Các trạng thái không giữ phòng: `CANCELLED`, `REJECTED`, `COMPLETED`. Danh sách chính thức phải được thống nhất bằng enum và business rule của backend.
+Đối chiếu enum và rule trạng thái nào giữ phòng. Tìm kiếm là ảnh chụp tại thời điểm đọc.
+Khi đặt phòng, kiểm tra lại điều kiện trong transaction với chiến lược khóa được TV2 chốt.
+Giữ nguyên snapshot giá, số đêm và dữ liệu cần thiết cho billing khi Booking đã được tạo.
 
-### 8.3 Booking workflow
+Sơ đồ sau là thiết kế workflow. Endpoint hoặc transition cụ thể phải được kiểm tra ở code và contract đã duyệt.
 
-```mermaid
+~~~mermaid
 stateDiagram-v2
     [*] --> PENDING
     PENDING --> CONFIRMED: Host xác nhận
     PENDING --> REJECTED: Host từ chối
-    PENDING --> CANCELLED: Customer hủy
+    PENDING --> CANCELLED: Customer hủy theo chính sách
     CONFIRMED --> CHECKED_IN: Check-in
     CONFIRMED --> CANCELLED: Hủy nếu chính sách cho phép
     CHECKED_IN --> COMPLETED: Check-out
     COMPLETED --> [*]
     CANCELLED --> [*]
     REJECTED --> [*]
-```
+~~~
 
-Chuyển trạng thái phải được kiểm tra ở backend. Không cho phép client gửi một status bất kỳ rồi cập nhật trực tiếp.
+Dịch vụ gắn với Booking tham chiếu danh mục theo Property và lưu snapshot tên, đơn vị, giá, số lượng và số tiền.
+Client gửi dữ liệu thao tác. Backend xác định giá và tổng từ nguồn đáng tin cậy.
+Các thao tác xác nhận, hủy, nhận phòng, trả phòng và dịch vụ dùng quyền và trạng thái phù hợp ở Backend.
 
-### 8.4 Dịch vụ phát sinh
+### 8.4 Invoice và Reporting
 
-Một Property có nhiều Service. Khi gắn dịch vụ vào Booking, `booking_services` cần snapshot `service_name`, `unit`, `unit_price`, `quantity`, `amount` để thay đổi giá danh mục sau này không làm sai lịch sử.
+Mỗi Booking có tối đa một Invoice. Invoice header và items được lưu nguyên tử.
+Số tiền xuất phát từ Booking và BookingService snapshots. Xử lý số tiền bằng decimal chính xác, giữ scale theo contract.
+Mã hóa đơn duy nhất và unique booking_id bảo vệ tính toàn vẹn ở DB. Kiểm tra xung đột trong workflow và phân loại constraint lỗi hợp lệ.
 
-### 8.5 Invoice
+~~~text
+room_total    = number_of_nights × price_per_night
+service_total = SUM(booking_services.amount)
+subtotal      = room_total + service_total
+total_amount  = subtotal - discount_amount + extra_fee
+~~~
 
-Một Booking có tối đa một Invoice; Invoice là header và Invoice Item là dòng chi tiết. Loại item dự kiến gồm `ROOM`, `SERVICE`, `SURCHARGE`, `DISCOUNT`, `OTHER`.
+Áp discount và extra fee đúng một lần theo workflow. Frontend hiển thị giá trị Backend đã tính.
 
-```text
-Booking COMPLETED
-  -> Host sở hữu Property yêu cầu tạo Invoice
-  -> khóa Booking, kiểm tra quyền/trạng thái/duplicate/snapshots
-  -> Calculator tính chính xác từ Booking/BookingService snapshots
-  -> Mapper tạo payload; validate Invoice/ROOM candidates
-  -> Repository lưu Invoice + ROOM/SERVICE items atomically
-  -> commit -> success log -> DTO/Common HTTP 201
-```
+Create hỗ trợ ROOM và SERVICE trong workflow hiện tại. Item enum rộng hơn được dùng khi có nghiệp vụ và contract tương ứng.
+Invoice mới có status UNPAID và paid_at null. Transition thanh toán, refund và KPI doanh thu phải được chốt ở backlog nghiệp vụ.
+Reporting Host lọc các Property thuộc mình. Reporting Admin kiểm tra quyền ADMIN. Các tham số thời gian, timezone và trạng thái hóa đơn tính doanh thu cần thống nhất trước khi triển khai.
 
-Create Invoice không tự thực hiện check-out hoặc thay payment status từ client; mặc định UNPAID/paid_at null. SURCHARGE/DISCOUNT/OTHER có trong schema enum không đồng nghĩa workflow tạo hiện tại đã hỗ trợ chúng.
+### 8.5 Review
 
-### 8.6 Review
+Chỉ Customer sở hữu Booking COMPLETED mới có quyền tạo Review. Mỗi Booking có tối đa một Review và rating từ 1 đến 5.
+POST bảo toàn thứ tự validation và privacy 404. Unique constraint bảo vệ cả các request đồng thời.
+Public trả tên đã ẩn danh. Host chỉ đọc Review theo Property sở hữu. Customer đọc Review của chính mình.
+Summary có phạm vi và key riêng của từng endpoint. API tạo và API đọc Customer dùng cùng projection.
 
-Chỉ Customer sở hữu booking đã hoàn tất mới được review, và mỗi booking chỉ được review theo cardinality đã quy định trong ERD. Backend phải xác minh điều kiện này thay vì chỉ ẩn form trên frontend.
+### 8.6 FAQ và Chat
 
-### 8.7 Chatbot
+FAQ quản lý ở phạm vi Admin theo contract được xác nhận. Chat V1 là luồng tư vấn do Backend điều phối:
 
-Chatbot V1 dùng retrieval/context từ dữ liệu nội bộ, không cần fine-tune:
+~~~text
+Chat UI → Chat API → dữ liệu được phép → context
+        → provider → kiểm tra response → lưu lịch sử theo quyền → UI
+~~~
 
-```text
-Chat UI -> Chatbot API -> truy vấn dữ liệu được phép
-        -> dựng context -> AI/LLM -> lọc/ghi lịch sử -> response
-```
+Kiểm soát quyền truy cập lịch sử theo session, giới hạn context và thời gian gọi provider.
+Provider chỉ nhận dữ liệu cần cho tư vấn. Loại thông tin nhạy cảm trước khi dựng context.
+Chat không thực hiện đặt phòng, hủy, thanh toán hoặc cập nhật dữ liệu nghiệp vụ.
 
-Chatbot chỉ tư vấn từ Property, Room Type, Amenity, Service và FAQ. Nó không được kết nối database trực tiếp và không tự tạo booking, hủy booking, thanh toán hay sửa dữ liệu.
+## 9. Luồng mẫu đã triển khai — Tạo Invoice
 
-## 9. Luồng end-to-end mẫu: tạo booking
-
-Ví dụ Booking bên dưới là thiết kế legacy/tham khảo của TV2, chưa phải migration theo SIMPLIFY. BookingResource trong ví dụ không yêu cầu agent tạo Resource mới; task Booking tương ứng phải chọn Validator/DTO/Common theo mục 4/13 và giữ contract thực tế.
-
-```mermaid
+~~~mermaid
 sequenceDiagram
-    participant UI as React Page
-    participant API as BookingController
-    participant V as StoreBookingRequest
-    participant S as BookingService
+    participant UI as React
+    participant C as HostInvoiceController
+    participant V as InvoiceValidator
+    participant S as InvoiceService
+    participant R as InvoiceRepository
+    participant M as InvoiceMapper
     participant DB as MySQL
 
-    UI->>API: POST /api/customer/bookings
-    API->>V: authorize + validate
-    V-->>API: validated data
-    API->>S: create(user, data)
-    S->>DB: begin transaction / lock cần thiết
-    S->>DB: kiểm tra room, maintenance, overlap
-    S->>DB: snapshot giá và tạo booking
-    S->>DB: commit
-    S-->>API: Booking
-    API-->>UI: 201 + BookingResource
-```
+    UI->>C: POST /api/host/bookings/{booking}/invoice
+    C->>V: Kiểm tra route input
+    V-->>C: ID hợp lệ
+    C->>S: CreateInvoiceRequest + actor
+    S->>R: Lock Booking và lấy facts cần thiết
+    R->>DB: Scoped read / lock
+    S->>V: Quyền, trạng thái, duplicate và snapshot
+    S->>S: Tính từ snapshot chính xác
+    S->>M: Dựng dữ liệu lưu
+    S->>R: Lưu Invoice header và items trong một transaction
+    R->>DB: INSERT header và items
+    S->>DB: Commit
+    S-->>C: Invoice với items đã tải
+    C->>M: Map sang InvoiceResponse
+    M-->>C: Response DTO
+    C-->>UI: 201, data
+~~~
 
-Nếu có request cạnh tranh, backend trả lỗi xung đột phù hợp; frontend tải lại availability và thông báo cho người dùng.
+- Host phải sở hữu Property của Booking đã hoàn tất. Giữ thứ tự lỗi riêng của mutation.
+- Candidate Invoice dùng nhóm invoice-create. ROOM item dùng invoice-create-room. Nhóm validation được gọi tường minh trước insert.
+- Repository quản lý persistence. Service sở hữu transaction và success log sau commit.
+- Header và items map qua Symfony ObjectMapper với allowlist. API tạo trả cùng hình dạng dữ liệu cơ bản với API đọc chi tiết.
+- Frontend dùng invoiceApi, invoiceService và invoiceMapper. Giữ decimal strings, nullable dates và phân biệt list không có items với detail có mảng items rỗng.
+
+### 9.1 Luồng đọc Invoice
+
+- Route list hoặc detail xác thực actor và giữ thứ tự role, input và lookup theo contract đọc.
+- QueryService yêu cầu Repository scope theo Host hoặc Customer và trả kết quả đã map. Repository kiểm soát dữ liệu cần eager-load.
+- Response list dùng PageResponse với data/meta/links. Response detail dùng ApiResponse với data.
+- Các giá trị tiền và ngày đi từ schema qua Eloquent casts, DTO rồi JSON. Frontend giữ chuỗi decimal và chỉ định dạng khi hiển thị.
+- Kiểm chứng bằng list/detail của cả hai vai trò, lookup sai owner, phân trang và tính nhất quán với response create.
+
+### 9.2 Áp dụng ví dụ cho slice khác
+
+So sánh điểm vào, quyền, đầu vào, read/write boundary và projection của slice mới.
+Nếu response có summary hoặc file stream, giữ envelope và serialization đặc thù của endpoint đó.
+Đối chiếu DTO hoặc mapper với fixture độc lập, gồm cả trường nullable và trường không được phép xuất ra.
+Khi kiểm tra refactor, chạy lại consumer thực tế để xác nhận đường đi trước và sau cho cùng dữ liệu.
 
 ## 10. Triển khai local
 
-```text
+~~~text
 Browser
-  -> http://localhost:5173       React/Vite dev server
-  -> http://localhost:8000       Laravel development server
-       -> MySQL                  database + session theo cấu hình
-```
+  → http://localhost:5173       React/Vite
+  → http://localhost:8000       Laravel dev
+       → XAMPP MySQL/MariaDB    dữ liệu nghiệp vụ và session theo cấu hình
+~~~
 
-Frontend và backend là hai origin khác nhau nên CORS, CSRF và cookie phải được cấu hình đồng bộ. Production nên dùng HTTPS, biến môi trường riêng, cache cấu hình Laravel, build frontend thành static assets và không bật debug.
+Xem [hướng dẫn cài và chạy](README.md).
+Cấu hình origin, CORS, cookie và session nhất quán. Khi chạy dev/test đồng thời, dùng cổng và schema test riêng.
+Production dùng HTTPS, biến môi trường riêng và APP_DEBUG tắt. Chỉ build nội dung cần thiết. Không đưa env, secret, log, vendor hoặc node_modules vào commit.
 
-## 11. Quy ước phát triển và kiểm thử
+## 11. Phát triển, kiểm thử và nghiệm thu
 
-- backend là source of truth cho quyền, availability, giá và tổng tiền;
-- controller mỏng, validator giữ validation, service giữ nghiệp vụ, concrete repository giữ persistence, Response DTO giữ public fields và Common helpers giữ envelope; legacy Resource chuyển theo task riêng;
-- mọi query theo dữ liệu của Host phải giới hạn ownership;
-- snapshot dữ liệu tài chính/lịch sử tại thời điểm phát sinh;
-- không commit `.env`, secret, log, `vendor/`, `node_modules/` hoặc output build;
-- feature test cho endpoint, auth, role, ownership và workflow;
-- unit test cho phép tính độc lập;
-- frontend test tập trung vào route guard, form và trạng thái loading/error khi được bổ sung test framework;
-- trước khi merge: chạy `php artisan test`, `npm run lint` và `npm run build` ở ứng dụng tương ứng.
+### 11.1 Quy trình theo lát chức năng
+
+1. Kiểm tra repo và ranh giới owner.
+2. Đọc kiến trúc, route, schema, contract và consumer thực tế.
+3. Trình bày Mini Plan gồm phạm vi file, hành vi giữ nguyên và AC đo được.
+4. Triển khai phần đã duyệt. Một tính năng có UI cần kiểm chứng cả Backend và Frontend.
+5. So diff, chạy test và báo bằng chứng theo từng cổng.
+6. Ghi nghiệm thu vào checklist tương ứng khi có xác nhận.
+
+### 11.2 Cổng kiểm chứng
+
+| Cổng | Mục đích |
+| --- | --- |
+| Unit | Quy tắc thuần, calculation, validation và projection |
+| Feature Laravel | Route, API contract, authentication, role, ownership và transaction test |
+| SQLite in-memory | Hồi quy nhanh theo guard của PHPUnit |
+| MySQL/XAMPP | Collation, constraint, storage-bound flow và InnoDB concurrency với schema test riêng |
+| Node frontend | Service, mapper, API adapter, lỗi và cancellation |
+| Lint và build | Chất lượng source và biên dịch Frontend |
+| Browser thật | Session/CSRF, trạng thái UI, responsive và tích hợp API thật |
+
+~~~powershell
+# Tại backend
+php artisan route:list
+php artisan test
+
+# Tại frontend
+node --experimental-test-module-mocks --test tests/*.test.js
+npm run lint
+npm run build
+
+# Tại root
+git status --short
+git diff --check
+~~~
+
+Chạy focused test khi phát triển và cổng hồi quy theo phạm vi thay đổi.
+Dùng schema XAMPP test riêng khi cần kiểm tra engine và transaction đồng thời. Xác nhận connection và SELECT DATABASE() trước khi ghi dữ liệu.
+Fixture, server tạm và quá trình cleanup thuộc lượt test. SQLite và mock adapter có giới hạn riêng cần ghi trong kết quả.
+Task tài liệu/skill kiểm chứng nội dung, liên kết, phạm vi và validator tương ứng.
+Ghi test, build và runtime riêng. Ghi technical result và owner acceptance riêng.
 
 ## 12. Tài liệu liên quan
 
-- `README.md`: giới thiệu, yêu cầu môi trường và cách chạy;
-- `docs/stayhub-usecase-system.md`: phạm vi chức năng và actor;
-- `docs/stayhub-erd.md`: mô hình dữ liệu mục tiêu;
-- `docs/stayhub-screen-mockups.md`: danh sách màn hình dự kiến;
-- `docs/stayhub-team-work-assignment.md`: phân chia trách nhiệm và module giữa 3 thành viên;
-- `docs/seed-data.md`: kịch bản dữ liệu kiểm thử và phân bổ dữ liệu mẫu;
-- `docs/ai-frontend-development-guide.md`: chỉ dẫn cho AI khi phát triển giao diện frontend;
-- `docs/StayNest-Frontend-template/`: bộ mã nguồn giao diện mẫu tham khảo.
-
-Khi thay đổi route, schema, workflow hoặc cấu trúc thư mục, cần cập nhật tài liệu kiến trúc trong cùng pull request để tránh lệch giữa thiết kế và mã nguồn.
+- [README](README.md) và [dữ liệu seed](docs/seed-data.md)
+- [Use case](docs/stayhub-usecase-system.md) và [ERD](docs/stayhub-erd.md)
+- [Phân công nhóm](docs/stayhub-team-work-assignment.md)
+- [Screen mockups](docs/stayhub-screen-mockups.md) và [Frontend guide](docs/ai-frontend-development-guide.md)
+- [Checklist TV3](docs/TV3/TV3_CHECKLIST.md) cho tiến độ và bằng chứng thuộc phạm vi TV3
 
 ## 13. ARCH-01 — kiến trúc mục tiêu toàn dự án
 
-Owner chọn Repository + DTO + Mapper toàn StayHub ngày 2026-11-14. Invoice read/create đã nối theo checkpoint được nghiệm thu đến 02C.1/02C.2; 02C.3 và audit tổng hợp đã được owner nghiệm thu; parent INV-ARCH-02 CLOSED / ACCEPTED trong phạm vi refactor read/create. VAL-STRUCT-01 là task chuẩn hóa namespace riêng, không mở lại parent hoặc mở thêm CRUD. Review và các module TV1/TV2 chuyển theo owner/scope riêng, không suy toàn project đã migrate.
+Mục này tổng hợp cách áp dụng cấu trúc chung theo từng loại task.
+Dùng tên lớp trong [cấu trúc Backend](#4-kiến-trúc-backend) và [cấu trúc Frontend](#3-kiến-trúc-frontend).
 
-### 13.1 Ranh giới và chiều phụ thuộc
+### 13.1 Chọn ranh giới theo nhu cầu
 
-- Read: Controller -> InvoiceValidator -> InvoiceMapper/InvoiceFilterRequest -> InvoiceQueryService -> InvoiceRepository -> Mapper/Response DTO -> Common. QueryService giữ role check ngoài HTTP; Repository giữ ownership/privacy, grouped search, stable ordering và eager-loading.
-- Create: raw ID -> InvoiceValidator.validateBookingId -> InvoiceMapper.toCreateRequest -> CreateInvoiceRequest -> InvoiceService.createInvoiceFromRequest -> InvoiceRepository. Output loaded Invoice -> InvoiceMapper.toResponse(includeItems true) -> InvoiceResponse -> ApiResponse.success(201).
-- InvoiceService.createInvoice(int, User): Invoice vẫn là compatibility entry point dùng cùng typed workflow; không tạo transaction/workflow thứ hai. Service inject bắt buộc Repository/Validator/Calculator/Mapper/Logger; InvoiceValidator inject AttributeValidator/Calculator. Không suy toàn bộ constructor trong project đã hết optional fallback.
-- Concrete Repository một file/domain; không interface, binding Repository, module provider hay BaseRepository mặc định. Interface/factory/config đặc biệt phải có lý do và scope. Không new Repository trong Service.
-- Mapper sở hữu filter normalization, snapshot/persistence projection và response projection; không query/lazy-load, authorize, tính tiền/log/mutate. DTO jsonSerialize xuất explicit fields, không Model raw. Persistence vẫn dùng Eloquent.
-- InvoiceRepository có bốn read methods và sáu create methods: findBookingForInvoiceWithLock, invoiceExistsForBooking, invoiceCodeExists, createInvoice, createInvoiceItem, loadInvoiceItems. Service sở hữu DB::transaction/afterCommit; Repository không commit hoặc quyết định payment workflow.
-- Không tạo Form Request/Resource song song cho Invoice. Auth/Profile/Review giữ legacy consumers; việc bỏ Invoice Resources không cho phép xóa cả thư mục Http/Requests hoặc Http/Resources.
+| Nhu cầu | Cách áp dụng |
+| --- | --- |
+| Chuẩn hóa input của endpoint | Giữ raw input nếu validation phụ thuộc kiểu ban đầu. Tạo Request DTO typed sau khi dữ liệu hợp lệ. |
+| Lấy facts nhiều bảng hoặc khóa ghi | Dùng concrete Repository có scope và method rõ. Service giữ workflow và transaction. |
+| Quy tắc kiểm tra dùng lại | Đặt trong Validator theo domain. Dùng Symfony attributes khi hợp với dữ liệu và group kiểm tra. |
+| Chuyển Model thành response theo audience | Dựng Response DTO với mapper thuần và dữ liệu đã load. Dùng adapter ObjectMapper cho projection tường minh. |
+| Tạo response chỉ có dữ liệu tổng hợp hoặc ID | Dùng DTO dựng trực tiếp khi source không phải projection của Model. |
+| Response và lỗi | Dùng Common cho luồng đã thống nhất envelope. Giữ contract legacy của consumer trong quá trình chuyển đổi. |
+| Nhiều màn hình xử lý cùng dữ liệu | Domain service áp mapper ở ranh giới API. Dùng chung pagination/projection và để component xử lý trình bày. |
 
-### 13.2 Base API và exception tập trung
+### 13.2 Các trường hợp cần đối chiếu khi refactor
 
-Common/ApiResponse, PageResponse, Constants và Exceptions/AppException, ErrorCode, GlobalExceptionHandler đã có. Global handler được đăng ký qua bootstrap/app.php nhưng chỉ áp allowlist 9 named routes Invoice/Review; không mở rộng Auth/Web/Profile.
+- **Read** — auth/role, canonical ID, filter, order, pagination, summary, ownership, lỗi API và trường lược bỏ.
+- **Create** — raw payload, validation, permission, duplicate, kết quả tạo, rollback và hồi quy bằng thao tác đọc.
+- **Update** — whitelist field, dữ liệu cũ, trạng thái, kết quả no-op, constraints và dữ liệu liên quan.
+- **Delete** — tình trạng tham chiếu, foreign key, đường dọn file, xử lý retry và độ nhất quán sau commit.
+- **Upload hoặc stream** — quyền, giới hạn file, mime/dimension khi có, storage path, lỗi giữa các bước và headers.
+- **UI** — phiên đăng nhập, lỗi theo field và domain, hủy request, đổi filter/page, gửi trùng, retry và focus.
 
-- Create: HTTP 201 với một envelope data, items được load. List: data/meta/links, không items. Detail: data với items, [] khi thực sự load rỗng. Decimal strings/date/null và Review summary/legacy Resource hooks giữ contract.
-- Read: INVOICE_READ_FORBIDDEN 403; ID sai/missing/foreign dùng INVOICE_NOT_FOUND privacy-404. Query validation giữ Laravel 422 field errors.
-- Expected create errors tiếp tục message-only qua Controller catches: 403 quyền, 404 Booking missing, 409 duplicate, 422 ID/snapshot/Model validation. Không ép qua ApiResponse.error vốn cần code, không tự thêm error codes khi chỉ refactor.
-- Guest/session/active-account/CSRF/rate-limit thuộc middleware/framework và Auth contract hiện hành. Giữ status/headers như Retry-After. Không suy Generic InvalidArgumentException ở mọi module là 422.
-- Unexpected errors do Laravel report một lần; global renderer không log/report trùng hoặc lộ SQL/trace/secrets. Catch dịch QueryException conflict trong Service vẫn hợp lệ, không log-and-throw.
+### 13.3 Các điểm mở rộng chung
 
-### 13.3 Logging
+- Giữ endpoint và lớp đang phục vụ caller cũ cho đến khi đã đối chiếu đầy đủ consumer.
+- Đối chiếu lower-level entry point cùng HTTP entry point nếu có caller trực tiếp từ module khác.
+- Giữ quy tắc hiện hành khi rút lớp dùng chung. Khi có thay đổi nghiệp vụ, tách thành quyết định và phạm vi được chốt.
+- Ưu tiên adapter và provider hiện có cho dependencies hạ tầng.
+- Đồng bộ tài liệu này khi thay đổi kiến trúc. Xem checklist của owner để theo dõi triển khai và nghiệm thu từng slice.
 
-Workflow Invoice ghi success sau outer commit; rollback không success log, context hiện có chỉ invoice_id/invoice_code/booking_id/total_amount. Không thêm PII/token/cookie/password/payload dumps hoặc INFO từng query. Mapper/DTO/input validation không log nghiệp vụ; failure reporting tập trung một lần.
+### 13.4 Nguồn đối chiếu cho task tích hợp
 
-Target calculator không cần workflow logging. Hiện InvoiceCalculationService vẫn có legacy begin/end INFO và optional Validator/Logger fallback; task 02B/02C chưa sửa phần đó. Ghi inventory này để không tuyên bố Calculator hoàn toàn thuần side effect hoặc toàn bộ DI/logging đã chuẩn hóa. Thay đổi sau phải có scope riêng.
-
-### 13.4 Frontend target
-
-Page/Component -> invoiceService.js -> invoiceApi.js/shared Axios; service dùng invoiceMapper.js. Một createInvoiceService(invoiceApi) factory trong cùng file gom năm operations create/list/detail Host-Customer; public named exports giữ signatures/defaults/options. Không tách module create/read chỉ để forwarding.
-
-Create/detail map bằng mapInvoiceDetailResponse, trả {data: Invoice}; lists mapInvoiceListResponse, giữ data/meta/links và metadata bổ sung. API module giữ URL/method/query/body/signal. CreateInvoiceButton nhận result.data, không fallback raw body. Mapper giữ snake_case, decimal strings/null/SERVICE names empty/whitespace/'0', không tính giá hoặc làm HTTP. Malformed success là INVALID_INVOICE_RESPONSE, không fake empty/success.
-
-Axios singleton/cookies/XSRF/Auth interceptors/session version/cancellation giữ nguyên. HTTP/network/timeout/cancel errors giữ rejection identity, không tự replay POST. Review và domain khác kiểm tra migration riêng; không suy có mapper vì API factory tồn tại.
-
-Node tests: tại frontend chạy node --experimental-test-module-mocks --test tests/*.test.js. Service test chỉ mock Vite-configured shared Axios module trước import, rồi thực thi service/factory thật; adapter fixtures không phải real backend/browser. Frontend code đổi chạy npm run lint và npm run build; docs-only không rerun các suite để ghi thành evidence mới.
-
-### 13.5 Rollout và evidence
-
-Read và create Invoice đã qua các checkpoint kỹ thuật; nghiệm thu module/parent và UI/use case là quyết định riêng. Review refactor/QA/browser/MySQL gates còn mở. Không thay schema, payment transitions, revenue rules hoặc module TV1/TV2 ngoài scope.
-
-Evidence lịch sử: 02C.1 full backend 492 tests/2860 assertions và 75 Node tests, exit 0; 02C.2 lint/build PASS với 3 Fast Refresh warnings và bundle >500 kB. 02C.3 không chạy lại application suites. SQLite không chứng minh InnoDB concurrency; Node/build không chứng minh browser/mobile/Auth thật. Plan/Task Result trên chat, checklist lưu trạng thái và source của evidence.
+| Thứ cần xác minh | Nguồn đối chiếu |
+| --- | --- |
+| Route, status và lỗi | Route registry, Controller, middleware, feature test và consumer |
+| Payload và field hiển thị | Request validation, Response DTO, mapper và UI thực tế |
+| Transaction, unique và FK | Service, Repository, migration và schema trên engine liên quan |
+| Quyền theo vai trò | Actor, policy hoặc workflow, scoped query và integration test |
 
 ## 14. STRUCT-01 — naming hiện hành và trạng thái chuyển đổi
 
-Cập nhật theo code đến 02C.1/02C.2. Không đổi URL/namespace hoặc thêm /api/v1. AGENTS.md giữ nguyên theo owner; hướng dẫn cũ đọc cùng quyết định hiện hành và task authorization.
+### 14.1 Quy ước tên
 
-```text
-app/
-├── Common/{ApiResponse,PageResponse,Constants}.php
-├── DTOs/Invoice/
-│   ├── Requests/{InvoiceFilterRequest,InvoiceCreateInputRequest,InvoiceIdInputRequest,InvoiceQueryInputRequest,CreateInvoiceRequest}.php
-│   └── Responses/{InvoiceResponse,InvoiceItemResponse}.php
-├── Mappers/Invoice/InvoiceMapper.php
-├── Validators/
-│   ├── AttributeValidator.php
-│   ├── Constraints/{CanonicalPositiveId,CanonicalPositiveIdValidator}.php
-│   ├── Invoice/{InvoiceValidator,InvoiceCalculationValidator}.php
-│   └── Review/ReviewCreationValidator.php
-├── Repositories/Invoice/InvoiceRepository.php
-├── Services/Invoice/{InvoiceQueryService,InvoiceService,InvoiceCalculationService}.php
-├── Mapping/EloquentObjectMapper.php
-├── Exceptions/{AppException,ErrorCode,GlobalExceptionHandler}.php
-├── Exceptions/Invoice/DuplicateInvoiceException.php
-└── Providers/AppServiceProvider.php
-```
+| Vai trò | Tổ chức |
+| --- | --- |
+| Controller | app/Http/Controllers/<Domain> |
+| Request/Response DTO | app/DTOs/<Domain>/Requests hoặc Responses |
+| Symfony adapter và domain mapper | app/Mappers cùng thư mục domain |
+| Domain validator và constraints | app/Validators/<Domain> và app/Validators/Constraints |
+| Workflow và persistence | app/Services/<Domain> và app/Repositories/<Domain> |
+| Frontend transport và mapping | src/api, src/services và src/mappers |
+| Host/Customer/Admin UI | src/pages và src/components theo vai trò hoặc domain đang dùng |
 
-- [InvoiceValidator](backend/app/Validators/Invoice/InvoiceValidator.php) gom input/read/create validation, không query/lazy-load. Read role-before-input và create raw-ID-before-Service-role là hai contract khác nhau; không tự đổi thứ tự.
-- [InvoiceMapper](backend/app/Mappers/Invoice/InvoiceMapper.php) gom request/response/persistence mapping. Runtime projection vẫn tường minh bằng PHP; [EloquentObjectMapper](backend/app/Mapping/EloquentObjectMapper.php) là runtime Symfony adapter/pilot chỉ map allowlisted loaded scalar attributes, chưa thay toàn bộ production mapper, không phải compile-time Java MapStruct.
-- [AttributeValidator](backend/app/Validators/AttributeValidator.php) dùng installed Symfony Validator. Invoice/InvoiceItem getter attributes không che DB columns. Groups invoice-create cho invoice_code, invoice-create-room chỉ cho ROOM item_name, invoice-pilot giữ explicit tests; default group/save() không tự chạy. Service validate candidate trước insert tương ứng, không đảm bảo mutations từ Eloquent events sau đó. Normalizer trim chỉ kiểm tra, không sửa snapshot; SERVICE giữ business behavior cũ.
-- [InvoiceRepository](backend/app/Repositories/Invoice/InvoiceRepository.php) bốn read/sáu create methods; [InvoiceService](backend/app/Services/Invoice/InvoiceService.php) giữ workflow/transaction/locks requested/code generation/conflict classification/safe afterCommit logging. Provider cấu hình engines, không binding Repository.
-- [InvoiceResponse](backend/app/DTOs/Invoice/Responses/InvoiceResponse.php)/[InvoiceItemResponse](backend/app/DTOs/Invoice/Responses/InvoiceItemResponse.php) JsonSerializable explicit fields; omitted list items khác loaded empty detail. [ApiResponse](backend/app/Common/ApiResponse.php)/[PageResponse](backend/app/Common/PageResponse.php) giữ một envelope và legacy Resource compatibility; Constants chỉ pagination 10/1/50.
+Dùng hậu tố Request, Response hoặc Query theo vai trò DTO. Tên field bên ngoài theo contract tiêu thụ.
+Namespace Controller theo domain và routing hiện hành. Chỉ thêm version prefix khi có quyết định về API versioning.
 
-| Boundary | Hiện trạng |
-|---|---|
-| Invoice Backend read/create | Validator/DTO/Service/Repository/Mapper/Common đã nối; Invoice HTTP Requests/Resources không còn |
-| Invoice Frontend | Một invoiceService.js cho create/read, invoiceApi/shared Axios và invoiceMapper |
-| Model validation/mapping | Explicit Invoice/ROOM groups active; SERVICE không thêm luật; mapping engine còn adapter/pilot |
-| Common/Exceptions | Route-scoped renderer, create expected errors message-only, Auth/Web contract giữ nguyên |
-| Review | API factory có; Request/Resource/Service migration theo task riêng |
-| TV1/TV2 và Dashboard/payment/FAQ/chat | Giữ ownership/inventory thực tế; không coi hoàn tất nhờ refactor Invoice |
-| Acceptance | 02C.1/02C.2/02C.3 và audit ACCEPTED; parent INV-ARCH-02 CLOSED; VAL-STRUCT-01 nghiệm thu riêng |
+### 14.2 Ví dụ từ code đang dùng
 
-Lịch sử naming/counts giữ trong [checklist TV3](docs/TV3/TV3_CHECKLIST.md); không sửa số test cũ thành kết quả mới của tài liệu. Security audit 9 advisories/6 baseline packages được ghi từ 02B.1 vẫn unresolved, không được coi đã fix bởi refactor hoặc tài liệu.
+| Slice | Backend | Frontend |
+| --- | --- | --- |
+| Invoice đọc/tạo | InvoiceValidator, typed DTO, InvoiceRepository, InvoiceMapper, Common | invoiceService, invoiceApi, invoiceMapper |
+| Review đọc/tạo | ReviewValidator, ReviewRepository, ReviewMapper, Response DTO theo audience, Common | reviewService, reviewApi, reviewMapper |
+| Auth và Profile | AuthUserMapper chia sẻ projection user. Đăng nhập/đăng ký dùng AuthValidator và typed Request DTO. Profile mutation dùng ProfileValidator, typed Request DTO và ProfileRepository. | authService và profileService theo contract Sanctum đang dùng |
+| Public Catalog | CatalogValidator, CatalogRepository và CatalogMapper, DTO theo endpoint | propertyService và lớp catalog theo contract đọc |
+| Host Catalog | Validator, QueryService/Service, Repository và DTO cho Property, ảnh và RoomType | hostPropertyService và các component Catalog |
+| Booking & Operations | Schema/model là đầu mối tích hợp. Xác nhận route khi code TV2 được hợp nhất. | bookingService có luồng DEV mock được gắn điều kiện |
+
+Các điểm xem nhanh trong source:
+
+- [Laravel route registry](backend/routes/api.php)
+- [Symfony engine registration](backend/app/Providers/AppServiceProvider.php)
+- [Adapter validation](backend/app/Validators/AttributeValidator.php)
+- [Invoice mapping](backend/app/Mappers/Invoice/InvoiceMapper.php)
+- [Review mapping](backend/app/Mappers/Review/ReviewMapper.php)
+- [Catalog mapping](backend/app/Mappers/Catalog/CatalogMapper.php)
+- [Auth mapping](backend/app/Mappers/Auth/AuthUserMapper.php)
+- [Frontend router](frontend/src/routes/AppRouter.jsx)
+- [Frontend shared Axios](frontend/src/api/axios.js)

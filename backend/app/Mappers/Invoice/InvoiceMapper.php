@@ -3,6 +3,7 @@
 namespace App\Mappers\Invoice;
 
 use App\Common\Constants;
+use App\Mappers\EloquentObjectMapper;
 use App\DTOs\Invoice\Requests\CreateInvoiceRequest;
 use App\Models\Booking;
 use Illuminate\Database\Eloquent\Model;
@@ -16,6 +17,8 @@ use LogicException;
 /** Pure projection of cast attributes and explicitly loaded relationships. */
 final class InvoiceMapper
 {
+    public function __construct(private readonly EloquentObjectMapper $objectMapper) {}
+
     public function toCreateRequest(int $bookingId): CreateInvoiceRequest
     {
         return new CreateInvoiceRequest($bookingId);
@@ -121,41 +124,40 @@ final class InvoiceMapper
             throw new LogicException('Invoice items must be eager loaded before detail mapping.');
         }
 
-        $items = $includeItems
-            ? $invoice->getRelation('items')->map(fn (InvoiceItem $item) => $this->toItemResponse($item))->values()->all()
-            : null;
+        $prepared = $includeItems
+            ? ['items' => $invoice->getRelation('items')->map(fn (InvoiceItem $item) => $this->toItemResponse($item))->values()->all()]
+            : [];
 
-        return new InvoiceResponse(
-            id: (int) $invoice->id,
-            invoice_code: (string) $invoice->invoice_code,
-            booking_id: (int) $invoice->booking_id,
-            customer_name: (string) $invoice->customer_name,
-            customer_email: (string) $invoice->customer_email,
-            customer_phone: (string) $invoice->customer_phone,
-            property_name: (string) $invoice->property_name,
-            room_name: (string) $invoice->room_name,
-            subtotal: (string) $invoice->subtotal,
-            discount_amount: (string) $invoice->discount_amount,
-            extra_fee: (string) $invoice->extra_fee,
-            total_amount: (string) $invoice->total_amount,
-            payment_status: (string) $invoice->payment_status,
-            paid_at: $invoice->paid_at?->toISOString(),
-            created_at: $invoice->created_at?->toISOString(),
-            items: $items,
-        );
+        return $this->objectMapper->map($invoice, InvoiceResponse::class, [
+            'id',
+            'invoice_code',
+            'booking_id',
+            'customer_name',
+            'customer_email',
+            'customer_phone',
+            'property_name',
+            'room_name',
+            'subtotal',
+            'discount_amount',
+            'extra_fee',
+            'total_amount',
+            'payment_status',
+            'paid_at',
+            'created_at',
+        ], $prepared);
     }
 
     public function toItemResponse(InvoiceItem $item): InvoiceItemResponse
     {
-        return new InvoiceItemResponse(
-            id: (int) $item->id,
-            invoice_id: (int) $item->invoice_id,
-            item_type: (string) $item->item_type,
-            item_name: (string) $item->item_name,
-            description: $item->description !== null ? (string) $item->description : null,
-            quantity: (string) $item->quantity,
-            unit_price: (string) $item->unit_price,
-            amount: (string) $item->amount,
-        );
+        return $this->objectMapper->map($item, InvoiceItemResponse::class, [
+            'id',
+            'invoice_id',
+            'item_type',
+            'item_name',
+            'description',
+            'quantity',
+            'unit_price',
+            'amount',
+        ]);
     }
 }

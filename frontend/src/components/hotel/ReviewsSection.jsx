@@ -12,21 +12,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { reviewService, parseReviewError } from "@/services/reviewService";
-
-function formatReviewDate(isoStr) {
-  if (!isoStr) return "";
-  try {
-    const d = new Date(isoStr);
-    if (isNaN(d.getTime())) return isoStr;
-    return d.toLocaleDateString("vi-VN", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
-  } catch {
-    return isoStr;
-  }
-}
+import { formatReviewDate } from "@/mappers/reviewMapper";
 
 function getInitials(name) {
   if (!name || typeof name !== "string") return "KH";
@@ -44,7 +30,7 @@ function ActiveReviewsSection({ propertyId }) {
   // State dữ liệu từ Backend API
   const [reviews, setReviews] = useState([]);
   const [summary, setSummary] = useState(null);
-  const [meta, setMeta] = useState(null);
+  const [pagination, setPagination] = useState(null);
 
   // State điều khiển phân trang & bộ lọc
   const [currentPage, setCurrentPage] = useState(1);
@@ -77,13 +63,11 @@ function ActiveReviewsSection({ propertyId }) {
         },
         { signal: controller.signal }
       )
-      .then((res) => {
+      .then(({ data, summary, pagination }) => {
         if (!isSubscribed) return;
-        setReviews(res?.data || []);
-        if (res?.summary) {
-          setSummary(res.summary);
-        }
-        setMeta(res?.meta || null);
+        setReviews(data);
+        setSummary(summary);
+        setPagination(pagination);
         setIsLoading(false);
         setIsPaging(false);
       })
@@ -258,8 +242,8 @@ function ActiveReviewsSection({ propertyId }) {
   }
 
   // TRẠNG THÁI: Valid Empty (Backend 200 nhưng review_count = 0)
-  const totalReviews = Number(summary?.review_count) || 0;
-  const avgRating = summary?.average_rating ? Number(summary.average_rating) : null;
+  const totalReviews = summary?.review_count ?? 0;
+  const avgRating = summary?.average_rating ?? null;
 
   if (totalReviews === 0) {
     return (
@@ -283,7 +267,7 @@ function ActiveReviewsSection({ propertyId }) {
   }
 
   // TRẠNG THÁI: Success — Hiển thị đầy đủ Quiet Luxury Review UI
-  const breakdown = summary?.rating_breakdown || {};
+  const breakdown = summary.rating_breakdown;
 
   return (
     <section id="reviews" className="space-y-6">
@@ -323,7 +307,7 @@ function ActiveReviewsSection({ propertyId }) {
           {/* 5-Star Breakdown Bars (Bấm vào thanh để lọc nhanh) */}
           <div className="space-y-2">
             {[5, 4, 3, 2, 1].map((star) => {
-              const count = Number(breakdown[String(star)]) || 0;
+              const count = breakdown[star];
               const percentage =
                 totalReviews > 0 ? Math.round((count / totalReviews) * 100) : 0;
               const isSelected = filterRating === star;
@@ -375,7 +359,7 @@ function ActiveReviewsSection({ propertyId }) {
               Tất cả ({totalReviews})
             </button>
             {[5, 4, 3, 2, 1].map((s) => {
-              const count = Number(breakdown[String(s)]) || 0;
+              const count = breakdown[s];
               const active = filterRating === s;
               return (
                 <button
@@ -500,28 +484,28 @@ function ActiveReviewsSection({ propertyId }) {
       </div>
 
       {/* 4. Server-side Pagination Bar */}
-      {meta && meta.last_page > 1 && (
+      {pagination && pagination.lastPage > 1 && (
         <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border/60 bg-card px-5 py-3.5">
           <div className="text-xs text-muted-foreground">
-            Hiển thị trang <span className="font-medium text-ink">{meta.current_page}</span> /{" "}
-            <span className="font-medium text-ink">{meta.last_page}</span> (Tổng số{" "}
-            {meta.total} đánh giá)
+            Hiển thị trang <span className="font-medium text-ink">{pagination.currentPage}</span> /{" "}
+            <span className="font-medium text-ink">{pagination.lastPage}</span> (Tổng số{" "}
+            {pagination.total} đánh giá)
           </div>
 
           <div className="flex items-center gap-1.5">
             <button
               type="button"
-              disabled={meta.current_page <= 1 || isPaging}
-              onClick={() => handlePageChange(meta.current_page - 1)}
+              disabled={pagination.currentPage <= 1 || isPaging}
+              onClick={() => handlePageChange(pagination.currentPage - 1)}
               className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-ink transition hover:border-primary/40 hover:text-primary disabled:opacity-40 disabled:pointer-events-none"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
               Trước
             </button>
 
-            {Array.from({ length: meta.last_page }).map((_, idx) => {
+            {Array.from({ length: pagination.lastPage }).map((_, idx) => {
               const p = idx + 1;
-              const isActive = p === meta.current_page;
+              const isActive = p === pagination.currentPage;
               return (
                 <button
                   key={p}
@@ -541,8 +525,8 @@ function ActiveReviewsSection({ propertyId }) {
 
             <button
               type="button"
-              disabled={meta.current_page >= meta.last_page || isPaging}
-              onClick={() => handlePageChange(meta.current_page + 1)}
+              disabled={pagination.currentPage >= pagination.lastPage || isPaging}
+              onClick={() => handlePageChange(pagination.currentPage + 1)}
               className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-ink transition hover:border-primary/40 hover:text-primary disabled:opacity-40 disabled:pointer-events-none"
             >
               Sau

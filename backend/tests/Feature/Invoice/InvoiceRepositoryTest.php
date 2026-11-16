@@ -123,7 +123,7 @@ class InvoiceRepositoryTest extends TestCase
         DB::flushQueryLog();
         DB::enableQueryLog();
         try {
-            $data = (new InvoiceMapper)->toResponse($invoice, true);
+            $data = app(InvoiceMapper::class)->toResponse($invoice, true);
             $this->assertSame([], DB::getQueryLog());
         } finally {
             DB::disableQueryLog();

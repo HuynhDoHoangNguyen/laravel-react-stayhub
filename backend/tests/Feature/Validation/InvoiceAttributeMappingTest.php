@@ -3,6 +3,8 @@
 namespace Tests\Feature\Validation;
 
 use App\DTOs\Invoice\Responses\InvoiceItemResponse;
+use App\DTOs\Invoice\Responses\InvoiceResponse;
+use App\Mappers\EloquentObjectMapper;
 use App\Mappers\Invoice\InvoiceMapper;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
@@ -109,7 +111,7 @@ class InvoiceAttributeMappingTest extends TestCase
         $this->assertNotEmpty(app(AttributeValidator::class)->errors($invoice, ['invoice-pilot']));
     }
 
-    public function test_mapping_eloquent_item_to_existing_readonly_dto_preserves_projection_without_queries(): void
+    public function test_invoice_mapper_calls_symfony_and_preserves_item_projection_without_queries(): void
     {
         $invoice = $this->persistedInvoice();
         $item = $invoice->items()->create(['item_type' => 'SERVICE', 'item_name' => 'Breakfast', 'description' => null,
@@ -118,15 +120,22 @@ class InvoiceAttributeMappingTest extends TestCase
         $before = $item->getAttributes();
         $expected = ['id' => $item->id, 'invoice_id' => $invoice->id, 'item_type' => 'SERVICE', 'item_name' => 'Breakfast',
             'description' => null, 'quantity' => '1.25', 'unit_price' => '12.34', 'amount' => '15.43'];
+        $engine = app(ObjectMapperInterface::class);
+        $spy = $this->createMock(ObjectMapperInterface::class);
+        $spy->expects($this->once())->method('map')->willReturnCallback(function (object $source, $target) use ($engine, $expected) {
+            $this->assertSame(InvoiceItemResponse::class, $target);
+            $this->assertSame($expected, get_object_vars($source));
+
+            return $engine->map($source, $target);
+        });
+        $this->app->instance(ObjectMapperInterface::class, $spy);
         DB::flushQueryLog();
         DB::enableQueryLog();
         try {
-            $dto = app(\App\Mapping\EloquentObjectMapper::class)->map($item, InvoiceItemResponse::class,
-                ['id', 'invoice_id', 'item_type', 'item_name', 'description', 'quantity', 'unit_price', 'amount']);
+            $dto = app(InvoiceMapper::class)->toItemResponse($item);
             $this->assertInstanceOf(InvoiceItemResponse::class, $dto);
             $this->assertTrue((new \ReflectionClass($dto))->isReadOnly());
             $this->assertSame($expected, $dto->jsonSerialize());
-            $this->assertSame((new InvoiceMapper)->toItemResponse($item)->jsonSerialize(), $dto->jsonSerialize());
             $this->assertSame($expected, json_decode(json_encode($dto, JSON_THROW_ON_ERROR), true));
             $this->assertSame([], DB::getQueryLog());
             $this->assertFalse($item->relationLoaded('invoice'));
@@ -137,6 +146,66 @@ class InvoiceAttributeMappingTest extends TestCase
     }
 
 
+    public function test_invoice_header_and_prepared_items_are_mapped_by_symfony_without_queries(): void
+    {
+        $invoice = $this->persistedInvoice();
+        $invoice->items()->create(['item_type' => 'SERVICE', 'item_name' => '0', 'description' => null,
+            'quantity' => '1.25', 'unit_price' => '12.34', 'amount' => '15.43']);
+        $invoice->load('items')->setAttribute('internal_note', 'must not leak');
+        $before = $invoice->getAttributes();
+        $relations = $invoice->getRelations();
+        $expected = [
+            'id' => $invoice->id, 'invoice_code' => 'INV-PILOT', 'booking_id' => 1,
+            'customer_name' => 'Customer', 'customer_email' => 'fixture@example.test', 'customer_phone' => '0900000000',
+            'property_name' => 'Snapshot property', 'room_name' => 'Snapshot room', 'subtotal' => '9999999999.99',
+            'discount_amount' => '0.01', 'extra_fee' => '0.02', 'total_amount' => '1234567.89',
+            'payment_status' => 'UNPAID', 'paid_at' => null, 'created_at' => $invoice->created_at->toISOString(),
+        ];
+        $expectedItem = [
+            'id' => $invoice->items[0]->id, 'invoice_id' => $invoice->id, 'item_type' => 'SERVICE',
+            'item_name' => '0', 'description' => null, 'quantity' => '1.25', 'unit_price' => '12.34', 'amount' => '15.43',
+        ];
+        $engine = app(ObjectMapperInterface::class);
+        $targets = [];
+        $spy = $this->createMock(ObjectMapperInterface::class);
+        $spy->expects($this->exactly(3))->method('map')
+            ->willReturnCallback(function (object $source, $target) use (&$targets, $engine, $expected, $expectedItem) {
+                $targets[] = $target;
+                $attributes = get_object_vars($source);
+                if ($target === InvoiceResponse::class) {
+                    if (array_key_exists('items', $attributes)) {
+                        $this->assertCount(1, $attributes['items']);
+                        $this->assertInstanceOf(InvoiceItemResponse::class, $attributes['items'][0]);
+                        $this->assertSame($expectedItem, $attributes['items'][0]->jsonSerialize());
+                        unset($attributes['items']);
+                    }
+                    $attributes['created_at'] = $attributes['created_at']->toISOString();
+                    $this->assertSame($expected, $attributes);
+                } else {
+                    $this->assertSame($expectedItem, $attributes);
+                }
+
+                return $engine->map($source, $target);
+            });
+        $this->app->instance(ObjectMapperInterface::class, $spy);
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        try {
+            $mapper = app(InvoiceMapper::class);
+            $this->assertSame($expected, $mapper->toResponse($invoice)->jsonSerialize());
+            $detail = $mapper->toResponse($invoice, true);
+            $this->assertTrue((new \ReflectionClass($detail))->isReadOnly());
+            $this->assertSame($expected + ['items' => [$expectedItem]], $detail->jsonSerialize());
+            $this->assertSame([InvoiceResponse::class, InvoiceItemResponse::class, InvoiceResponse::class], $targets);
+            $this->assertSame([], DB::getQueryLog());
+            $this->assertSame($before, $invoice->getAttributes());
+            $this->assertSame($relations, $invoice->getRelations());
+        } finally {
+            DB::disableQueryLog();
+        }
+    }
+
     public function test_mapping_adapter_rejects_relationships_and_missing_fields_without_queries(): void
     {
         $invoice = $this->persistedInvoice();
@@ -146,7 +215,7 @@ class InvoiceAttributeMappingTest extends TestCase
         try {
             foreach (['invoice', 'missing_field'] as $field) {
                 try {
-                    app(\App\Mapping\EloquentObjectMapper::class)->map($item, InvoiceItemResponse::class, [$field]);
+                    app(EloquentObjectMapper::class)->map($item, InvoiceItemResponse::class, [$field]);
                     $this->fail('Missing attribute or relation accepted.');
                 } catch (\LogicException $error) {
                     $this->assertSame('Only loaded model attributes may be mapped.', $error->getMessage());
@@ -157,6 +226,15 @@ class InvoiceAttributeMappingTest extends TestCase
         } finally {
             DB::disableQueryLog();
         }
+    }
+
+    public function test_mapping_adapter_rejects_prepared_values_that_override_loaded_fields(): void
+    {
+        $invoice = (new Invoice)->forceFill(['paid_at' => null]);
+
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('Prepared mapping values cannot override model attributes in the allowlist.');
+        app(EloquentObjectMapper::class)->map($invoice, InvoiceResponse::class, ['paid_at'], ['paid_at' => 'override']);
     }
 
     public function test_mapper_date_transform_and_nullable_constructor_arguments_are_supported(): void
@@ -173,23 +251,21 @@ class InvoiceAttributeMappingTest extends TestCase
     public function test_empty_and_loaded_item_collections_keep_existing_list_detail_semantics(): void
     {
         $invoice = $this->persistedInvoice()->load('items');
-        $mapper = new InvoiceMapper;
+        $mapper = app(InvoiceMapper::class);
         $this->assertArrayNotHasKey('items', $mapper->toResponse($invoice)->jsonSerialize());
         $this->assertSame([], $mapper->toResponse($invoice, true)->jsonSerialize()['items']);
-        $this->assertSame([], $invoice->items->map(fn ($item) => app(\App\Mapping\EloquentObjectMapper::class)->map($item, InvoiceItemResponse::class,
-            ['id', 'invoice_id', 'item_type', 'item_name', 'description', 'quantity', 'unit_price', 'amount']))->all());
-        foreach (['ROOM', 'SERVICE'] as $type) {
-            $invoice->items()->create(['item_type' => $type, 'item_name' => $type, 'description' => null,
+        $expected = [];
+        foreach ([['ROOM', 'Phòng 101'], ['SERVICE', ''], ['SERVICE', '   '], ['SERVICE', '0']] as [$type, $name]) {
+            $item = $invoice->items()->create(['item_type' => $type, 'item_name' => $name, 'description' => null,
                 'quantity' => '1.00', 'unit_price' => '0.00', 'amount' => '0.00']);
+            $expected[] = ['id' => $item->id, 'invoice_id' => $invoice->id, 'item_type' => $type,
+                'item_name' => $name, 'description' => null, 'quantity' => '1.00', 'unit_price' => '0.00', 'amount' => '0.00'];
         }
         $invoice->load('items');
         DB::flushQueryLog();
         DB::enableQueryLog();
         try {
-            $mapped = $invoice->items->map(fn ($item) => app(\App\Mapping\EloquentObjectMapper::class)->map($item, InvoiceItemResponse::class,
-                ['id', 'invoice_id', 'item_type', 'item_name', 'description', 'quantity', 'unit_price', 'amount'])->jsonSerialize())->all();
-            $this->assertCount(2, $mapped);
-            $this->assertSame($mapper->toResponse($invoice, true)->jsonSerialize()['items'], $mapped);
+            $this->assertSame($expected, $mapper->toResponse($invoice, true)->jsonSerialize()['items']);
             $this->assertSame([], DB::getQueryLog());
         } finally {
             DB::disableQueryLog();

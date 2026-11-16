@@ -5,49 +5,28 @@ description: Implement or review StayHub Laravel 12 APIs and services, including
 
 # StayHub Laravel
 
-Use current instructions and approved scope; this shared skill does not grant ownership of all modules. Read ARCHITECTURE.md and the actual request-to-persistence chain rather than forcing a new directory convention.
+Use [ARCHITECTURE.md](../../../ARCHITECTURE.md) and the actual authorized slice. Start from registered routes and middleware, trace to callers and tests, and check runtime contracts before restructuring an endpoint.
 
-## Trace and implement
+## Choose responsibilities
 
-- Inspect registered routes, auth middleware, validators/DTOs, services/repositories, models/enums, Common responses and any legacy Form Requests/Resources, plus matching tests. Confirm frontend consumer contract when the task exposes an API.
-- Keep controllers as coordinators. For new/migrated slices, input validators handle input/authorization rules, domain validators handle business/internal constraints, services own workflow/transactions, concrete repositories own persistence, models own relationships/casts/scopes, and explicit JsonSerializable Response DTOs plus Common helpers serialize output. Keep legacy Form Requests/Resources until separately migrated.
-- Use Sanctum session/cookie authentication and existing active-account rules. Enforce role and ownership on the server through the project's approved policy/middleware/service boundary. Do not infer protection from React guards or leak resource existence contrary to the established error contract.
-- Derive prices and identifiers from trusted server state. Use exact decimal/BCMath or suitable scaled integers for money, including aggregate response serialization.
-- For mutations, define atomicity, uniqueness, legal transitions and conflict/retry behavior. Add locks/constraints where justified by actual concurrent writes, not as boilerplate. Do not change shared schema without approved scope.
-- Preserve endpoint naming, pagination and error contracts. Reject mass-assigned role/owner/status/total fields that are server-owned. Repository and central exception infrastructure follow ARCH-01; implement bindings/global registration only in the approved task scope.
-- Log meaningful business operations with safe identifiers. Avoid per-calculation logs, broad catch solely to log/rethrow, and tokens/cookies/credentials/PII. Translate expected domain exceptions only at a boundary that owns that contract.
+- Route and middleware own method/path, session, role gates, account-state checks and rate limits that apply to the route. Enforce resource ownership at the policy/workflow/query boundary. Keep established privacy and error order.
+- Keep controllers focused on extracting actor/input and invoking the appropriate validator, DTO, service and response helper.
+- Use one validation root under app/Validators. Put shared Symfony infrastructure in AttributeValidator and Constraints, and domain rules under their domain directory. Reuse Form Requests where the existing HTTP boundary still uses them.
+- Check raw input before casting when canonical IDs, types or error messages matter. Convert to a typed Request DTO for the workflow and pass the authenticated actor separately. Keep validators query-free by passing facts resolved by the service.
+- Service owns workflow, transaction and order of checks. Concrete Repository holds scoped queries, eager loading and persistence. Use constructor DI for required collaborators. Introduce binding/interface only for a concrete need.
+- Eloquent Model holds casts, fillable or guarded fields, relationships and entity scopes. Whitelist fields on writes. Derive fields such as owner, status and totals from authorized server data.
 
-## Domain checks
+## Validate and map explicitly
 
-- Identity/catalog: follow TV1's current auth/account/property visibility contract; do not redesign authentication while integrating another module.
-- Booking/services: use TV2's approved availability/workflow and snapshot contract; do not recompute booking prices in another module.
-- Invoice: unique booking, snapshot amounts, atomic header/items, no double discount/surcharge. Payment transitions require an agreed workflow, not just an enum list.
-- Review: own COMPLETED booking, one review per booking, rating 1–5; Host reads but cannot edit Customer content.
-- Reporting: read-only queries; Host ownership scope on every aggregate; confirm eligible invoice statuses/date/refund treatment before revenue queries.
-- FAQ/chat: role-scoped management and session ownership; provider failures/timeouts handled; context excludes secrets and unauthorized data; V1 performs no booking/payment mutation.
+- Use Symfony Validator attributes where they express reusable input or model constraints. Call an explicit group for a model candidate before its insert/update when required by the workflow. Test the active and unaffected groups.
+- Place mappers under app/Mappers. Use EloquentObjectMapper with loaded attributes, an explicit allowlist and the existing Symfony registration for Model-to-DTO projections. Compose nested values from loaded relations. Construct a derived response DTO directly when it only carries a command result.
+- Keep mapping free of queries, writes and authorization. Use typed Response DTOs with explicit JSON fields. Preserve nullable values, absent fields, collection shape, dates and decimal strings.
+- Keep public payloads scoped to the consumer. Preserve status, envelope, field errors, existing headers and route-scoped exception handling. Use Common helpers where they fit the contract and verify legacy consumers before removing a compatibility path.
 
-## Verify
+## Transactions, logging and checks
 
-Cover success and meaningful validation, unauthenticated/wrong-role/wrong-owner, not-found/conflict paths. Financial tests use independently specified decimal expectations rather than calling the production formula to calculate expected results. Add regression tests for real defects.
-
-Inspect test database safety first. Run focused tests while developing and the required backend gate `php artisan test` before reporting completion. Report SQLite and MySQL evidence separately; SQLite tests do not prove row-lock concurrency. Finish Backend and required Frontend scope before claiming the whole use case is complete.
-
-## Current Invoice boundary
-
-See [architecture](../../../ARCHITECTURE.md) sections 4/13/14. InvoiceValidator groups read/create validation; InvoiceMapper owns normalized Request DTOs, persistence snapshots and Response DTO projection. InvoiceRepository is one concrete class with four read and six create methods, injected through constructors without Repository binding. AppServiceProvider still configures Symfony Validator/ObjectMapper engines; don't remove those registrations to eliminate Repository binding.
-
-Read: authorize expected role before query/ID validation, preserve framework 422 field errors and privacy-404/INVOICE_NOT_FOUND; QueryService retains role checks outside HTTP. Create: Controller validates raw ID through DTO attributes before mapping to CreateInvoiceRequest; actor comes from session. Service locks/loads Booking, checks role/ownership/status, then queries duplicate fact via Repository before snapshots/financial integrity. Validator receives bool fact, never Repository/query callback; loaded-null business errors differ from unloaded-relation LogicException. Don't apply read ordering mechanically to create.
-
-HTTP create calls createInvoiceFromRequest and maps loaded Invoice to InvoiceResponse -> ApiResponse.success(201); compatibility createInvoice(int, User) shares the workflow. Keep expected create 403/404/409/422 message-only catches. GlobalExceptionHandler remains route-scoped, read codes/Auth/Web/framework headers unchanged. Invoice Resources are removed; retain Auth/Profile/Review legacy consumers and Common Resource compatibility.
-
-InvoiceService dependencies Repository/Validator/Calculator/Mapper/Logger are required; InvoiceValidator requires AttributeValidator/Calculator. Service owns transaction, requested lock lookup, uniqueness recheck, exact money, DB exception classification and safe success-afterCommit logging. Calculator internal optional fallback and begin/end INFO are still legacy, not resolved by this documentation or authority for an unrelated fix.
-
-Raw InvoiceCreateInputRequest/InvoiceIdInputRequest/InvoiceQueryInputRequest attributes run before cast; CreateInvoiceRequest(int bookingId)/InvoiceFilterRequest are application data. AttributeValidator applies explicit invoice-create to Invoice code and invoice-create-room only to ROOM name before insert. No observers/global save validation; trim doesn't alter snapshots; SERVICE empty/whitespace/'0' behavior remains. Don't add new constraints that change accepted business inputs under refactor scope.
-
-Production InvoiceMapper remains explicit PHP projection; EloquentObjectMapper is a runtime Symfony adapter/pilot restricted to loaded scalar allowlists. Neither mapper/DTO nor serialization may query/lazy-load, calculate totals or mutate. JsonSerializable output keeps decimal/date/null, omitted list items vs loaded [] detail and one data envelope.
-
-Verify canonical IDs/error order, ownership, exact response/create-to-read parity, no-query validation/projection, rollback/unique conflict/Model faults, safe outer-commit logging and full php artisan test. SQLite isn't MySQL concurrency evidence. Read/create implementation does not close parent/module/browser acceptance; Review migration remains separate.
-
-## Unified validation namespace
-
-Validation namespaces are unified under App\Validators: shared AttributeValidator at the root, custom constraint/validator pairs in App\Validators\Constraints, domain rules under Invoice/Review. Keep pairs together so Symfony validatedBy() resolves the new FQCN. No alias, forwarding class, provider/binding or dependency change is needed; composer dump-autoload --no-scripts refreshes generated autoload metadata without running setup/migration hooks.
+- Resolve ownership, state and uniqueness at the appropriate step. Recheck facts that can change under concurrency while the necessary locks are held.
+- Use exact decimal or appropriately scaled integer arithmetic for money. Source financial data from stored snapshots per module contract.
+- Log meaningful operations with safe identifiers. Record committed success after the real outer commit. Let Laravel report unexpected errors. Catch only where the workflow needs exception classification, translation or compensation.
+- Verify auth/role/ownership, field validation, projections and the endpoint's existing error precedence. Exercise rollback, conflict and retry when they are in scope. Use an independent expected value for financial tests.
+- Run focused tests and php artisan test for Backend work with isolated data. Use the relevant engine for locking or collation. Verify frontend consumers when they are part of the slice.

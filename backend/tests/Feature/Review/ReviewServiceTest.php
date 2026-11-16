@@ -2,12 +2,14 @@
 
 namespace Tests\Feature\Review;
 
+use App\DTOs\Review\Requests\CreateReviewRequest;
 use App\Enums\BookingStatus;
 use App\Enums\PropertyStatus;
 use App\Enums\PropertyType;
 use App\Enums\RoomStatus;
 use App\Enums\UserRole;
 use App\Enums\UserStatus;
+use App\Mappers\Review\ReviewMapper;
 use App\Models\Booking;
 use App\Models\Property;
 use App\Models\Review;
@@ -59,7 +61,7 @@ class ReviewServiceTest extends TestCase
             $this->fail("AN TOÀN KIỂM THỬ BỊ VI PHẠM: Config driver: {$driver}, database: {$database}");
         }
 
-        $this->reviewService = new ReviewService();
+        $this->reviewService = app(ReviewService::class);
         $this->seedTestData();
     }
 
@@ -170,6 +172,39 @@ class ReviewServiceTest extends TestCase
         $this->assertTrue($review->relationLoaded('customer'));
         $this->assertSame($this->property->id, $review->property->id);
         $this->assertSame($this->customer->id, $review->customer->id);
+    }
+
+    public function test_typed_and_legacy_creation_share_validation_and_load_response_relations(): void
+    {
+        $comment = '  Identical workflow comment.  ';
+        $payload = ['rating' => 5, 'comment' => $comment];
+        $legacy = $this->reviewService->createReview($this->booking->id, $this->customer, $payload);
+        $legacy->delete();
+        $typed = $this->reviewService->createReviewFromRequest(
+            new CreateReviewRequest($this->booking->id, 5, $comment),
+            $this->customer,
+        );
+        $fields = ['booking_id', 'customer_id', 'property_id', 'rating', 'comment'];
+        $this->assertSame($legacy->only($fields), $typed->only($fields));
+        $this->assertSame('Identical workflow comment.', $typed->comment);
+        foreach ([$legacy, $typed] as $review) {
+            foreach (['booking', 'property', 'customer'] as $relation) {
+                $this->assertTrue($review->relationLoaded($relation));
+            }
+            $this->assertTrue($review->getRelation('booking')->relationLoaded('room'));
+        }
+
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        try {
+            $dto = app(ReviewMapper::class)->toCustomerResponse($typed);
+            $json = json_decode(json_encode($dto, JSON_THROW_ON_ERROR), true, flags: JSON_THROW_ON_ERROR);
+            $this->assertSame($this->room->name, $json['room_name']);
+            $this->assertSame([], DB::getQueryLog());
+        } finally {
+            DB::disableQueryLog();
+            DB::flushQueryLog();
+        }
     }
 
     public function test_property_id_is_always_derived_from_booking_room(): void
@@ -313,52 +348,93 @@ class ReviewServiceTest extends TestCase
         ]);
     }
 
+    private function serviceWith($repository = null, $validator = null, $logger = null): ReviewService
+    {
+        return new ReviewService(
+            $repository ?? app(\App\Repositories\Review\ReviewRepository::class),
+            $validator ?? app(\App\Validators\Review\ReviewCreationValidator::class),
+            app(\App\Mappers\Review\ReviewMapper::class),
+            $logger ?? app(LoggerInterface::class),
+        );
+    }
+
+    public function test_eligibility_precedes_duplicate_query_and_loaded_duplicate_short_circuits_it(): void
+    {
+        $repository = $this->getMockBuilder(\App\Repositories\Review\ReviewRepository::class)
+            ->onlyMethods(['reviewExistsForBooking'])->getMock();
+        $repository->expects($this->never())->method('reviewExistsForBooking');
+        $service = $this->serviceWith($repository);
+        try {
+            $service->createReview($this->booking->id, $this->otherCustomer, ['rating' => 6, 'comment' => 'x']);
+            $this->fail('Expected ownership denial before duplicate query.');
+        } catch (AuthorizationException) {
+            $this->assertDatabaseCount('reviews', 0);
+        }
+        $this->booking->update(['status' => BookingStatus::PENDING]);
+        try {
+            $service->createReview($this->booking->id, $this->customer, ['rating' => 6, 'comment' => 'x']);
+            $this->fail('Expected status failure before duplicate query.');
+        } catch (InvalidReviewConditionException) {
+            $this->assertDatabaseCount('reviews', 0);
+        }
+        $this->booking->update(['status' => BookingStatus::COMPLETED]);
+        Review::create(['booking_id' => $this->booking->id, 'customer_id' => $this->customer->id,
+            'property_id' => $this->property->id, 'rating' => 5, 'comment' => 'Existing loaded duplicate.']);
+        $this->expectException(DuplicateReviewException::class);
+        $service->createReview($this->booking->id, $this->customer, ['rating' => 6, 'comment' => 'x']);
+    }
+
+    public function test_duplicate_fact_and_recheck_preserve_distinct_messages(): void
+    {
+        foreach ([[true], [false, true]] as $facts) {
+            $repository = $this->getMockBuilder(\App\Repositories\Review\ReviewRepository::class)
+                ->onlyMethods(['reviewExistsForBooking'])->getMock();
+            $repository->expects($this->exactly(count($facts)))->method('reviewExistsForBooking')->willReturnOnConsecutiveCalls(...$facts);
+            try {
+                $this->serviceWith($repository)->createReview($this->booking->id, $this->customer,
+                    ['rating' => 5, 'comment' => 'Recheck fixture.']);
+                $this->fail('Expected duplicate fact.');
+            } catch (DuplicateReviewException $error) {
+                $suffix = count($facts) === 1 ? ' Mỗi đơn đặt phòng chỉ được đánh giá một lần.' : '';
+                $this->assertSame("Đơn đặt phòng #{$this->booking->id} đã có đánh giá.".$suffix, $error->getMessage());
+            }
+        }
+        $this->assertDatabaseCount('reviews', 0);
+    }
+
     public function test_database_unique_constraint_on_booking_id_is_handled_correctly(): void
     {
-        // Giả lập trường hợp race condition vượt qua tầng pre-check nhưng bị chặn ở DB UNIQUE constraint
-        $mockValidator = $this->createMock(\App\Validators\Review\ReviewCreationValidator::class);
-        $mockValidator->method('validateForCreation')
-            ->willReturn($this->property->id);
-
-        // Tạo trước review
-        Review::create([
-            'booking_id' => $this->booking->id,
-            'customer_id' => $this->customer->id,
-            'property_id' => $this->property->id,
-            'rating' => 5,
-            'comment' => 'Review có sẵn trong database',
-        ]);
-
-        // Tạo service với mock validator bỏ qua pre-check để ép kích hoạt exception DB
-        $service = new ReviewService($mockValidator);
-
-        $this->expectException(DuplicateReviewException::class);
-        $this->expectExceptionMessage("Đơn đặt phòng #{$this->booking->id} đã có đánh giá");
-
-        $service->createReview($this->booking->id, $this->customer, [
-            'rating' => 4,
-            'comment' => 'Đánh giá trùng lặp bị DB chặn lại',
-        ]);
+        Review::create(['booking_id' => $this->booking->id, 'customer_id' => $this->customer->id,
+            'property_id' => $this->property->id, 'rating' => 5, 'comment' => 'Existing fixture.']);
+        $repository = $this->getMockBuilder(\App\Repositories\Review\ReviewRepository::class)
+            ->onlyMethods(['findBookingForReviewWithLock', 'reviewExistsForBooking'])->getMock();
+        $booking = $this->booking->fresh(['room.property']);
+        $booking->setRelation('review', null);
+        $repository->expects($this->once())->method('findBookingForReviewWithLock')->willReturn($booking);
+        $repository->expects($this->exactly(2))->method('reviewExistsForBooking')->willReturn(false);
+        try {
+            $this->serviceWith($repository)->createReview($booking->id, $this->customer, ['rating' => 4, 'comment' => 'Duplicate attempt.']);
+            $this->fail('Expected a real database UNIQUE failure.');
+        } catch (DuplicateReviewException $error) {
+            $this->assertInstanceOf(QueryException::class, $error->getPrevious());
+            $this->assertStringContainsString('UNIQUE constraint failed: reviews.booking_id', $error->getPrevious()->errorInfo[2]);
+            $this->assertSame("Đơn đặt phòng #{$booking->id} đã có đánh giá trong hệ thống (vi phạm ràng buộc duy nhất).", $error->getMessage());
+        }
+        $this->assertDatabaseCount('reviews', 1);
     }
 
     public function test_non_unique_query_exception_is_re_thrown_and_not_swallowed(): void
     {
-        $mockValidator = $this->createMock(\App\Validators\Review\ReviewCreationValidator::class);
-        $mockValidator->method('validateForCreation')
-            ->willReturn(99999); // Property ID không tồn tại để ép kích hoạt Foreign Key violation
-
-        $service = new ReviewService($mockValidator);
-
-        // Foreign key violation phải được ném ra nguyên bản dưới dạng QueryException, KHÔNG bị bọc thành DuplicateReviewException
-        $this->expectException(QueryException::class);
-
-        // SQLite in-memory bật foreign key checks
-        DB::statement('PRAGMA foreign_keys = ON;');
-
-        $service->createReview($this->booking->id, $this->customer, [
-            'rating' => 5,
-            'comment' => 'Lỗi vi phạm foreign key không được nuốt.',
-        ]);
+        $validator = $this->createMock(\App\Validators\Review\ReviewCreationValidator::class);
+        $validator->method('validateCreationDetails')->willReturn(99999);
+        try {
+            $this->serviceWith(null, $validator)->createReview($this->booking->id, $this->customer,
+                ['rating' => 5, 'comment' => 'Foreign key failure fixture.']);
+            $this->fail('Expected a real foreign key failure.');
+        } catch (QueryException $error) {
+            $this->assertStringContainsString('FOREIGN KEY constraint failed', $error->errorInfo[2]);
+        }
+        $this->assertDatabaseCount('reviews', 0);
     }
 
     // ==========================================
@@ -429,7 +505,7 @@ class ReviewServiceTest extends TestCase
                 })
             );
 
-        $service = new ReviewService(null, $mockLogger);
+        $service = $this->serviceWith(null, null, $mockLogger);
 
         $service->createReview($this->booking->id, $this->customer, [
             'rating' => 5,

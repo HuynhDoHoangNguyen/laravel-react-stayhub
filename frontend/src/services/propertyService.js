@@ -1,5 +1,8 @@
 import api from '@/api/axios';
 import { MOCK_PROPERTIES } from '@/mocks/propertyMockData';
+import { createCatalogService } from './catalog';
+
+const catalog = createCatalogService(api, { dev: import.meta.env.DEV, enableMocks: import.meta.env.VITE_ENABLE_PROPERTY_MOCKS, properties: MOCK_PROPERTIES });
 
 /**
  * Service to fetch and filter property data for public catalog, landing page, and search results.
@@ -9,34 +12,8 @@ import { MOCK_PROPERTIES } from '@/mocks/propertyMockData';
  * - Does NOT silently fallback to mock if real API fails.
  */
 export const propertyService = {
-  async getFeaturedProperties() {
-    const isMockEnabled =
-      import.meta.env.DEV && import.meta.env.VITE_ENABLE_PROPERTY_MOCKS === 'true';
-
-    if (isMockEnabled) {
-      return {
-        data: MOCK_PROPERTIES.slice(0, 6),
-        source: 'mock',
-      };
-    }
-
-    try {
-      const response = await api.get('/api/public/properties');
-      return {
-        data: response.data?.data || response.data || [],
-        source: 'api',
-      };
-    } catch (error) {
-      if (error?.response?.status === 404) {
-        return {
-          data: [],
-          source: 'api',
-          unavailable: true,
-        };
-      }
-      throw error;
-    }
-  },
+  getFeaturedProperties: catalog.getFeaturedProperties,
+  getProperties: catalog.getProperties,
 
   async searchProperties({
     city = '',
@@ -146,33 +123,5 @@ export const propertyService = {
     }
   },
 
-  async getPropertyById(id) {
-    const isMockEnabled =
-      import.meta.env.DEV && import.meta.env.VITE_ENABLE_PROPERTY_MOCKS === 'true';
-
-    if (isMockEnabled) {
-      const found = MOCK_PROPERTIES.find((p) => String(p.id) === String(id));
-      return {
-        data: found || null,
-        source: 'mock',
-      };
-    }
-
-    try {
-      const response = await api.get(`/api/public/properties/${id}`);
-      return {
-        data: response.data?.data || response.data || null,
-        source: 'api',
-      };
-    } catch (error) {
-      if (error?.response?.status === 404) {
-        return {
-          data: null,
-          source: 'api',
-          unavailable: true,
-        };
-      }
-      throw error;
-    }
-  },
+  getPropertyById: catalog.getPropertyById,
 };
