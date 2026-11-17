@@ -4,6 +4,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight, CirclePlus, Pencil, RefreshCw, Se
 import { toast } from 'sonner';
 import { propertyServiceCatalogService } from '@/services/propertyServiceCatalogService';
 import { formatHostVnd } from '@/services/hostBookingService';
+import { bookingDisplayError } from '@/utils/bookingDisplayError';
 
 const PER_PAGE = 10;
 const EMPTY_FORM = { name: '', description: '', unit: '', price: '' };
@@ -47,7 +48,7 @@ export default function HostServiceListPage() {
       setMeta(result?.meta || { last_page: 1, current_page: page, total: 0 });
     } catch (loadError) {
       if (loadError.name !== 'CanceledError' && loadError.name !== 'AbortError') {
-        setError(loadError.message || 'Không thể tải danh mục dịch vụ.');
+        setError(bookingDisplayError(loadError, loadError.message || 'Không thể tải danh mục dịch vụ.'));
         setServices([]);
       }
     } finally {
@@ -114,7 +115,7 @@ export default function HostServiceListPage() {
       setLoading(true);
       setReloadKey((current) => current + 1);
     } catch (saveError) {
-      setFormError(saveError.message || 'Không thể lưu dịch vụ.');
+      setFormError(bookingDisplayError(saveError, saveError.message || 'Không thể lưu dịch vụ.'));
     } finally {
       mutationLock.current = false;
       setSaving(false);
@@ -131,7 +132,7 @@ export default function HostServiceListPage() {
       toast.success(service.status ? 'Đã tắt dịch vụ.' : 'Đã bật dịch vụ.');
       setReloadKey((current) => current + 1);
     } catch (toggleError) {
-      setError(toggleError.message || 'Không thể cập nhật trạng thái dịch vụ.');
+      setError(bookingDisplayError(toggleError, toggleError.message || 'Không thể cập nhật trạng thái dịch vụ.'));
     } finally {
       mutationLock.current = false;
       setBusyServiceId(null);

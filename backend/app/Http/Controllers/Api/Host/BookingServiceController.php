@@ -27,10 +27,10 @@ class BookingServiceController extends Controller
     {
         Gate::authorize('manageHost', $booking);
 
-        $booking->load('bookingServices');
+        $services = $this->bookingServiceManagement->list($booking);
 
         return $this->successResponse(
-            BookingServiceResource::collection($booking->bookingServices),
+            BookingServiceResource::collection($services),
             'Danh sách dịch vụ trong đặt phòng.'
         );
     }

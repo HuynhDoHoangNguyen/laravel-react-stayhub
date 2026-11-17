@@ -1,37 +1,11 @@
-import api from '@/api/axios';
 import { hostBookingApi } from '@/api/hostBookingApi';
-import { mapHostBookingListResponse, mapHostBookingResponse } from '@/mappers/hostBookingMapper';
-
-const BASE_URL = '/api/host/bookings';
-const SERVICE_URL = '/api/host/services';
-
-function toHostBookingError(error, fallback) {
-  const status = error.response?.status;
-  const serverMessage = error.response?.data?.message;
-  const messages = {
-    401: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
-    403: 'Tài khoản hiện tại không có quyền quản lý booking này.',
-    404: 'Không tìm thấy booking hoặc booking không thuộc cơ sở của bạn.',
-    409: 'Phòng vừa phát sinh lịch trùng. Hãy kiểm tra lịch trước khi xác nhận.',
-    422: 'Booking không thể chuyển sang trạng thái tiếp theo.',
-  };
-  const message = status === 409 || status === 422
-    ? (serverMessage || messages[status])
-    : (messages[status] || serverMessage || error.message || fallback);
-  const parsed = new Error(message || fallback);
-  parsed.status = status || 0;
-  parsed.errors = error.response?.data?.errors || null;
-  parsed.isNetworkError = !error.response;
-  return parsed;
-}
-
-async function request(promise, fallback) {
-  try {
-    return await promise;
-  } catch (error) {
-    throw toHostBookingError(error, fallback);
-  }
-}
+import {
+  mapHostBookingListResponse,
+  mapHostBookingResponse,
+  mapHostBookingServiceResponse,
+  mapHostBookingServicesListResponse,
+} from '@/mappers/hostBookingMapper';
+import { propertyServiceCatalogService } from '@/services/propertyServiceCatalogService';
 
 export const hostBookingService = {
   async list({ page = 1, perPage = 10, status = '', keyword = '', startDate = '', endDate = '' } = {}, options = {}) {
@@ -55,42 +29,27 @@ export const hostBookingService = {
   },
 
   async listPropertyServices(propertyId, options = {}) {
-    const response = await request(
-      api.get(SERVICE_URL, { params: { property_id: propertyId, status: true, per_page: 50 }, signal: options.signal }),
-      'Không thể tải danh mục dịch vụ của cơ sở.'
-    );
-    return response.data?.data || [];
+    const response = await propertyServiceCatalogService.listActiveForProperty(propertyId, options);
+    return response?.data || [];
   },
 
   async listBookingServices(bookingId, options = {}) {
-    const response = await request(
-      api.get(`${BASE_URL}/${bookingId}/services`, { signal: options.signal }),
-      'Không thể tải dịch vụ đã ghi nhận trong booking.'
-    );
-    return response.data?.data || [];
+    const response = await hostBookingApi.listBookingServices(bookingId, options);
+    return mapHostBookingServicesListResponse(response.data);
   },
 
   async addBookingService(bookingId, payload) {
-    const response = await request(
-      api.post(`${BASE_URL}/${bookingId}/services`, payload),
-      'Không thể thêm dịch vụ vào booking.'
-    );
-    return response.data?.data || response.data;
+    const response = await hostBookingApi.addBookingService(bookingId, payload);
+    return mapHostBookingServiceResponse(response.data);
   },
 
   async updateBookingService(bookingId, bookingServiceId, quantity) {
-    const response = await request(
-      api.put(`${BASE_URL}/${bookingId}/services/${bookingServiceId}`, { quantity }),
-      'Không thể cập nhật số lượng dịch vụ.'
-    );
-    return response.data?.data || response.data;
+    const response = await hostBookingApi.updateBookingService(bookingId, bookingServiceId, quantity);
+    return mapHostBookingServiceResponse(response.data);
   },
 
   async removeBookingService(bookingId, bookingServiceId) {
-    await request(
-      api.delete(`${BASE_URL}/${bookingId}/services/${bookingServiceId}`),
-      'Không thể xóa dịch vụ khỏi booking.'
-    );
+    await hostBookingApi.removeBookingService(bookingId, bookingServiceId);
   },
 };
 

@@ -14,4 +14,20 @@ export const hostBookingApi = {
   transition(id, action, payload = {}) {
     return api.post(`${BASE_URL}/${id}/${action}`, payload);
   },
+
+  listBookingServices(id, options = {}) {
+    return api.get(`${BASE_URL}/${id}/services`, { signal: options.signal });
+  },
+
+  addBookingService(id, payload) {
+    return api.post(`${BASE_URL}/${id}/services`, payload);
+  },
+
+  updateBookingService(id, bookingServiceId, quantity) {
+    return api.put(`${BASE_URL}/${id}/services/${bookingServiceId}`, { quantity });
+  },
+
+  removeBookingService(id, bookingServiceId) {
+    return api.delete(`${BASE_URL}/${id}/services/${bookingServiceId}`);
+  },
 };

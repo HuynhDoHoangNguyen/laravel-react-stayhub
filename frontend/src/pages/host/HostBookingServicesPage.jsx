@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, LoaderCircle, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { hostBookingService, HOST_BOOKING_STATUSES, formatHostDate, formatHostVnd } from '@/services/hostBookingService';
+import { bookingDisplayError } from '@/utils/bookingDisplayError';
 
 export default function HostBookingServicesPage() {
   const { bookingId } = useParams();
@@ -35,7 +36,7 @@ export default function HostBookingServicesPage() {
       setSelectedServiceId((current) => current || String(availableServices[0]?.id || ''));
     } catch (loadError) {
       if (loadError.name !== 'CanceledError' && loadError.name !== 'AbortError') {
-        setError(loadError.message || 'Không thể tải dịch vụ booking.');
+        setError(bookingDisplayError(loadError, 'Không thể tải dịch vụ booking.'));
       }
     } finally {
       if (!signal.aborted) setLoading(false);
@@ -71,8 +72,9 @@ export default function HostBookingServicesPage() {
       await reloadServices();
       toast.success('Đã cập nhật dịch vụ booking.');
     } catch (actionError) {
-      setError(actionError.message || 'Không thể cập nhật dịch vụ booking.');
-      toast.error(actionError.message || 'Không thể cập nhật dịch vụ booking.');
+      const message = bookingDisplayError(actionError, 'Không thể cập nhật dịch vụ booking.');
+      setError(message);
+      toast.error(message);
     } finally {
       actionLock.current = false;
       setSaving('');

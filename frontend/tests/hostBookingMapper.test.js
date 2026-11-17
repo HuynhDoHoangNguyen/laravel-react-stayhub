@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mapHostBookingListResponse, mapHostBookingResponse } from '../src/mappers/hostBookingMapper.js';
+import {
+  mapHostBookingListResponse,
+  mapHostBookingResponse,
+  mapHostBookingServiceResponse,
+  mapHostBookingServicesListResponse,
+} from '../src/mappers/hostBookingMapper.js';
 
 test('host list mapper preserves pagination and booking values unchanged', () => {
   const response = {
@@ -17,4 +22,12 @@ test('host detail and transition mapper unwraps success envelope and preserves n
   assert.deepEqual(mapHostBookingResponse({ id: 8, room_total: null }), { id: 8, room_total: null });
   const emptyEnvelope = { success: true, data: null };
   assert.equal(mapHostBookingResponse(emptyEnvelope), emptyEnvelope);
+});
+
+test('booking-service mappers preserve snapshot decimals, nulls, omitted fields, and empty lists', () => {
+  const line = { id: 21, service_name: 'Breakfast', unit: 'set', quantity: '2.50', unit_price: '100.25', amount: '250.63', note: null };
+  assert.deepEqual(mapHostBookingServicesListResponse({ success: true, data: [line] }), [line]);
+  assert.deepEqual(mapHostBookingServicesListResponse({ success: true, data: [] }), []);
+  assert.deepEqual(mapHostBookingServiceResponse({ success: true, data: line }), line);
+  assert.deepEqual(mapHostBookingServiceResponse({ id: 21, amount: null }), { id: 21, amount: null });
 });

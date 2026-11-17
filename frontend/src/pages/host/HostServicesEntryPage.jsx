@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { Building2, RefreshCw } from 'lucide-react';
 import { propertyServiceCatalogService } from '@/services/propertyServiceCatalogService';
+import { bookingDisplayError } from '@/utils/bookingDisplayError';
 
 export default function HostServicesEntryPage() {
   const navigate = useNavigate();
@@ -17,7 +18,7 @@ export default function HostServicesEntryPage() {
         setState({ loading: false, error: '', properties });
         if (properties[0]?.id) navigate(`/host/properties/${properties[0].id}/services`, { replace: true });
       } catch (error) {
-        if (!controller.signal.aborted) setState({ loading: false, error: error.message, properties: [] });
+        if (!controller.signal.aborted) setState({ loading: false, error: bookingDisplayError(error, error.message || 'Không thể tải cơ sở lưu trú.'), properties: [] });
       }
     }, 0);
     return () => {

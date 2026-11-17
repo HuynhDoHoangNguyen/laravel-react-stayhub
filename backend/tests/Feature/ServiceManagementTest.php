@@ -12,6 +12,9 @@ use App\Models\Room;
 use App\Models\Service;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class ServiceManagementTest extends TestCase
@@ -80,6 +83,54 @@ class ServiceManagementTest extends TestCase
             ->assertJsonPath('data.status', false);
     }
 
+    public function test_host_service_catalog_scopes_ownership_and_preserves_filter_pagination(): void
+    {
+        $host = User::factory()->host()->create();
+        $otherHost = User::factory()->host()->create();
+        $ownProperty = Property::factory()->create(['host_id' => $host->id]);
+        $otherProperty = Property::factory()->create(['host_id' => $otherHost->id]);
+        $own = Service::factory()->create(['property_id' => $ownProperty->id, 'status' => true]);
+        $inactive = Service::factory()->create(['property_id' => $ownProperty->id, 'name' => 'Inactive breakfast', 'status' => false]);
+        Service::factory()->create(['property_id' => $otherProperty->id, 'status' => true]);
+
+        $this->getJson('/api/host/services')->assertUnauthorized();
+        $this->actingAs($host)->getJson('/api/host/services?property_id='.$otherProperty->id)
+            ->assertOk()->assertJsonPath('meta.total', 0)->assertJsonCount(0, 'data');
+        $this->getJson('/api/host/services?property_id='.$ownProperty->id.'&per_page=1&status=true')
+            ->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('meta.per_page', 1)
+            ->assertJsonPath('data.0.id', $own->id);
+        $this->getJson('/api/host/services?property_id='.$ownProperty->id.'&status=false&keyword=Inactive')
+            ->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.id', $inactive->id)
+            ->assertJsonPath('data.0.status', false);
+    }
+
+    public function test_service_validation_shape_allows_duplicate_names_and_zero_price(): void
+    {
+        $host = User::factory()->host()->create();
+        $property = Property::factory()->create(['host_id' => $host->id]);
+        $payload = ['property_id' => $property->id, 'name' => '', 'unit' => '', 'price' => -1];
+
+        $this->actingAs($host)->postJson('/api/host/services', $payload)->assertUnprocessable()
+            ->assertJsonStructure(['message', 'errors' => ['name', 'unit', 'price']]);
+        $valid = ['property_id' => $property->id, 'name' => 'Breakfast', 'unit' => 'set', 'price' => 0];
+        $this->postJson('/api/host/services', $valid)->assertCreated()->assertJsonPath('data.price', '0.00');
+        $this->postJson('/api/host/services', $valid)->assertCreated()->assertJsonPath('data.price', '0.00');
+    }
+
+    public function test_catalog_service_referenced_by_booking_service_cannot_be_hard_deleted(): void
+    {
+        $service = Service::factory()->create();
+        $bookingService = BookingService::factory()->forService($service)->create();
+
+        try {
+            $service->delete();
+            $this->fail('The service FK is RESTRICT and should reject hard deletion.');
+        } catch (QueryException) {
+            $this->assertDatabaseHas('services', ['id' => $service->id]);
+            $this->assertDatabaseHas('booking_services', ['id' => $bookingService->id, 'service_id' => $service->id]);
+        }
+    }
+
     public function test_add_service_to_checked_in_booking_snapshots_and_ignores_client_fake_price(): void
     {
         $host = User::factory()->host()->create();
@@ -120,12 +171,89 @@ class ServiceManagementTest extends TestCase
             ]);
 
         // Price change on Service model in DB later does NOT affect existing booking_service snapshot
-        $service->update(['price' => 999999]);
+        $service->update(['name' => 'Laundry Plus', 'unit' => 'bag', 'price' => 999999]);
 
         $bsId = $res->json('data.id');
         $bsModel = BookingService::find($bsId);
         $this->assertEquals('50000.00', $bsModel->unit_price);
         $this->assertEquals('175000.00', $bsModel->amount);
+        $this->assertSame('Giặt ủi', $bsModel->service_name);
+        $this->assertSame('kg', $bsModel->unit);
+    }
+
+    public function test_booking_service_routes_keep_auth_and_role_responses(): void
+    {
+        $booking = Booking::factory()->checkedIn()->create();
+        $this->getJson("/api/host/bookings/{$booking->id}/services")->assertUnauthorized();
+        $this->actingAs(User::factory()->customer()->create())
+            ->getJson("/api/host/bookings/{$booking->id}/services")->assertForbidden();
+    }
+
+    public function test_booking_service_quantity_boundaries_and_validation_errors(): void
+    {
+        $host = User::factory()->host()->create();
+        $property = Property::factory()->create(['host_id' => $host->id, 'status' => PropertyStatus::ACTIVE]);
+        $room = Room::factory()->create(['property_id' => $property->id, 'capacity' => 4, 'status' => RoomStatus::ACTIVE]);
+        $booking = Booking::factory()->checkedIn()->create(['room_id' => $room->id]);
+        $service = Service::factory()->create(['property_id' => $property->id, 'price' => '100.01', 'status' => true]);
+
+        $this->actingAs($host)->postJson("/api/host/bookings/{$booking->id}/services", [
+            'service_id' => $service->id, 'quantity' => '0.01',
+        ])->assertCreated()->assertJsonPath('data.quantity', '0.01')->assertJsonPath('data.amount', '1.00');
+        $max = $this->postJson("/api/host/bookings/{$booking->id}/services", [
+            'service_id' => $service->id, 'quantity' => '9999.99',
+        ]);
+        $max->assertCreated()->assertJsonPath('data.quantity', '10000.00')->assertJsonPath('data.amount', '1000100.00');
+
+        $this->postJson("/api/host/bookings/{$booking->id}/services", [
+            'service_id' => $service->id, 'quantity' => '0.001',
+        ])->assertUnprocessable()->assertJsonStructure(['errors' => ['quantity']]);
+        $this->postJson("/api/host/bookings/{$booking->id}/services", [
+            'service_id' => $service->id, 'quantity' => '10000',
+        ])->assertUnprocessable()->assertJsonStructure(['errors' => ['quantity']]);
+    }
+
+    public function test_update_and_remove_booking_service_are_rejected_outside_checked_in(): void
+    {
+        $host = User::factory()->host()->create();
+        $property = Property::factory()->create(['host_id' => $host->id, 'status' => PropertyStatus::ACTIVE]);
+        $room = Room::factory()->create(['property_id' => $property->id, 'capacity' => 4, 'status' => RoomStatus::ACTIVE]);
+        $booking = Booking::factory()->create(['room_id' => $room->id, 'status' => BookingStatus::COMPLETED]);
+        $service = Service::factory()->create(['property_id' => $property->id]);
+        $line = BookingService::factory()->forService($service)->create(['booking_id' => $booking->id]);
+
+        $this->actingAs($host)->putJson("/api/host/bookings/{$booking->id}/services/{$line->id}", ['quantity' => 2])
+            ->assertUnprocessable()->assertJsonPath('success', false)->assertJsonStructure(['message', 'errors']);
+        $this->deleteJson("/api/host/bookings/{$booking->id}/services/{$line->id}")
+            ->assertUnprocessable()->assertJsonPath('success', false)->assertJsonStructure(['message', 'errors']);
+        $this->assertDatabaseHas('booking_services', ['id' => $line->id, 'quantity' => '1.00']);
+    }
+
+    public function test_booking_service_insert_failure_rolls_back_inserted_snapshot(): void
+    {
+        $host = User::factory()->host()->create();
+        $property = Property::factory()->create(['host_id' => $host->id, 'status' => PropertyStatus::ACTIVE]);
+        $room = Room::factory()->create(['property_id' => $property->id, 'capacity' => 4, 'status' => RoomStatus::ACTIVE]);
+        $booking = Booking::factory()->checkedIn()->create(['room_id' => $room->id]);
+        $service = Service::factory()->create(['property_id' => $property->id, 'status' => true]);
+        $shouldFail = true;
+        DB::listen(static function (QueryExecuted $query) use (&$shouldFail): void {
+            if ($shouldFail && str_starts_with(strtolower(ltrim($query->sql)), 'insert')
+                && str_contains(strtolower($query->sql), 'booking_services')) {
+                $shouldFail = false;
+                throw new \RuntimeException('Forced booking service insert failure.');
+            }
+        });
+
+        $this->withoutExceptionHandling();
+        try {
+            $this->actingAs($host)->postJson("/api/host/bookings/{$booking->id}/services", ['service_id' => $service->id, 'quantity' => 1]);
+            $this->fail('Expected forced booking service insert failure.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('Forced booking service insert failure.', $exception->getMessage());
+        }
+
+        $this->assertDatabaseMissing('booking_services', ['booking_id' => $booking->id, 'service_id' => $service->id]);
     }
 
     public function test_cannot_add_disabled_service_or_service_from_another_property(): void

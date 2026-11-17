@@ -12,15 +12,23 @@ const { hostBookingApi } = await import('../src/api/hostBookingApi.js');
 
 test.after(() => mock.restoreAll());
 
-test('host booking API uses existing list, detail, and transition endpoints', async () => {
+test('host booking API uses existing list, detail, transition, and booking-service endpoints', async () => {
   const options = { signal: new AbortController().signal };
   await hostBookingApi.list({ page: 2, per_page: 5, status: 'PENDING' }, options);
   await hostBookingApi.detail(8, options);
   await hostBookingApi.transition(8, 'reject', { reason: 'Unavailable' });
+  await hostBookingApi.listBookingServices(8, options);
+  await hostBookingApi.addBookingService(8, { service_id: 4, quantity: 2.5 });
+  await hostBookingApi.updateBookingService(8, 21, 3);
+  await hostBookingApi.removeBookingService(8, 21);
 
   assert.deepEqual(requests.map(({ method, url, params, signal, data }) => ({ method, url, params, hasSignal: Boolean(signal), data: typeof data === 'string' ? JSON.parse(data) : data })), [
     { method: 'get', url: '/api/host/bookings', params: { page: 2, per_page: 5, status: 'PENDING' }, hasSignal: true, data: undefined },
     { method: 'get', url: '/api/host/bookings/8', params: undefined, hasSignal: true, data: undefined },
     { method: 'post', url: '/api/host/bookings/8/reject', params: undefined, hasSignal: false, data: { reason: 'Unavailable' } },
+    { method: 'get', url: '/api/host/bookings/8/services', params: undefined, hasSignal: true, data: undefined },
+    { method: 'post', url: '/api/host/bookings/8/services', params: undefined, hasSignal: false, data: { service_id: 4, quantity: 2.5 } },
+    { method: 'put', url: '/api/host/bookings/8/services/21', params: undefined, hasSignal: false, data: { quantity: 3 } },
+    { method: 'delete', url: '/api/host/bookings/8/services/21', params: undefined, hasSignal: false, data: undefined },
   ]);
 });
