@@ -1,6 +1,6 @@
 # Checklist PR TV2 vào dev — Booking & Operations
 
-Ngày kiểm: 2026-11-17 (Asia/Saigon). Nhánh: `feature/member-2-booking`, HEAD `65b6e00`. Xem [bàn giao baseline](BASELINE_HANDOVER.md), [kiến trúc](../../ARCHITECTURE.md) và [tiến độ TV2](TV2_CHECKLIST.md).
+Ngày kiểm: 2026-11-17 (Asia/Saigon). Nhánh: `feature/member-2-booking`, HEAD tài liệu hiện tại `b7a1981` (U3 code ở `65b6e00`). Xem [bàn giao baseline](BASELINE_HANDOVER.md), [kiến trúc](../../ARCHITECTURE.md) và [tiến độ TV2](TV2_CHECKLIST.md).
 
 ## Hai mức kết luận
 

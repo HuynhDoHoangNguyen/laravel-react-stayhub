@@ -1,6 +1,6 @@
 # Bàn giao baseline TV2 — Booking & Operations
 
-Ngày đối chiếu: 2026-11-17 (Asia/Saigon). Nhánh: `feature/member-2-booking`. HEAD theo `git log`: `65b6e00` (U3 Host bookings + services). Phạm vi là các commit đã có trong lịch sử nhánh; tài liệu này không xác nhận PR hoặc approval merge.
+Ngày đối chiếu: 2026-11-17 (Asia/Saigon). Nhánh: `feature/member-2-booking`. HEAD hiện tại theo `git log`: `b7a1981` (tài liệu TV2); commit U3 Host bookings + services là `65b6e00`. Phạm vi là các commit đã có trong lịch sử nhánh; tài liệu này không xác nhận PR hoặc approval merge.
 
 Trước khi tạo tài liệu, `git status` ghi nhận `docs/handover-member2.md` và `frontend/.env` đang thay đổi. Hai thay đổi này nằm ngoài nội dung baseline TV2; không chép nội dung `.env`. Ba file mới trong thư mục này cần được đưa vào diff riêng khi người dùng chuẩn bị PR.
 
