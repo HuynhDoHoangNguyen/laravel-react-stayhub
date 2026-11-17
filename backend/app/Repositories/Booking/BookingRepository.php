@@ -5,6 +5,7 @@ namespace App\Repositories\Booking;
 use App\Models\Booking;
 use App\Models\Room;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 
 class BookingRepository
 {
@@ -50,6 +51,47 @@ class BookingRepository
         return Booking::query()
             ->forCustomer($customerId)
             ->with(['room.property', 'bookingServices'])
+            ->findOrFail($bookingId);
+    }
+
+    public function listForHost(int $hostId, array $filters, int $perPage): LengthAwarePaginator
+    {
+        $query = Booking::query()
+            ->forHost($hostId)
+            ->with(['customer', 'room.property', 'bookingServices'])
+            ->orderBy('created_at', 'desc');
+
+        if (isset($filters['status']) && $filters['status'] !== '') {
+            $query->where('status', $filters['status']);
+        }
+        if (isset($filters['property_id']) && $filters['property_id'] !== '') {
+            $propertyId = $filters['property_id'];
+            $query->whereHas('room', fn (Builder $roomQuery) => $roomQuery->where('property_id', $propertyId));
+        }
+        if (isset($filters['start_date']) && $filters['start_date'] !== '') {
+            $query->where('check_in_date', '>=', $filters['start_date']);
+        }
+        if (isset($filters['end_date']) && $filters['end_date'] !== '') {
+            $query->where('check_out_date', '<=', $filters['end_date']);
+        }
+        if (isset($filters['keyword']) && $filters['keyword'] !== '') {
+            $keyword = $filters['keyword'];
+            $query->where(function (Builder $subQuery) use ($keyword): void {
+                $subQuery->where('booking_code', 'like', "%{$keyword}%")
+                    ->orWhereHas('customer', fn (Builder $customerQuery) => $customerQuery
+                        ->where('name', 'like', "%{$keyword}%")
+                        ->orWhere('email', 'like', "%{$keyword}%"));
+            });
+        }
+
+        return $query->paginate($perPage);
+    }
+
+    public function findForHost(int $bookingId, int $hostId): Booking
+    {
+        return Booking::query()
+            ->forHost($hostId)
+            ->with(['customer', 'room.property', 'bookingServices'])
             ->findOrFail($bookingId);
     }
 

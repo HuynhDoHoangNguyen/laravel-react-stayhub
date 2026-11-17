@@ -27,10 +27,7 @@ class BookingWorkflowService
     public function confirm(Booking $booking): Booking
     {
         return DB::transaction(function () use ($booking) {
-            $currentBooking = Booking::query()
-                ->where('id', $booking->id)
-                ->lockForUpdate()
-                ->firstOrFail();
+            $currentBooking = $this->bookingRepository->lockForUpdate($booking->id);
 
             $currentStatus = $currentBooking->status instanceof BookingStatus
                 ? $currentBooking->status
@@ -41,8 +38,9 @@ class BookingWorkflowService
             }
 
             // Re-check room availability (excluding current booking)
+            $room = $this->bookingRepository->lockRoomForUpdate($currentBooking->room_id);
             $checkResult = $this->availabilityService->check(
-                $currentBooking->room,
+                $room,
                 $currentBooking->check_in_date,
                 $currentBooking->check_out_date,
                 $currentBooking->guest_count,
@@ -57,7 +55,7 @@ class BookingWorkflowService
             }
 
             $currentBooking->status = BookingStatus::CONFIRMED;
-            $currentBooking->save();
+            $this->bookingRepository->save($currentBooking);
 
             return $currentBooking;
         });
@@ -71,10 +69,7 @@ class BookingWorkflowService
     public function reject(Booking $booking, ?string $reason = null): Booking
     {
         return DB::transaction(function () use ($booking, $reason) {
-            $currentBooking = Booking::query()
-                ->where('id', $booking->id)
-                ->lockForUpdate()
-                ->firstOrFail();
+            $currentBooking = $this->bookingRepository->lockForUpdate($booking->id);
 
             $currentStatus = $currentBooking->status instanceof BookingStatus
                 ? $currentBooking->status
@@ -88,7 +83,7 @@ class BookingWorkflowService
             if ($reason !== null && trim($reason) !== '') {
                 $currentBooking->note = ($currentBooking->note ? $currentBooking->note . "\nLý do từ chối: " : 'Lý do từ chối: ') . trim($reason);
             }
-            $currentBooking->save();
+            $this->bookingRepository->save($currentBooking);
 
             return $currentBooking;
         });
@@ -102,10 +97,7 @@ class BookingWorkflowService
     public function checkIn(Booking $booking): Booking
     {
         return DB::transaction(function () use ($booking) {
-            $currentBooking = Booking::query()
-                ->where('id', $booking->id)
-                ->lockForUpdate()
-                ->firstOrFail();
+            $currentBooking = $this->bookingRepository->lockForUpdate($booking->id);
 
             $currentStatus = $currentBooking->status instanceof BookingStatus
                 ? $currentBooking->status
@@ -116,7 +108,7 @@ class BookingWorkflowService
             }
 
             $currentBooking->status = BookingStatus::CHECKED_IN;
-            $currentBooking->save();
+            $this->bookingRepository->save($currentBooking);
 
             return $currentBooking;
         });
@@ -131,10 +123,7 @@ class BookingWorkflowService
     public function checkOut(Booking $booking): Booking
     {
         return DB::transaction(function () use ($booking) {
-            $currentBooking = Booking::query()
-                ->where('id', $booking->id)
-                ->lockForUpdate()
-                ->firstOrFail();
+            $currentBooking = $this->bookingRepository->lockForUpdate($booking->id);
 
             $currentStatus = $currentBooking->status instanceof BookingStatus
                 ? $currentBooking->status
@@ -145,7 +134,7 @@ class BookingWorkflowService
             }
 
             $currentBooking->status = BookingStatus::COMPLETED;
-            $currentBooking->save();
+            $this->bookingRepository->save($currentBooking);
 
             return $currentBooking;
         });

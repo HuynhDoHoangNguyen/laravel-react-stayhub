@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, CalendarDays, Check, CircleAlert, DoorOpen, Mail, MapPin, Phone, UserRound, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { hostBookingService, HOST_BOOKING_STATUSES, formatHostDate, formatHostVnd } from '@/services/hostBookingService';
+import { bookingDisplayError } from '@/utils/bookingDisplayError';
 
 function DetailItem({ icon: Icon, label, children }) {
   return (
@@ -35,7 +36,7 @@ export default function HostBookingDetailPage() {
       setBooking(data);
     } catch (loadError) {
       if (loadError.name !== 'CanceledError' && loadError.name !== 'AbortError') {
-        setError(loadError.message || 'Không thể tải chi tiết booking.');
+        setError(bookingDisplayError(loadError, 'Không thể tải chi tiết booking.'));
       }
     } finally {
       if (!signal.aborted) setLoading(false);
@@ -64,7 +65,7 @@ export default function HostBookingDetailPage() {
       setRejectReason('');
       toast.success('Đã cập nhật trạng thái booking.');
     } catch (transitionError) {
-      const message = transitionError.message || 'Không thể cập nhật booking.';
+      const message = bookingDisplayError(transitionError, 'Không thể cập nhật booking.');
       setActionError(message);
       toast.error(message);
     } finally {

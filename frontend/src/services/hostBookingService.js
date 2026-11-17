@@ -1,4 +1,6 @@
 import api from '@/api/axios';
+import { hostBookingApi } from '@/api/hostBookingApi';
+import { mapHostBookingListResponse, mapHostBookingResponse } from '@/mappers/hostBookingMapper';
 
 const BASE_URL = '/api/host/bookings';
 const SERVICE_URL = '/api/host/services';
@@ -38,28 +40,18 @@ export const hostBookingService = {
     if (keyword.trim()) params.keyword = keyword.trim();
     if (startDate) params.start_date = startDate;
     if (endDate) params.end_date = endDate;
-
-    const response = await request(
-      api.get(BASE_URL, { params, signal: options.signal }),
-      'Không thể tải danh sách booking.'
-    );
-    return response.data;
+    const response = await hostBookingApi.list(params, options);
+    return mapHostBookingListResponse(response.data);
   },
 
   async detail(id, options = {}) {
-    const response = await request(
-      api.get(`${BASE_URL}/${id}`, { signal: options.signal }),
-      'Không thể tải chi tiết booking.'
-    );
-    return response.data?.data || response.data;
+    const response = await hostBookingApi.detail(id, options);
+    return mapHostBookingResponse(response.data);
   },
 
   async transition(id, action, payload = {}) {
-    const response = await request(
-      api.post(`${BASE_URL}/${id}/${action}`, payload),
-      'Không thể cập nhật trạng thái booking.'
-    );
-    return response.data?.data || response.data;
+    const response = await hostBookingApi.transition(id, action, payload);
+    return mapHostBookingResponse(response.data);
   },
 
   async listPropertyServices(propertyId, options = {}) {

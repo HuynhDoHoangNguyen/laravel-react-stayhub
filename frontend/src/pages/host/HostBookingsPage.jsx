@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarDays, ChevronLeft, ChevronRight, Search, RefreshCw, MapPin, Users } from 'lucide-react';
 import { hostBookingService, HOST_BOOKING_STATUSES, formatHostDate, formatHostVnd } from '@/services/hostBookingService';
+import { bookingDisplayError } from '@/utils/bookingDisplayError';
 
 const PAGE_SIZE = 10;
 
@@ -25,7 +26,7 @@ export default function HostBookingsPage() {
     } catch (loadError) {
       if (loadError.name !== 'CanceledError' && loadError.name !== 'AbortError') {
         setBookings([]);
-        setError(loadError.message || 'Không thể tải danh sách booking.');
+        setError(bookingDisplayError(loadError, 'Không thể tải danh sách booking.'));
       }
     } finally {
       if (!signal.aborted) setLoading(false);
