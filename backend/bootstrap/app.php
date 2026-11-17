@@ -21,5 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->render(function (\Throwable $exception, \Illuminate\Http\Request $request) {
+            return app(\App\Exceptions\GlobalExceptionHandler::class)->render($exception, $request);
+        });
     })->create();

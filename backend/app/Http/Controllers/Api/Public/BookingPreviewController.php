@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api\Public;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\PreviewBookingRequest;
+use App\Validators\PreviewBookingRequest;
 use App\Models\Room;
 use App\Services\AvailabilityService;
 use App\Services\PricingService;

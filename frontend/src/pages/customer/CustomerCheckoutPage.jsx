@@ -59,6 +59,12 @@ export default function CustomerCheckoutPage() {
           children: urlChildren,
         });
         if (!ignore) {
+          if (res?.source === 'api') {
+            setProperty(null);
+            setErrorMsg('Hiện chưa thể đặt phòng trực tuyến từ danh mục này. Giá phòng chỉ để tham khảo.');
+            setIsLoading(false);
+            return;
+          }
           if (res?.data) {
             setProperty(res.data);
             setErrorMsg(null);

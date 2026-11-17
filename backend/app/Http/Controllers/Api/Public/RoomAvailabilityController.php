@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api\Public;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\CheckAvailabilityRequest;
+use App\Validators\CheckAvailabilityRequest;
 use App\Http\Resources\AvailabilityResource;
 use App\Models\Room;
 use App\Services\AvailabilityService;

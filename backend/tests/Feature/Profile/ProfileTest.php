@@ -2,6 +2,9 @@
 
 namespace Tests\Feature\Profile;
 
+use App\DTOs\Profile\Requests\ChangePasswordRequest;
+use App\DTOs\Profile\Requests\UpdateProfileRequest;
+use App\DTOs\Profile\Requests\UploadAvatarRequest;
 use App\Enums\UserRole;
 use App\Enums\UserStatus;
 use App\Models\User;
@@ -57,23 +60,37 @@ class ProfileTest extends TestCase
     #[DataProvider('roles')]
     public function test_each_active_role_can_read_and_update_only_its_own_profile(string $role): void
     {
+        $this->freezeSecond();
         $user = $this->fixture($role);
         $other = $this->fixture();
         $this->login($user);
-        $response = $this->browser('GET', '/api/profile')->assertOk()->assertJsonPath('user.id', $user->id);
-        $keys = array_keys($response->json('user'));
-        sort($keys);
-        $expected = ['id', 'name', 'email', 'phone', 'address', 'avatar', 'role', 'status', 'email_verified_at', 'created_at', 'updated_at', 'gender', 'date_of_birth'];
-        sort($expected);
-        $this->assertSame($expected, $keys);
-        $this->browser('PATCH', '/api/profile', ['name' => ' Updated name ', 'phone' => '0987654321'])
-            ->assertOk()->assertJsonPath('user.name', 'Updated name')->assertJsonPath('user.phone', '0987654321')
-            ->assertJsonPath('user.role', $role)->assertJsonPath('message', 'Cập nhật hồ sơ thành công.');
+        $expected = $this->expectedUser($user, '/fixture/avatar.png');
+        $this->browser('GET', '/api/profile')->assertOk()->assertExactJson(['user' => $expected]);
+        $this->browser('PATCH', '/api/profile', [
+            'name' => ' Updated name ', 'phone' => '0987654321', 'gender' => 'FEMALE', 'date_of_birth' => '2000-02-29',
+        ])->assertOk()->assertExactJson([
+            'message' => 'Cập nhật hồ sơ thành công.',
+            'user' => array_replace($expected, [
+                'name' => 'Updated name', 'phone' => '0987654321', 'gender' => 'FEMALE', 'date_of_birth' => '2000-02-29',
+            ]),
+        ]);
         $this->browser('GET', '/api/me')->assertOk()->assertJsonPath('user.name', 'Updated name');
         $this->assertSame('Original fixture', $other->fresh()->name);
         $this->assertSame($user->email, $user->fresh()->email);
         $this->assertNotNull($user->fresh()->email_verified_at);
         $this->assertSame('/fixture/avatar.png', $user->fresh()->avatar);
+    }
+
+    private function expectedUser(User $user, string $avatar): array
+    {
+        $timestamp = now()->toISOString();
+
+        return [
+            'id' => $user->id, 'name' => 'Original fixture', 'email' => $user->email,
+            'phone' => '0901234567', 'address' => 'Địa chỉ fixture', 'avatar' => $avatar, 'gender' => null,
+            'date_of_birth' => null, 'role' => $user->role->value, 'status' => 'ACTIVE',
+            'email_verified_at' => $timestamp, 'created_at' => $timestamp, 'updated_at' => $timestamp,
+        ];
     }
 
     public static function forbiddenFields(): array
@@ -153,6 +170,39 @@ class ProfileTest extends TestCase
         $this->assertSame('0987654321', $user->fresh()->phone);
     }
 
+    public function test_patch_distinguishes_explicit_null_from_an_omitted_field(): void
+    {
+        $user = $this->fixture();
+        $this->login($user);
+
+        $this->browser('PATCH', '/api/profile', ['phone' => null, 'name' => ' Updated name '])
+            ->assertOk()->assertJsonPath('user.phone', null)
+            ->assertJsonPath('user.address', 'Địa chỉ fixture');
+
+        $this->assertDatabaseHas('users', [
+            'id' => $user->id, 'name' => 'Updated name', 'phone' => null, 'address' => 'Địa chỉ fixture',
+        ]);
+    }
+
+    public function test_profile_validation_reports_rule_errors_before_forbidden_fields(): void
+    {
+        $user = $this->fixture();
+        $this->login($user);
+        $before = $user->getAttributes();
+
+        $response = $this->browser('PATCH', '/api/profile', [
+            'email' => $user->email, 'phone' => 901234567, 'role' => null,
+        ])->assertUnprocessable();
+
+        $this->assertSame([
+            'phone' => ['Số điện thoại phải là chuỗi ký tự.'],
+            'email' => ['Email đăng nhập không được phép thay đổi.'],
+            'role' => ['Trường này không được phép cập nhật trong hồ sơ.'],
+        ], $response->json('errors'));
+        $this->assertStringStartsWith('Số điện thoại phải là chuỗi ký tự.', $response->json('message'));
+        $this->assertSame($before, $user->fresh()->getAttributes());
+    }
+
     public function test_gender_and_birth_date_can_be_saved_read_and_cleared_without_changing_email(): void
     {
         $user = $this->fixture(); $this->login($user);
@@ -188,6 +238,7 @@ class ProfileTest extends TestCase
     #[DataProvider('roles')]
     public function test_each_role_can_upload_and_read_own_avatar_with_an_opaque_url(string $role): void
     {
+        $this->freezeSecond();
         Storage::fake('local');
         $user = $this->fixture($role); $this->login($user);
         $response = $this->browser('POST', '/api/profile/avatar', ['avatar' => $this->png('my-local-file.png')])
@@ -198,8 +249,16 @@ class ProfileTest extends TestCase
         $this->assertStringNotContainsString('my-local-file', $path);
         $this->assertStringContainsString('/api/profile/avatar?v=', $response->json('user.avatar'));
         $this->assertStringNotContainsString('profile-avatars', $response->json('user.avatar'));
-        $this->browser('GET', '/api/profile/avatar')->assertOk()->assertHeader('Content-Type', 'image/png')
-            ->assertHeader('X-Content-Type-Options', 'nosniff');
+        $version = substr(hash('sha256', $path), 0, 16);
+        $response->assertExactJson([
+            'message' => 'Cập nhật ảnh đại diện thành công.',
+            'user' => $this->expectedUser($user, url('/api/profile/avatar').'?v='.$version),
+        ]);
+        $stream = $this->browser('GET', '/api/profile/avatar')->assertOk()
+            ->assertHeader('Content-Type', 'image/png')->assertHeader('X-Content-Type-Options', 'nosniff');
+        $this->assertTrue($stream->headers->hasCacheControlDirective('private'));
+        $this->assertTrue($stream->headers->hasCacheControlDirective('no-store'));
+        $this->assertStringStartsWith('inline', $stream->headers->get('Content-Disposition'));
         $this->browser('GET', '/api/me')->assertOk()->assertJsonPath('user.avatar', $response->json('user.avatar'));
     }
 
@@ -251,17 +310,38 @@ class ProfileTest extends TestCase
     {
         Storage::fake('local');
         $user = $this->fixture();
-        $this->app->make(AvatarService::class)->upload($user, $this->png());
+        $this->app->make(AvatarService::class)->upload($user, new UploadAvatarRequest($this->png()));
         $oldPath = $user->fresh()->avatar;
         User::updated(fn () => throw new RuntimeException('Fixture avatar SQL failure'));
         try {
-            $this->app->make(AvatarService::class)->upload($user, $this->png());
+            $this->app->make(AvatarService::class)->upload($user, new UploadAvatarRequest($this->png()));
             $this->fail('Expected fixture failure.');
         } catch (RuntimeException $error) {
             $this->assertSame('Fixture avatar SQL failure', $error->getMessage());
         } finally { User::flushEventListeners(); }
         $this->assertSame($oldPath, $user->fresh()->avatar);
         $this->assertSame([$oldPath], Storage::disk('local')->allFiles());
+    }
+
+    public function test_avatar_validation_reports_file_error_before_forbidden_fields(): void
+    {
+        Storage::fake('local');
+        $user = $this->fixture();
+        $this->login($user);
+        $before = $user->getAttributes();
+
+        $response = $this->browser('POST', '/api/profile/avatar', [
+            'user_id' => $user->id,
+            'avatar' => $this->png('wide.png', 4097),
+        ])->assertUnprocessable();
+
+        $this->assertSame([
+            'avatar' => ['Kích thước ảnh không được vượt quá 4096 × 4096 pixel.'],
+            'user_id' => ['Chỉ được gửi tệp ảnh đại diện của tài khoản hiện tại.'],
+        ], $response->json('errors'));
+        $this->assertStringStartsWith('Kích thước ảnh không được vượt quá 4096 × 4096 pixel.', $response->json('message'));
+        $this->assertSame($before, $user->fresh()->getAttributes());
+        $this->assertSame([], Storage::disk('local')->allFiles());
     }
 
     public function test_storage_write_failure_does_not_change_the_database_avatar(): void
@@ -271,7 +351,7 @@ class ProfileTest extends TestCase
         $file->shouldReceive('extension')->once()->andReturn('png');
         $file->shouldReceive('storeAs')->once()->andReturn(false);
         try {
-            $this->app->make(AvatarService::class)->upload($user, $file);
+            $this->app->make(AvatarService::class)->upload($user, new UploadAvatarRequest($file));
             $this->fail('Expected storage write failure.');
         } catch (RuntimeException $error) {
             $this->assertSame('Avatar storage failed.', $error->getMessage());
@@ -283,7 +363,7 @@ class ProfileTest extends TestCase
     {
         Storage::fake('local');
         $user = $this->fixture(); $other = $this->fixture(); $this->login($user);
-        $this->app->make(AvatarService::class)->upload($other, $this->png());
+        $this->app->make(AvatarService::class)->upload($other, new UploadAvatarRequest($this->png()));
         $this->browser('GET', '/api/profile/avatar?path='.$other->fresh()->avatar)->assertNotFound();
         $this->browser('GET', '/api/profile/avatar/'.$other->id)->assertNotFound();
     }
@@ -303,9 +383,9 @@ class ProfileTest extends TestCase
     public function test_service_cannot_change_email_verification_or_roles_from_internal_payload(): void
     {
         $user = $this->fixture(); $other = $this->fixture();
-        $updated = $this->app->make(ProfileService::class)->update($user, [
+        $updated = $this->app->make(ProfileService::class)->update($user, UpdateProfileRequest::fromValidated([
             'email' => $other->email, 'role' => 'ADMIN', 'name' => 'Valid name', 'email_verified_at' => null,
-        ]);
+        ]));
         $this->assertSame($user->email, $updated->email);
         $this->assertSame(UserRole::CUSTOMER, $updated->role);
         $this->assertNotNull($updated->email_verified_at);
@@ -341,7 +421,7 @@ class ProfileTest extends TestCase
         $failure = new UniqueConstraintViolationException('sqlite', 'fixture', [], $previous);
         User::updating(fn () => throw $failure);
         try {
-            $this->app->make(ProfileService::class)->update($user, ['name' => 'Must not save']);
+            $this->app->make(ProfileService::class)->update($user, UpdateProfileRequest::fromValidated(['name' => 'Must not save']));
             $this->fail('Expected constraint exception.');
         } catch (QueryException $error) {
             $this->assertSame($failure, $error);
@@ -408,14 +488,55 @@ class ProfileTest extends TestCase
         $this->browser('GET', '/api/profile')->assertOk();
     }
 
+    public function test_avatar_and_password_rate_limits_have_independent_counters(): void
+    {
+        $user = $this->fixture();
+        $this->login($user);
+        for ($attempt = 0; $attempt < 5; ++$attempt) {
+            $this->browser('POST', '/api/profile/avatar')->assertUnprocessable();
+        }
+
+        // Avatar attempts leave the five password attempts available.
+        for ($attempt = 0; $attempt < 5; ++$attempt) {
+            $this->browser('PATCH', '/api/profile/password')->assertUnprocessable();
+        }
+        $this->browser('PATCH', '/api/profile/password')->assertStatus(429)->assertHeader('Retry-After');
+
+        // Exhausting password attempts still leaves the remaining avatar attempts.
+        for ($attempt = 5; $attempt < 10; ++$attempt) {
+            $this->browser('POST', '/api/profile/avatar')->assertUnprocessable();
+        }
+        $this->browser('POST', '/api/profile/avatar')->assertStatus(429)->assertHeader('Retry-After');
+        $this->browser('GET', '/api/profile')->assertOk();
+    }
+
+    public function test_password_validation_reports_rule_errors_before_forbidden_fields(): void
+    {
+        $user = $this->fixture();
+        $this->login($user);
+        $hash = $user->password;
+
+        $response = $this->browser('PATCH', '/api/profile/password', [
+            'role' => null, 'current_password' => 123, 'password' => null, 'password_confirmation' => null,
+        ])->assertUnprocessable();
+
+        $this->assertSame([
+            'current_password' => ['Mật khẩu hiện tại không hợp lệ.'],
+            'password' => ['Vui lòng nhập mật khẩu.'],
+            'password_confirmation' => ['Vui lòng xác nhận mật khẩu.'],
+            'role' => ['Trường này không được phép gửi khi đổi mật khẩu.'],
+        ], $response->json('errors'));
+        $this->assertStringStartsWith('Mật khẩu hiện tại không hợp lệ.', $response->json('message'));
+        $this->assertSame($hash, $user->fresh()->password);
+    }
+
     public function test_password_database_failure_rolls_back_and_the_old_password_still_works(): void
     {
         $user = $this->fixture(); $this->login($user); $hash = $user->password;
         User::updated(fn () => throw new RuntimeException('Fixture password write failure'));
         try {
-            $this->app->make(ProfileService::class)->changePassword($user, [
-                'current_password' => self::PASSWORD, 'password' => 'New-Password2!',
-            ]);
+            $request = new ChangePasswordRequest(self::PASSWORD, 'New-Password2!');
+            $this->app->make(ProfileService::class)->changePassword($user, $request);
             $this->fail('Expected fixture exception.');
         } catch (RuntimeException $error) {
             $this->assertSame('Fixture password write failure', $error->getMessage());

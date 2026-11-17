@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Api\Host;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\SetServiceStatusRequest;
-use App\Http\Requests\StoreServiceRequest;
-use App\Http\Requests\UpdateServiceRequest;
+use App\Validators\SetServiceStatusRequest;
+use App\Validators\StoreServiceRequest;
+use App\Validators\UpdateServiceRequest;
 use App\Http\Resources\ServiceResource;
 use App\Models\Service;
 use App\Services\PropertyServiceManagementService;

@@ -22,9 +22,8 @@ function getRatingSentiment(score) {
  * @param {Function} [props.onSelectRating] Callback khi Host click chọn lọc theo sao
  */
 export function HostReviewSummary({ summary, selectedRating, onSelectRating }) {
-  const total = Number(summary?.total_reviews) || 0;
-  const avg = summary?.average_rating != null ? Number(summary.average_rating) : null;
-  const breakdown = summary?.rating_breakdown || { '5': 0, '4': 0, '3': 0, '2': 0, '1': 0 };
+  const total = summary?.total_reviews ?? 0;
+  const avg = summary?.average_rating ?? null;
 
   const starLevels = [5, 4, 3, 2, 1];
 
@@ -101,7 +100,7 @@ export function HostReviewSummary({ summary, selectedRating, onSelectRating }) {
 
           <div className="mt-4 space-y-2.5">
             {starLevels.map((star) => {
-              const count = Number(breakdown[String(star)]) || 0;
+              const count = summary?.rating_breakdown[star] ?? 0;
               const percent = total > 0 ? Math.round((count / total) * 100) : 0;
               const isFilterActive = Number(selectedRating) === star;
 

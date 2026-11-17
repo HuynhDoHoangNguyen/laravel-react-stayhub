@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Api\Host;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\AddBookingServiceRequest;
-use App\Http\Requests\UpdateBookingServiceRequest;
+use App\Validators\AddBookingServiceRequest;
+use App\Validators\UpdateBookingServiceRequest;
 use App\Http\Resources\BookingServiceResource;
 use App\Models\Booking;
 use App\Models\BookingService as BookingServiceModel;

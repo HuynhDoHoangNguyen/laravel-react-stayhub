@@ -2,48 +2,77 @@
 
 namespace Tests\Feature\Auth;
 
+use App\DTOs\Auth\Requests\RegisterRequest;
 use App\Enums\UserRole;
 use App\Enums\UserStatus;
 use App\Models\User;
+use App\Repositories\Auth\AuthRepository;
 use App\Services\Auth\RegistrationService;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\TestCase;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Testing\TestResponse;
 use Illuminate\Validation\ValidationException;
 use PDOException;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Group;
 use RuntimeException;
 
 class RegistrationTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase { beginDatabaseTransaction as beginTestTransaction; }
 
     private ?string $sessionCookie = null;
     private const PASSWORD = 'UC1-fixture-password!';
+    private const REAL_COMMIT_GROUP = 'registration-real-commit';
+    private const SUCCESS_LOG = 'Đăng ký tài khoản khách hàng thành công.';
+
+    public function beginDatabaseTransaction()
+    {
+        // Keep the migrated, guarded database and Laravel's real afterCommit behavior.
+        if (!in_array(self::REAL_COMMIT_GROUP, $this->groups(), true)) {
+            $this->beginTestTransaction();
+        }
+    }
 
     public function createApplication()
     {
-        foreach (['APP_ENV' => 'testing', 'DB_CONNECTION' => 'sqlite', 'DB_DATABASE' => ':memory:',
-            'DB_URL' => '', 'CACHE_STORE' => 'array', 'SESSION_DRIVER' => 'array'] as $key => $expected) {
+        foreach (['APP_ENV' => 'testing', 'DB_URL' => '', 'CACHE_STORE' => 'array', 'SESSION_DRIVER' => 'array'] as $key => $expected) {
             if (($_ENV[$key] ?? getenv($key)) !== $expected) {
-                throw new RuntimeException('UC1 tests require an isolated in-memory test environment before boot.');
+                throw new RuntimeException('UC1 tests require isolated testing configuration before boot.');
             }
         }
         if (is_file(dirname(__DIR__, 3).'/bootstrap/cache/config.php')) {
             throw new RuntimeException('UC1 tests cannot run with cached application configuration.');
         }
 
+        $driver = $_ENV['DB_CONNECTION'] ?? getenv('DB_CONNECTION');
+        $database = $_ENV['DB_DATABASE'] ?? getenv('DB_DATABASE');
+        $disposable = getenv('STAYHUB_REGISTRATION_TEST_DATABASE');
+        $sqlite = $driver === 'sqlite' && $database === ':memory:';
+        $mysql = $driver === 'mysql' && is_string($database) && $database === $disposable
+            && preg_match('/\Astayhub_auth01c_test_[a-f0-9]{32}\z/', $database) === 1;
+        if (!$sqlite && !$mysql) {
+            throw new RuntimeException('Use SQLite in-memory or explicitly select a disposable registration test database.');
+        }
+
         $app = parent::createApplication();
-        if ($app['config']->get('database.default') !== 'sqlite'
-            || $app['config']->get('database.connections.sqlite.database') !== ':memory:'
-            || !empty($app['config']->get('database.connections.sqlite.url'))
-            || $app['config']->get('cache.default') !== 'array'
-            || $app['config']->get('session.driver') !== 'array') {
+        $config = $app['config'];
+        $connection = $config->get("database.connections.{$driver}");
+        if ($config->get('database.default') !== $driver
+            || ($connection['database'] ?? null) !== $database || !empty($connection['url'])
+            || ($mysql && (($connection['host'] ?? null) !== '127.0.0.1' || !empty($connection['unix_socket'])))
+            || $config->get('cache.default') !== 'array'
+            || $config->get('session.driver') !== 'array') {
             throw new RuntimeException('UC1 database isolation must be verified before RefreshDatabase runs.');
+        }
+        if ($mysql && $app['db']->connection()->selectOne('SELECT DATABASE() AS selected_database')->selected_database !== $database) {
+            throw new RuntimeException('The MySQL server did not select the disposable test database.');
         }
         $app['config']->set('sanctum.stateful', ['localhost:5173']);
         return $app;
@@ -145,6 +174,31 @@ class RegistrationTest extends TestCase
         $this->assertTrue(Hash::check($password, User::firstOrFail()->password));
     }
 
+    public function test_registration_passes_only_validated_fields_to_the_typed_service(): void
+    {
+        $workflow = app(RegistrationService::class);
+        $service = $this->createMock(RegistrationService::class);
+        $service->expects($this->once())->method('register')
+            ->willReturnCallback(function (RegisterRequest $command) use ($workflow): void {
+                $this->assertSame(['name', 'email', 'password'], array_keys(get_object_vars($command)));
+                $this->assertSame('Khách Fixture', $command->name);
+                $this->assertSame('MixedCase@example.test', $command->email);
+                $this->assertTrue(hash_equals(self::PASSWORD, $command->password));
+
+                $workflow->register($command);
+            });
+        $this->app->instance(RegistrationService::class, $service);
+
+        $url = '/register?name=Wrong&email=query@example.test&password=wrong&password_confirmation=wrong';
+        $this->browser('POST', $url, $this->payload(['password_confirmation' => 'mismatch-fixture']))
+            ->assertUnprocessable()->assertJsonValidationErrors('password');
+        $this->browser('POST', $url, $this->payload([
+            'name' => '  Khách Fixture  ', 'email' => '  MixedCase@example.test  ', 'role' => 'ADMIN',
+        ]))->assertCreated();
+        $this->assertDatabaseCount('users', 1);
+        $this->assertDatabaseHas('users', ['name' => 'Khách Fixture', 'email' => 'MixedCase@example.test', 'role' => 'CUSTOMER']);
+    }
+
     public function test_a_hash_shaped_password_is_still_hashed_as_the_submitted_plaintext(): void
     {
         $literalPassword = password_hash('short', PASSWORD_BCRYPT, ['cost' => 4]);
@@ -156,6 +210,81 @@ class RegistrationTest extends TestCase
         $this->assertFalse(Hash::check('short', $user->password));
         $this->browser('POST', '/login', ['email' => $user->email, 'password' => 'short'])->assertUnprocessable();
         $this->browser('POST', '/login', ['email' => $user->email, 'password' => $literalPassword])->assertOk();
+    }
+
+    public function test_registration_resolves_and_calls_the_repository_once_inside_the_transaction(): void
+    {
+        $realRepository = $this->app->make(AuthRepository::class);
+        $repository = $this->createMock(AuthRepository::class);
+        $repository->expects($this->once())->method('createUser')
+            ->willReturnCallback(function (array $attributes) use ($realRepository): User {
+                $this->assertSame(2, DB::transactionLevel());
+                $this->assertTrue(DB::connection()->getPdo()->inTransaction());
+                $this->assertNotSame(self::PASSWORD, $attributes['password']);
+                $this->assertTrue(Hash::check(self::PASSWORD, $attributes['password']));
+                $user = $realRepository->createUser($attributes);
+                unset($attributes['password']);
+
+                $this->assertEquals([
+                    'name' => 'Khách Fixture',
+                    'email' => 'uc1@example.test',
+                    'role' => UserRole::CUSTOMER,
+                    'status' => UserStatus::ACTIVE,
+                    'email_verified_at' => null,
+                ], $attributes);
+
+                return $user;
+            });
+        $this->app->instance(AuthRepository::class, $repository);
+
+        $this->browser('POST', '/register', $this->payload([
+            'role' => UserRole::ADMIN->value,
+            'phone' => '0900000000',
+        ]))->assertCreated();
+        $this->assertDatabaseCount('users', 1);
+    }
+
+    public static function outerTransactionOutcomes(): array
+    {
+        return ['commit' => [true], 'rollback' => [false]];
+    }
+
+    #[Group(self::REAL_COMMIT_GROUP)]
+    #[DataProvider('outerTransactionOutcomes')]
+    public function test_registration_success_log_follows_the_outer_transaction(bool $commit): void
+    {
+        $email = 'registration-outer-transaction@example.test';
+        $connection = DB::connection();
+        $this->assertSame(0, $connection->transactionLevel());
+        Log::spy();
+
+        $connection->beginTransaction();
+        try {
+            $this->app->make(RegistrationService::class)->register(
+                new RegisterRequest('Khách Fixture', $email, self::PASSWORD),
+            );
+            $this->assertTrue($connection->getPdo()->inTransaction());
+            $this->assertDatabaseHas('users', ['email' => $email]);
+            Log::shouldNotHaveReceived('info');
+
+            if ($commit) {
+                $connection->commit();
+                $this->assertDatabaseHas('users', ['email' => $email]);
+                Log::shouldHaveReceived('info')->once()->with(self::SUCCESS_LOG);
+            } else {
+                $connection->rollBack();
+                $this->assertDatabaseMissing('users', ['email' => $email]);
+                $connection->transaction(static fn () => null);
+                Log::shouldNotHaveReceived('info');
+            }
+
+            $this->assertFalse($connection->getPdo()->inTransaction());
+        } finally {
+            if ($connection->transactionLevel() > 0) {
+                $connection->rollBack(0);
+            }
+            $connection->table('users')->where('email', $email)->delete();
+        }
     }
 
     public static function invalidPayloads(): array
@@ -258,6 +387,31 @@ class RegistrationTest extends TestCase
     {
         $this->browser('POST', '/register')->assertUnprocessable()
             ->assertJsonValidationErrors(['name', 'email', 'password', 'password_confirmation']);
+        $this->assertDatabaseCount('users', 0);
+    }
+
+    public function test_registration_preserves_json_errors_and_html_old_input(): void
+    {
+        $this->browser('POST', '/register')->assertUnprocessable()->assertExactJson([
+            'message' => 'Vui lòng nhập họ và tên. (and 3 more errors)',
+            'errors' => [
+                'name' => ['Vui lòng nhập họ và tên.'],
+                'email' => ['Vui lòng nhập địa chỉ email.'],
+                'password' => ['Vui lòng nhập mật khẩu.'],
+                'password_confirmation' => ['Vui lòng xác nhận mật khẩu.'],
+            ],
+        ]);
+
+        $this->from('/register')->post('/register', $this->payload([
+            'name' => '  Khách Fixture  ',
+            'email' => '  MixedCase@example.test  ',
+            'password_confirmation' => 'mismatch-fixture',
+        ]))->assertRedirect('/register')
+            ->assertSessionHasErrors(['password' => 'Mật khẩu xác nhận không khớp.'])
+            ->assertSessionHasInput('name', 'Khách Fixture')
+            ->assertSessionHasInput('email', 'MixedCase@example.test')
+            ->assertSessionMissing('_old_input.password')
+            ->assertSessionMissing('_old_input.password_confirmation');
         $this->assertDatabaseCount('users', 0);
     }
 
@@ -385,13 +539,17 @@ class RegistrationTest extends TestCase
     public function test_database_email_unique_violation_after_validation_is_mapped_precisely(): void
     {
         $existing = $this->fixture();
+        Log::spy();
         try {
-            $this->app->make(RegistrationService::class)->register($this->payload(['email' => $existing->email]));
+            $this->app->make(RegistrationService::class)->register(
+                new RegisterRequest('Khách Fixture', $existing->email, self::PASSWORD),
+            );
             $this->fail('Expected a database email unique conflict.');
         } catch (ValidationException $exception) {
             $this->assertSame(['email' => [RegistrationService::DUPLICATE_EMAIL]], $exception->errors());
         }
         $this->assertDatabaseCount('users', 1);
+        Log::shouldNotHaveReceived('info');
     }
 
     public static function databaseErrors(): array

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Stayhub Database"
+  short_description: "Help with Stayhub Database tasks"
+  default_prompt: "Use $stayhub-database for this StayHub task and report scope and results on chat."

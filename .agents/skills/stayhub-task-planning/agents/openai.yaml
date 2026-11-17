@@ -1,0 +1,4 @@
+interface:
+  display_name: "Stayhub Task Planning"
+  short_description: "Help with Stayhub Task Planning tasks"
+  default_prompt: "Use $stayhub-task-planning for this StayHub task and report scope and results on chat."

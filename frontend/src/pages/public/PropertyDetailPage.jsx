@@ -1,18 +1,18 @@
-import { useParams, useSearchParams, Link } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Loader2, AlertCircle } from "lucide-react";
-import { propertyService } from "@/services/propertyService";
-import { PropertyHeader } from "@/components/hotel/PropertyHeader";
-import { PropertyGallery } from "@/components/hotel/PropertyGallery";
-import { PropertyAmenities } from "@/components/hotel/PropertyAmenities";
-import { RoomsList } from "@/components/hotel/RoomsList";
-import { BookingPreviewCard } from "@/components/hotel/BookingPreviewCard";
-import { ReviewsSection } from "@/components/hotel/ReviewsSection";
+import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
+import { propertyService } from '../../services/propertyService';
+import { PropertyHeader } from '../../components/hotel/PropertyHeader';
+import { PropertyGallery } from '../../components/hotel/PropertyGallery';
+import { PropertyAmenities } from '../../components/hotel/PropertyAmenities';
+import { RoomsList } from '../../components/hotel/RoomsList';
+import { BookingPreviewCard } from '../../components/hotel/BookingPreviewCard';
+import { ReviewsSection } from '../../components/hotel/ReviewsSection';
 
 function todayPlus(days) {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
 }
 
 export default function PropertyDetailPage() {

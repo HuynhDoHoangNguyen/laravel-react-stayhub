@@ -1,5 +1,8 @@
 import api from '@/api/axios';
 import { MOCK_PROPERTIES } from '@/mocks/propertyMockData';
+import { createCatalogService } from './catalog';
+
+const catalog = createCatalogService(api, { dev: import.meta.env.DEV, enableMocks: import.meta.env.VITE_ENABLE_PROPERTY_MOCKS, properties: MOCK_PROPERTIES });
 
 const MOCKS_ENABLED =
   import.meta.env.DEV && import.meta.env.VITE_ENABLE_PROPERTY_MOCKS === 'true';
@@ -133,6 +136,7 @@ export const propertyService = {
       source: 'api',
     };
   },
+  getProperties: catalog.getProperties,
 
   async searchProperties({
     city = '',

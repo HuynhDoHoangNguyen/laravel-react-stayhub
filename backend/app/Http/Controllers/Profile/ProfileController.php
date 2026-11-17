@@ -3,12 +3,10 @@
 namespace App\Http\Controllers\Profile;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Profile\ChangePasswordRequest;
-use App\Http\Requests\Profile\UpdateProfileRequest;
-use App\Http\Requests\Profile\UploadAvatarRequest;
-use App\Http\Resources\Auth\AuthUserResource;
+use App\Mappers\Auth\AuthUserMapper;
 use App\Services\Profile\ProfileService;
 use App\Services\Profile\AvatarService;
+use App\Validators\Profile\ProfileValidator;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Illuminate\Http\JsonResponse;
@@ -16,33 +14,35 @@ use Illuminate\Http\Request;
 
 class ProfileController extends Controller
 {
+    public function __construct(private readonly AuthUserMapper $userMapper) {}
+
     public function show(Request $request): JsonResponse
     {
-        return response()->json(['user' => (new AuthUserResource($request->user()))->resolve($request)]);
+        return response()->json(['user' => $this->userMapper->toResponse($request->user())]);
     }
 
-    public function update(UpdateProfileRequest $request, ProfileService $service): JsonResponse
+    public function update(Request $request, ProfileValidator $validator, ProfileService $service): JsonResponse
     {
-        $user = $service->update($request->user(), $request->safe()->only(['name', 'phone', 'address', 'gender', 'date_of_birth']));
+        $user = $service->update($request->user(), $validator->validateUpdate($request->all()));
         return response()->json([
             'message' => 'Cập nhật hồ sơ thành công.',
-            'user' => (new AuthUserResource($user))->resolve($request),
+            'user' => $this->userMapper->toResponse($user),
         ]);
     }
 
-    public function password(ChangePasswordRequest $request, ProfileService $service): JsonResponse
+    public function password(Request $request, ProfileValidator $validator, ProfileService $service): JsonResponse
     {
-        $service->changePassword($request->user(), $request->safe()->only(['current_password', 'password']));
+        $service->changePassword($request->user(), $validator->validatePasswordChange($request->all()));
         // Sanctum stores this guard user's current password fingerprint after response.
         $request->user()->refresh();
         return response()->json(['message' => 'Đổi mật khẩu thành công.']);
     }
 
-    public function uploadAvatar(UploadAvatarRequest $request, AvatarService $service): JsonResponse
+    public function uploadAvatar(Request $request, ProfileValidator $validator, AvatarService $service): JsonResponse
     {
-        $user = $service->upload($request->user(), $request->file('avatar'));
+        $user = $service->upload($request->user(), $validator->validateAvatarUpload($request->all()));
         return response()->json(['message' => 'Cập nhật ảnh đại diện thành công.',
-            'user' => (new AuthUserResource($user))->resolve($request)]);
+            'user' => $this->userMapper->toResponse($user)]);
     }
 
     public function avatar(Request $request): StreamedResponse

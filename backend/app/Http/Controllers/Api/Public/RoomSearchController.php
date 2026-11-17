@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api\Public;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\SearchRoomsRequest;
+use App\Validators\SearchRoomsRequest;
 use App\Http\Resources\RoomSearchResource;
 use App\Services\SearchService;
 use App\Traits\ApiResponse;

@@ -15,7 +15,7 @@ function CreateInvoiceButton({ bookingId, onSuccess, onError, disabled = false, 
         try {
             const result = await createHostInvoice(bookingId);
             if (onSuccess) {
-                onSuccess(result.data || result);
+                onSuccess(result.data);
             }
         } catch (err) {
             const parsed = parseInvoiceError(err);
