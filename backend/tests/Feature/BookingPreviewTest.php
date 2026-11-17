@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Room;
+use App\Models\User;
+use App\Enums\RoomStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -51,5 +53,51 @@ class BookingPreviewTest extends TestCase
                     ],
                 ],
             ]);
+    }
+
+    public function test_preview_and_create_return_the_same_decimal_price_snapshot(): void
+    {
+        $customer = User::factory()->customer()->create();
+        $room = Room::factory()->create([
+            'price_per_night' => '123456.78',
+            'capacity' => 4,
+            'status' => RoomStatus::ACTIVE,
+        ]);
+        $checkIn = now()->addDays(10)->format('Y-m-d');
+        $checkOut = now()->addDays(13)->format('Y-m-d');
+        $payload = [
+            'room_id' => $room->id,
+            'check_in_date' => $checkIn,
+            'check_out_date' => $checkOut,
+            'guest_count' => 2,
+        ];
+
+        $preview = $this->postJson('/api/public/bookings/preview', $payload)
+            ->assertOk()
+            ->assertJsonPath('data.price_per_night', '123456.78')
+            ->assertJsonPath('data.room_total', '370370.34');
+
+        $created = $this->actingAs($customer)->postJson('/api/customer/bookings', $payload)
+            ->assertCreated()
+            ->assertJsonPath('data.status', 'PENDING')
+            ->assertJsonPath('data.price_per_night', '123456.78')
+            ->assertJsonPath('data.room_total', '370370.34');
+
+        $this->assertSame($preview->json('data.price_per_night'), $created->json('data.price_per_night'));
+        $this->assertSame($preview->json('data.room_total'), $created->json('data.room_total'));
+    }
+
+    public function test_preview_invalid_date_returns_form_request_error_shape(): void
+    {
+        $room = Room::factory()->create();
+
+        $this->postJson('/api/public/bookings/preview', [
+            'room_id' => $room->id,
+            'check_in_date' => now()->addDays(3)->format('Y-m-d'),
+            'check_out_date' => now()->addDays(2)->format('Y-m-d'),
+            'guest_count' => 1,
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['check_out_date'])
+            ->assertJsonStructure(['message', 'errors' => ['check_out_date']]);
     }
 }

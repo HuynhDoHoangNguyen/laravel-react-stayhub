@@ -6,11 +6,15 @@ use App\Enums\BookingStatus;
 use App\Enums\RoomStatus;
 use App\Models\Booking;
 use App\Models\BookingService;
+use App\Models\Maintenance;
 use App\Models\Room;
 use App\Models\Service;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -180,6 +184,58 @@ class CustomerBookingTest extends TestCase
             'guest_count' => 1,
         ]);
         $res3->assertStatus(201);
+    }
+
+    public function test_booking_conflicting_with_maintenance_returns_409_with_reason(): void
+    {
+        $customer = User::factory()->customer()->create();
+        $room = Room::factory()->create(['capacity' => 2, 'status' => RoomStatus::ACTIVE]);
+        $checkIn = Carbon::now()->addDays(10)->format('Y-m-d');
+        $checkOut = Carbon::now()->addDays(13)->format('Y-m-d');
+        Maintenance::factory()->create([
+            'room_id' => $room->id,
+            'start_date' => $checkIn,
+            'end_date' => $checkOut,
+        ]);
+
+        $this->actingAs($customer)->postJson('/api/customer/bookings', [
+            'room_id' => $room->id,
+            'check_in_date' => $checkIn,
+            'check_out_date' => $checkOut,
+            'guest_count' => 1,
+        ])->assertConflict()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Phòng không khả dụng trong thời gian yêu cầu.')
+            ->assertJsonPath('errors.reasons.0', 'MAINTENANCE_OVERLAP');
+    }
+
+    public function test_booking_insert_failure_rolls_back_the_created_row(): void
+    {
+        $customer = User::factory()->customer()->create();
+        $room = Room::factory()->create(['capacity' => 2, 'status' => RoomStatus::ACTIVE]);
+        $shouldFail = true;
+        DB::listen(static function (QueryExecuted $query) use (&$shouldFail): void {
+            if ($shouldFail && str_starts_with(strtolower(ltrim($query->sql)), 'insert')
+                && str_contains(strtolower($query->sql), 'bookings')) {
+                $shouldFail = false;
+                throw new RuntimeException('Forced failure after booking insert.');
+            }
+        });
+
+        $this->withoutExceptionHandling();
+        try {
+            $this->actingAs($customer)->postJson('/api/customer/bookings', [
+                'room_id' => $room->id,
+                'check_in_date' => Carbon::now()->addDays(10)->format('Y-m-d'),
+                'check_out_date' => Carbon::now()->addDays(12)->format('Y-m-d'),
+                'guest_count' => 1,
+            ]);
+            $this->fail('Expected the forced post-insert failure.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('Forced failure after booking insert.', $exception->getMessage());
+        }
+
+        $this->assertDatabaseMissing('bookings', ['room_id' => $room->id]);
     }
 
     public function test_ownership_protection(): void

@@ -1,5 +1,7 @@
 import api from '@/api/axios';
 import { MOCK_BOOKINGS } from '@/mocks/bookingMockData';
+import { bookingApi } from '@/api/bookingApi';
+import { mapBookingCommandResponse } from '@/mappers/bookingMapper';
 
 /**
  * Cấu hình hiển thị chuẩn hóa 6 trạng thái từ Backend BookingStatus:
@@ -156,8 +158,6 @@ const ENDPOINTS = {
   customerBookingDetail: (id) => `/api/customer/bookings/${id}`,
   customerBookingCancel: (id) => `/api/customer/bookings/${id}/cancel`,
   customerBookingServices: (id) => `/api/customer/bookings/${id}/services`,
-  bookingPreview: '/api/public/bookings/preview',
-  createBooking: '/api/customer/bookings',
 };
 
 function bookingApiError(error, fallback) {
@@ -180,8 +180,7 @@ function bookingApiError(error, fallback) {
 export const bookingService = {
   async previewBooking(payload) {
     try {
-      const response = await api.post(ENDPOINTS.bookingPreview, payload);
-      return response.data?.data || response.data;
+      return mapBookingCommandResponse(await bookingApi.previewBooking(payload));
     } catch (error) {
       throw bookingApiError(error, 'Không thể kiểm tra giá và tình trạng phòng.');
     }
@@ -189,8 +188,7 @@ export const bookingService = {
 
   async createBooking(payload) {
     try {
-      const response = await api.post(ENDPOINTS.createBooking, payload);
-      return response.data?.data || response.data;
+      return mapBookingCommandResponse(await bookingApi.createBooking(payload));
     } catch (error) {
       throw bookingApiError(error, 'Không thể hoàn tất đặt phòng. Vui lòng thử lại.');
     }
