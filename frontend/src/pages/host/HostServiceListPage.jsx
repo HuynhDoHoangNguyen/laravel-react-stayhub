@@ -5,6 +5,11 @@ import { toast } from 'sonner';
 import { propertyServiceCatalogService } from '@/services/propertyServiceCatalogService';
 import { formatHostVnd } from '@/services/hostBookingService';
 import { bookingDisplayError } from '@/utils/bookingDisplayError';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const PER_PAGE = 10;
 const EMPTY_FORM = { name: '', description: '', unit: '', price: '' };
@@ -27,6 +32,40 @@ export default function HostServiceListPage() {
   const [saving, setSaving] = useState(false);
   const [busyServiceId, setBusyServiceId] = useState(null);
   const mutationLock = useRef(false);
+  const formDialogRef = useRef(null);
+  const formReturnFocusRef = useRef(null);
+  const pageHeadingRef = useRef(null);
+
+  useEffect(() => {
+    if (!formOpen) return undefined;
+    const returnFocusTarget = formReturnFocusRef.current;
+    const pageHeading = pageHeadingRef.current;
+    formDialogRef.current?.querySelector('input, textarea')?.focus();
+    const handleDialogKeyDown = (event) => {
+      if (event.key === 'Escape' && !mutationLock.current) {
+        setFormOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = formDialogRef.current?.querySelectorAll('button:not(:disabled), input:not(:disabled), textarea:not(:disabled)');
+      if (!focusable?.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleDialogKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleDialogKeyDown);
+      if (returnFocusTarget?.isConnected) returnFocusTarget.focus();
+      else pageHeading?.focus();
+    };
+  }, [formOpen]);
 
   const loadServices = useCallback(async (signal) => {
     setLoading(true);
@@ -65,14 +104,16 @@ export default function HostServiceListPage() {
     };
   }, [loadServices, reloadKey]);
 
-  const openCreate = () => {
+  const openCreate = (event) => {
+    formReturnFocusRef.current = event.currentTarget;
     setEditingService(null);
     setForm(EMPTY_FORM);
     setFormError('');
     setFormOpen(true);
   };
 
-  const openEdit = (service) => {
+  const openEdit = (service, event) => {
+    formReturnFocusRef.current = event.currentTarget;
     setEditingService(service);
     setForm({
       name: service.name || '',
@@ -146,20 +187,20 @@ export default function HostServiceListPage() {
   return (
     <div className="mx-auto max-w-[1400px] space-y-6 text-left">
       <Link to="/host/services" className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-primary"><ArrowLeft className="h-4 w-4" /> Danh mục dịch vụ</Link>
-      <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+      <header className="flex flex-col justify-between gap-4 rounded-3xl border border-border/60 bg-gradient-to-br from-white to-surface/60 p-5 shadow-xs sm:flex-row sm:items-end sm:p-7">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-accent">Quản lý cơ sở lưu trú</p>
-          <h1 className="mt-1 font-display text-3xl font-bold text-primary sm:text-4xl">Dịch vụ</h1>
+          <h1 ref={pageHeadingRef} tabIndex={-1} className="mt-1 font-display text-3xl font-bold text-primary outline-none sm:text-4xl">Dịch vụ</h1>
           <p className="mt-2 text-sm text-muted-foreground">{property?.name || 'Danh mục dịch vụ của cơ sở'}</p>
         </div>
-        <button type="button" onClick={openCreate} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary-mid"><CirclePlus className="h-4 w-4" /> Thêm dịch vụ</button>
+        <Button type="button" onClick={openCreate} className="h-10 rounded-xl"><CirclePlus className="h-4 w-4" /> Thêm dịch vụ</Button>
       </header>
 
       <form onSubmit={applyFilters} className="grid gap-3 rounded-2xl border border-border/70 bg-white p-4 shadow-xs sm:grid-cols-[minmax(0,1fr)_200px_auto]">
         <label className="relative">
           <span className="sr-only">Tìm dịch vụ</span>
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input value={filters.keyword} onChange={(event) => setFilters((current) => ({ ...current, keyword: event.target.value }))} placeholder="Tìm theo tên dịch vụ" className="h-10 w-full rounded-xl border border-border pl-9 pr-3 text-sm outline-none focus:border-primary" />
+          <Input value={filters.keyword} onChange={(event) => setFilters((current) => ({ ...current, keyword: event.target.value }))} placeholder="Tìm theo tên dịch vụ" className="h-10 rounded-xl pl-9" />
         </label>
         <label>
           <span className="sr-only">Lọc trạng thái dịch vụ</span>
@@ -167,43 +208,43 @@ export default function HostServiceListPage() {
             <option value="">Tất cả dịch vụ</option><option value="true">Đang bật</option><option value="false">Đang tắt</option>
           </select>
         </label>
-        <button type="submit" className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border bg-white px-4 text-sm font-semibold text-ink hover:border-primary/40 hover:text-primary"><Search className="h-4 w-4" /> Lọc</button>
+        <Button variant="outline" type="submit" className="h-10 rounded-xl"><Search className="h-4 w-4" /> Lọc</Button>
       </form>
 
-      {error && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800"><span>{error}</span><button type="button" onClick={() => { setLoading(true); setReloadKey((current) => current + 1); }} className="inline-flex items-center gap-1.5 font-semibold"><RefreshCw className="h-3.5 w-3.5" /> Thử lại</button></div>}
+      {error && <Card role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 shadow-none"><span>{error}</span><Button variant="outline" type="button" onClick={() => { setLoading(true); setReloadKey((current) => current + 1); }} className="h-9 border-rose-200 bg-white text-rose-800 hover:bg-rose-100"><RefreshCw className="h-3.5 w-3.5" /> Thử lại</Button></Card>}
 
       <div className="flex items-center justify-between text-sm text-muted-foreground"><span>{loading ? 'Đang tải danh mục…' : `${total} dịch vụ`}</span>{!loading && total > 0 && <span>Trang {currentPage}/{lastPage}</span>}</div>
 
       {loading ? (
-        <div className="space-y-3">{[1, 2, 3].map((item) => <div key={item} className="h-28 animate-pulse rounded-2xl bg-white/80" />)}</div>
+        <div className="space-y-3" aria-label="Đang tải danh mục dịch vụ" aria-busy="true">{[1, 2, 3].map((item) => <Skeleton key={item} className="h-28 rounded-2xl" />)}</div>
       ) : !error && services.length === 0 ? (
-        <section className="rounded-2xl border border-dashed border-border bg-white p-12 text-center">
+        <Card className="rounded-2xl border-dashed p-8 text-center sm:p-12">
           <h2 className="font-display text-xl font-bold text-primary">Chưa có dịch vụ phù hợp</h2>
           <p className="mt-1 text-sm text-muted-foreground">Thêm dịch vụ mới hoặc thay đổi bộ lọc để xem danh mục.</p>
-          <button type="button" onClick={openCreate} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"><CirclePlus className="h-4 w-4" /> Thêm dịch vụ đầu tiên</button>
-        </section>
+          <Button type="button" onClick={openCreate} className="mt-4 rounded-xl"><CirclePlus className="h-4 w-4" /> Thêm dịch vụ đầu tiên</Button>
+        </Card>
       ) : !error && (
         <div className="space-y-3">
           {services.map((service) => (
-            <article key={service.id} className="rounded-2xl border border-border/70 bg-white p-4 shadow-xs sm:p-5">
+            <Card key={service.id} className="rounded-2xl border-border/70 p-4 shadow-xs sm:p-5">
               <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="font-display text-lg font-bold text-primary">{service.name}</h2>
-                    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${service.status ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-slate-100 text-slate-700'}`}>{service.status ? 'Đang bật' : 'Đang tắt'}</span>
+                    <Badge variant="outline" className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${service.status ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-slate-100 text-slate-700'}`}>{service.status ? 'Đang bật' : 'Đang tắt'}</Badge>
                   </div>
                   {service.description && <p className="mt-1 text-sm text-muted-foreground">{service.description}</p>}
                   <p className="mt-2 text-xs text-muted-foreground">Đơn vị: {service.unit}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                   <strong className="mr-2 text-sm text-primary">{formatHostVnd(service.price)} / {service.unit}</strong>
-                  <button type="button" onClick={() => openEdit(service)} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold text-ink hover:border-primary/40 hover:text-primary"><Pencil className="h-3.5 w-3.5" /> Chỉnh sửa</button>
-                  <button type="button" disabled={busyServiceId === service.id} onClick={() => toggleStatus(service)} className={`min-w-24 rounded-lg px-3 py-2 text-xs font-semibold disabled:opacity-50 ${service.status ? 'border border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100' : 'bg-emerald-700 text-white hover:bg-emerald-800'}`}>
+                  <Button variant="outline" type="button" onClick={(event) => openEdit(service, event)} className="h-9 rounded-lg"><Pencil className="h-3.5 w-3.5" /> Chỉnh sửa</Button>
+                  <Button variant={service.status ? 'outline' : 'default'} type="button" disabled={busyServiceId === service.id} onClick={() => toggleStatus(service)} className={`h-9 min-w-24 rounded-lg text-xs ${service.status ? 'border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100' : 'bg-emerald-700 text-white hover:bg-emerald-800'}`}>
                     {busyServiceId === service.id ? 'Đang lưu…' : service.status ? 'Tắt dịch vụ' : 'Bật dịch vụ'}
-                  </button>
+                  </Button>
                 </div>
               </div>
-            </article>
+            </Card>
           ))}
         </div>
       )}
@@ -216,7 +257,7 @@ export default function HostServiceListPage() {
 
       {formOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/45 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) setFormOpen(false); }}>
-          <section role="dialog" aria-modal="true" aria-labelledby="service-form-title" className="my-auto w-full max-w-xl rounded-2xl border border-border/70 bg-white p-5 shadow-xl sm:p-6">
+          <Card ref={formDialogRef} role="dialog" aria-modal="true" aria-labelledby="service-form-title" className="my-auto w-full max-w-xl rounded-2xl border-border/70 p-5 shadow-xl sm:p-6">
             <div className="flex items-start justify-between gap-3">
               <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">{property?.name || 'Dịch vụ cơ sở'}</p><h2 id="service-form-title" className="mt-1 font-display text-2xl font-bold text-primary">{editingService ? 'Chỉnh sửa dịch vụ' : 'Thêm dịch vụ mới'}</h2></div>
               <button type="button" aria-label="Đóng biểu mẫu" disabled={saving} onClick={() => setFormOpen(false)} className="grid h-9 w-9 place-items-center rounded-full text-muted-foreground hover:bg-surface"><X className="h-4 w-4" /></button>
@@ -243,7 +284,7 @@ export default function HostServiceListPage() {
                 <button type="submit" disabled={saving} className="inline-flex min-w-32 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-50">{saving ? 'Đang lưu…' : editingService ? 'Lưu thay đổi' : 'Tạo dịch vụ'}</button>
               </div>
             </form>
-          </section>
+          </Card>
         </div>
       )}
     </div>
