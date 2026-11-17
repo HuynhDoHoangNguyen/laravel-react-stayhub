@@ -3,6 +3,9 @@ import { requireApiId } from './apiId.js';
 /** Transport only; client must be the shared Axios instance in production. */
 export function createInvoiceApi(client) {
   return {
+    async updateHostInvoicePaymentStatus(id, { signal } = {}) {
+      return (await client.patch(`/api/host/invoices/${requireApiId(id, 'Mã hóa đơn')}/payment-status`, { payment_status: 'PAID' }, { signal })).data;
+    },
     async createHostInvoice(id, { signal } = {}) {
       return (await client.post(`/api/host/bookings/${requireApiId(id, 'Mã đơn đặt phòng')}/invoice`, undefined, { signal })).data;
     },

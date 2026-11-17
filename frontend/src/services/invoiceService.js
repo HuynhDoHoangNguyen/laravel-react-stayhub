@@ -13,6 +13,15 @@ export function createInvoiceService(invoiceApi) {
   }
 
   return {
+    async updateHostInvoicePaymentStatus(id, options = {}) {
+      const result = mapInvoiceDetailResponse(await invoiceApi.updateHostInvoicePaymentStatus(id, options));
+      if (result.data.id !== Number(id) || result.data.payment_status !== 'PAID' || result.data.paid_at === null) {
+        throw Object.assign(new Error('Dữ liệu hóa đơn từ máy chủ không hợp lệ.'), {
+          isApiError: true, status: 0, kind: 'contract', code: 'INVALID_INVOICE_RESPONSE', fields: {},
+        });
+      }
+      return result;
+    },
     async createHostInvoice(id, options = {}) {
       return mapInvoiceDetailResponse(await invoiceApi.createHostInvoice(id, options));
     },
@@ -32,6 +41,10 @@ export function createInvoiceService(invoiceApi) {
 }
 
 const invoiceService = createInvoiceService(createInvoiceApi(api));
+
+export async function updateHostInvoicePaymentStatus(invoiceId, options = {}) {
+    return invoiceService.updateHostInvoicePaymentStatus(invoiceId, options);
+}
 
 /**
  * Service quản lý các yêu cầu API liên quan đến Hóa đơn (Invoice / Billing)

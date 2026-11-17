@@ -18,6 +18,8 @@ Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
         ->name('host.bookings.invoice.store');
     Route::get('/host/invoices/{invoice}', [HostInvoiceController::class, 'show'])
         ->name('host.invoices.show');
+    Route::patch('/host/invoices/{invoice}/payment-status', [HostInvoiceController::class, 'updatePaymentStatus'])
+        ->name('host.invoices.payment-status.update');
 
     // Customer Invoices
     Route::get('/customer/invoices', [CustomerInvoiceController::class, 'index'])

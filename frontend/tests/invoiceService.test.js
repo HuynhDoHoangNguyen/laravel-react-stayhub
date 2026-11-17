@@ -21,6 +21,58 @@ const row = {
 const page = { data: [row], meta: { current_page: 1, last_page: 1, per_page: 10, total: 1 }, links: { first: '?page=1', last: '?page=1', prev: null, next: null } };
 const detail = { data: { ...row, items: [] } };
 
+test('payment PATCH uses the real API/service, fixed body and signal; maps paid detail for factory and public export', async () => {
+  const calls = [];
+  const paid = { data: { ...row, payment_status: 'PAID', paid_at: '2026-11-17T01:00:00.000000Z', items: [] } };
+  const adapter = async (config) => {
+    calls.push(config);
+    return { status: 200, data: paid, config, headers: {} };
+  };
+  const { service } = setup(adapter);
+  const signal = new AbortController().signal;
+  for (let i = 0; i < 2; i++) {
+    assert.deepEqual(await service.updateHostInvoicePaymentStatus('7', { signal }), paid);
+  }
+  publicAdapter = adapter;
+  assert.deepEqual(await invoiceServiceModule.updateHostInvoicePaymentStatus(7, { signal }), paid);
+  assert.equal(calls.length, 3);
+  for (const config of calls) {
+    assert.equal(config.method, 'patch');
+    assert.equal(config.url, '/api/host/invoices/7/payment-status');
+    assert.deepEqual(JSON.parse(config.data), { payment_status: 'PAID' });
+    assert.equal(config.signal, signal);
+  }
+});
+
+test('payment HTTP/network/timeout failures retain identity and are never replayed', async () => {
+  for (const status of [401, 403, 404, 409, 419, 422, 500, 0]) {
+    let calls = 0;
+    const error = new AxiosError('Fixture', status ? undefined : 'ECONNABORTED', undefined, undefined,
+      status ? { status, data: { message: 'Fixture error', errors: { payment_status: ['Invalid'] } }, headers: {} } : undefined);
+    const { service } = setup(async () => { ++calls; throw error; });
+    await assert.rejects(service.updateHostInvoicePaymentStatus(7), (actual) => actual === error);
+    assert.equal(calls, 1);
+  }
+});
+
+test('payment rejects malformed or wrong-state success so callers can recover by GET', async () => {
+  for (const body of [{}, detail, { data: { ...detail.data, payment_status: 'PAID' } },
+    { data: { ...detail.data, id: 8, payment_status: 'PAID', paid_at: '2026-11-17T01:00:00Z' } }]) {
+    let calls = 0;
+    const { service } = setup(async (config) => { ++calls; return { status: 200, data: body, config, headers: {} }; });
+    await assert.rejects(service.updateHostInvoicePaymentStatus(7), (error) => error.kind === 'contract' && error.code === 'INVALID_INVOICE_RESPONSE');
+    assert.equal(calls, 1);
+  }
+});
+
+test('cancelled payment does not send or retry a mutation', async () => {
+  let calls = 0;
+  const { service } = setup(async () => { ++calls; throw new Error('Must not reach transport'); });
+  const controller = new AbortController(); controller.abort();
+  await assert.rejects(service.updateHostInvoicePaymentStatus(7, { signal: controller.signal }), CanceledError);
+  assert.equal(calls, 0);
+});
+
 function setup(adapter) {
   const client = axios.create({ adapter });
   return { client, service: createInvoiceService(createInvoiceApi(client)) };

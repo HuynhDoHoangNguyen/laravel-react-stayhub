@@ -21,6 +21,19 @@ final class InvoiceRepository
         return $this->forHost($hostId)->with('items')->whereKey($invoiceId)->first();
     }
 
+    /** Caller owns the transaction. Locking read returns the current payment state. */
+    public function findForHostWithPaymentLock(int $invoiceId, int $hostId): ?Invoice
+    {
+        return $this->forHost($hostId)->whereKey($invoiceId)->lockForUpdate()->first();
+    }
+
+    public function markPaid(Invoice $invoice): void
+    {
+        $invoice->payment_status = 'PAID';
+        $invoice->paid_at = now();
+        $invoice->saveOrFail();
+    }
+
     public function paginateForCustomer(int $customerId, InvoiceFilterRequest $filters): LengthAwarePaginator
     {
         return $this->paginate($this->forCustomer($customerId), $filters, 'property_name');
