@@ -52,7 +52,7 @@ export default function CustomerCheckoutPage() {
 
       setIsLoading(true);
       try {
-        const res = await propertyService.getPropertyById(propertyId, {
+        const res = await propertyService.getBookableProperty(propertyId, {
           startDate,
           endDate,
           adults: urlAdults,

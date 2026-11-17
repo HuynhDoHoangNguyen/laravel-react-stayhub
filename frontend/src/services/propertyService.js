@@ -64,6 +64,16 @@ function buildSearchParams({
   return params;
 }
 
+async function searchPropertyRooms(id, params) {
+  const response = await roomSearchApi.search(buildSearchParams({
+    propertyId: id,
+    ...params,
+    perPage: 50,
+  }));
+
+  return mapPropertyFromRooms(mapPropertyRooms(response.data?.data || []));
+}
+
 export const propertyService = {
   async getFeaturedProperties() {
     if (MOCKS_ENABLED) {
@@ -148,18 +158,21 @@ export const propertyService = {
       return { data: found || null, source: 'mock' };
     }
 
-    const response = await roomSearchApi.search(buildSearchParams({
-        propertyId: id,
-        startDate,
-        endDate,
-        adults,
-        children,
-        perPage: 50,
-      }));
-    const rooms = mapPropertyRooms(response.data?.data || []);
     return {
-      data: mapPropertyFromRooms(rooms),
+      data: await searchPropertyRooms(id, { startDate, endDate, adults, children }),
       source: 'api',
+    };
+  },
+
+  async getBookableProperty(id, { startDate, endDate, adults = 2, children = 0 } = {}) {
+    if (MOCKS_ENABLED) {
+      const found = MOCK_PROPERTIES.find((item) => String(item.id) === String(id));
+      return { data: found || null, source: 'mock' };
+    }
+
+    return {
+      data: await searchPropertyRooms(id, { startDate, endDate, adults, children }),
+      source: 'room-search',
     };
   },
 };
