@@ -2,18 +2,16 @@
 
 namespace App\Services;
 
-use App\Enums\BookingStatus;
-use App\Enums\MaintenanceStatus;
 use App\Enums\PropertyStatus;
 use App\Enums\RoomStatus;
-use App\Models\Booking;
-use App\Models\Maintenance;
 use App\Models\Room;
+use App\Repositories\Booking\RoomAvailabilityRepository;
 use Carbon\Carbon;
-use Illuminate\Database\Eloquent\Builder;
 
 class AvailabilityService
 {
+    public function __construct(private readonly RoomAvailabilityRepository $repository) {}
+
     /**
      * Check availability of a specific room for given dates and guest count.
      *
@@ -43,7 +41,7 @@ class AvailabilityService
         }
 
         // 2. Property Status
-        $property = $room->relationLoaded('property') ? $room->property : $room->property()->first();
+        $property = $this->repository->propertyForRoom($room);
         $propertyStatus = $property->status instanceof PropertyStatus ? $property->status->value : (string) $property->status;
         if ($propertyStatus !== PropertyStatus::ACTIVE->value) {
             $reasons[] = 'PROPERTY_NOT_ACTIVE';
@@ -55,28 +53,12 @@ class AvailabilityService
         }
 
         // 4. Maintenance Overlap
-        $hasMaintenanceOverlap = Maintenance::query()
-            ->where('room_id', $room->id)
-            ->whereNotIn('status', [MaintenanceStatus::CANCELLED->value, MaintenanceStatus::COMPLETED->value])
-            ->where('start_date', '<', $out)
-            ->where('end_date', '>', $in)
-            ->exists();
-
-        if ($hasMaintenanceOverlap) {
+        if ($this->repository->hasBlockingMaintenanceOverlap($room->id, $in, $out)) {
             $reasons[] = 'MAINTENANCE_OVERLAP';
         }
 
         // 5. Booking Overlap
-        $bookingQuery = Booking::query()
-            ->where('room_id', $room->id)
-            ->holdingRoom()
-            ->overlapping($in, $out);
-
-        if ($ignoreBookingId !== null) {
-            $bookingQuery->where('id', '!=', $ignoreBookingId);
-        }
-
-        if ($bookingQuery->exists()) {
+        if ($this->repository->hasHoldingBookingOverlap($room->id, $in, $out, $ignoreBookingId)) {
             $reasons[] = 'BOOKING_OVERLAP';
         }
 
@@ -84,38 +66,6 @@ class AvailabilityService
             'available' => empty($reasons),
             'reasons' => $reasons,
         ];
-    }
-
-    /**
-     * Get Query Builder for available rooms matching date & guest filters.
-     * Uses database SQL constraints only.
-     */
-    public function availableRooms(array $filters): Builder
-    {
-        $in = Carbon::parse($filters['check_in_date'])->format('Y-m-d');
-        $out = Carbon::parse($filters['check_out_date'])->format('Y-m-d');
-        $guestCount = (int) $filters['guest_count'];
-        $ignoreBookingId = $filters['ignore_booking_id'] ?? null;
-
-        $query = Room::query()
-            ->where('status', RoomStatus::ACTIVE->value)
-            ->where('capacity', '>=', $guestCount)
-            ->whereHas('property', function (Builder $q) {
-                $q->where('status', PropertyStatus::ACTIVE->value);
-            })
-            ->whereDoesntHave('maintenances', function (Builder $q) use ($in, $out) {
-                $q->whereNotIn('status', [MaintenanceStatus::CANCELLED->value, MaintenanceStatus::COMPLETED->value])
-                    ->where('start_date', '<', $out)
-                    ->where('end_date', '>', $in);
-            })
-            ->whereDoesntHave('bookings', function (Builder $q) use ($in, $out, $ignoreBookingId) {
-                $q->holdingRoom()->overlapping($in, $out);
-                if ($ignoreBookingId !== null) {
-                    $q->where('id', '!=', $ignoreBookingId);
-                }
-            });
-
-        return $query;
     }
 
     /**
@@ -131,11 +81,7 @@ class AvailabilityService
         $ranges = [];
 
         // Bookings
-        $bookings = Booking::query()
-            ->where('room_id', $room->id)
-            ->holdingRoom()
-            ->overlapping($from, $to)
-            ->get(['check_in_date', 'check_out_date']);
+        $bookings = $this->repository->blockingBookings($room, $from, $to);
 
         foreach ($bookings as $booking) {
             $ranges[] = [
@@ -146,12 +92,7 @@ class AvailabilityService
         }
 
         // Maintenances
-        $maintenances = Maintenance::query()
-            ->where('room_id', $room->id)
-            ->whereNotIn('status', [MaintenanceStatus::CANCELLED->value, MaintenanceStatus::COMPLETED->value])
-            ->where('start_date', '<', $to)
-            ->where('end_date', '>', $from)
-            ->get(['start_date', 'end_date']);
+        $maintenances = $this->repository->blockingMaintenances($room, $from, $to);
 
         foreach ($maintenances as $m) {
             $ranges[] = [

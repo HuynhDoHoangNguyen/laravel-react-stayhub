@@ -23,7 +23,7 @@ class AvailabilityServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->availabilityService = new AvailabilityService();
+        $this->availabilityService = app(AvailabilityService::class);
     }
 
     public function test_room_not_active(): void

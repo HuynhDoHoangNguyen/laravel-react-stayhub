@@ -1,4 +1,6 @@
 import api from '@/api/axios';
+import { roomSearchApi } from '@/api/roomSearchApi';
+import { mapFeaturedProperty, mapPropertyFromRooms, mapPropertyRooms, mapSearchRoom } from '@/mappers/propertyMapper';
 import { MOCK_PROPERTIES } from '@/mocks/propertyMockData';
 import { createCatalogService } from './catalog';
 
@@ -20,58 +22,6 @@ function defaultStay() {
     1,
   );
   return { check_in_date: checkIn, check_out_date: addDays(checkIn, 2) };
-}
-
-function mapRoom(room) {
-  const images = Array.isArray(room.images) ? room.images : [];
-  const amenities = Array.isArray(room.amenities) ? room.amenities : [];
-  return {
-    ...room,
-    price: Number(room.price_per_night),
-    roomTypeName: room.room_type?.name || '',
-    room_type_name: room.room_type?.name || '',
-    photos: images.map((image) => image.image_path).filter(Boolean),
-    amenities: amenities.map((amenity) => amenity.name),
-    amenityIds: amenities.map((amenity) => amenity.id),
-  };
-}
-
-function mapSearchRoom(room) {
-  const normalizedRoom = mapRoom(room);
-  const property = room.property || {};
-
-  return {
-    id: property.id,
-    resultId: room.id,
-    roomId: room.id,
-    name: property.name || room.name,
-    city: property.address || '',
-    address: property.address || '',
-    propertyType: property.type || '',
-    price: normalizedRoom.price,
-    roomName: room.name,
-    roomTypeName: normalizedRoom.roomTypeName,
-    capacity: room.capacity,
-    photos: normalizedRoom.photos,
-    amenities: normalizedRoom.amenities,
-    amenityIds: normalizedRoom.amenityIds,
-  };
-}
-
-function mapFeaturedProperty(room) {
-  const property = room.property || {};
-  const mappedRoom = mapRoom(room);
-  return {
-    ...property,
-    id: property.id,
-    name: property.name || room.name,
-    city: property.address || '',
-    address: property.address || '',
-    propertyType: property.type || '',
-    price: mappedRoom.price,
-    photos: mappedRoom.photos,
-    rooms: [mappedRoom],
-  };
 }
 
 function buildSearchParams({
@@ -122,9 +72,7 @@ export const propertyService = {
 
     // The booking API exposes date based room search, not a property catalog endpoint.
     const stay = defaultStay();
-    const response = await api.get('/api/public/rooms/search', {
-      params: buildSearchParams({ ...stay, adults: 2 }),
-    });
+    const response = await roomSearchApi.search(buildSearchParams({ ...stay, adults: 2 }));
     const featured = new Map();
     (response.data?.data || []).forEach((room) => {
       if (!featured.has(room.property_id)) {
@@ -173,8 +121,7 @@ export const propertyService = {
       };
     }
 
-    const response = await api.get('/api/public/rooms/search', {
-      params: buildSearchParams({
+    const response = await roomSearchApi.search(buildSearchParams({
         city,
         keyword,
         startDate,
@@ -186,8 +133,7 @@ export const propertyService = {
         amenities,
         sortBy,
         page,
-      }),
-    });
+      }));
 
     return {
       data: (response.data?.data || []).map(mapSearchRoom),
@@ -202,32 +148,17 @@ export const propertyService = {
       return { data: found || null, source: 'mock' };
     }
 
-    const response = await api.get('/api/public/rooms/search', {
-      params: buildSearchParams({
+    const response = await roomSearchApi.search(buildSearchParams({
         propertyId: id,
         startDate,
         endDate,
         adults,
         children,
         perPage: 50,
-      }),
-    });
-    const rooms = (response.data?.data || []).map(mapRoom);
-    if (rooms.length === 0) return { data: null, source: 'api' };
-
-    const property = rooms[0].property || {};
+      }));
+    const rooms = mapPropertyRooms(response.data?.data || []);
     return {
-      data: {
-        ...property,
-        id: property.id,
-        name: property.name,
-        address: property.address,
-        phone: property.phone,
-        propertyType: property.type,
-        photos: rooms.flatMap((room) => room.photos).slice(0, 8),
-        amenities: [...new Map(rooms.flatMap((room) => (room.amenities || []).map((name, index) => [room.amenityIds[index], name]))).values()],
-        rooms,
-      },
+      data: mapPropertyFromRooms(rooms),
       source: 'api',
     };
   },

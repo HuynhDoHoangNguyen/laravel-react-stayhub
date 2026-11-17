@@ -2,7 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Enums\BookingStatus;
+use App\Enums\MaintenanceStatus;
 use App\Models\Amenity;
+use App\Models\Booking;
+use App\Models\Maintenance;
 use App\Models\Property;
 use App\Models\Room;
 use App\Models\RoomType;
@@ -127,5 +131,88 @@ class RoomSearchTest extends TestCase
 
         $resDesc->assertStatus(200)
             ->assertJsonPath('data.0.id', $roomExpensive->id);
+    }
+
+    public function test_search_keeps_half_open_booking_ranges_and_maintenance_rules(): void
+    {
+        $checkIn = \Carbon\Carbon::today()->addDays(20);
+        $checkOut = $checkIn->copy()->addDays(3);
+
+        $roomBefore = Room::factory()->create(['price_per_night' => 300000, 'capacity' => 2]);
+        Booking::factory()->create([
+            'room_id' => $roomBefore->id,
+            'check_in_date' => $checkIn->copy()->subDays(5)->toDateString(),
+            'check_out_date' => $checkIn->toDateString(),
+            'status' => BookingStatus::CONFIRMED,
+        ]);
+
+        $roomAfter = Room::factory()->create(['price_per_night' => 400000, 'capacity' => 2]);
+        Booking::factory()->create([
+            'room_id' => $roomAfter->id,
+            'check_in_date' => $checkOut->toDateString(),
+            'check_out_date' => $checkOut->copy()->addDays(5)->toDateString(),
+            'status' => BookingStatus::CHECKED_IN,
+        ]);
+
+        $roomOverlapping = Room::factory()->create(['price_per_night' => 500000, 'capacity' => 2]);
+        Booking::factory()->create([
+            'room_id' => $roomOverlapping->id,
+            'check_in_date' => $checkIn->copy()->subDay()->toDateString(),
+            'check_out_date' => $checkIn->copy()->addDay()->toDateString(),
+            'status' => BookingStatus::PENDING,
+        ]);
+
+        $roomMaintenance = Room::factory()->create(['price_per_night' => 600000, 'capacity' => 2]);
+        Maintenance::factory()->create([
+            'room_id' => $roomMaintenance->id,
+            'start_date' => $checkIn->copy()->addDay()->toDateString(),
+            'end_date' => $checkIn->copy()->addDays(2)->toDateString(),
+            'status' => MaintenanceStatus::SCHEDULED,
+        ]);
+
+        $roomCancelledMaintenance = Room::factory()->create(['price_per_night' => 700000, 'capacity' => 2]);
+        Maintenance::factory()->create([
+            'room_id' => $roomCancelledMaintenance->id,
+            'start_date' => $checkIn->copy()->addDay()->toDateString(),
+            'end_date' => $checkIn->copy()->addDays(2)->toDateString(),
+            'status' => MaintenanceStatus::CANCELLED,
+        ]);
+
+        $response = $this->getJson('/api/public/rooms/search?' . http_build_query([
+            'check_in_date' => $checkIn->toDateString(),
+            'check_out_date' => $checkOut->toDateString(),
+            'guest_count' => 2,
+        ]));
+
+        $response->assertOk()->assertJsonPath('meta.total', 3);
+        $this->assertEqualsCanonicalizing(
+            [$roomBefore->id, $roomAfter->id, $roomCancelledMaintenance->id],
+            array_column($response->json('data'), 'id'),
+        );
+    }
+
+    public function test_search_paginates_results_on_requested_page(): void
+    {
+        $rooms = collect([300000, 600000, 900000])
+            ->map(fn (int $price) => Room::factory()->create(['price_per_night' => $price, 'capacity' => 2]));
+        $checkIn = \Carbon\Carbon::today()->addDays(2)->toDateString();
+        $checkOut = \Carbon\Carbon::today()->addDays(4)->toDateString();
+
+        $response = $this->getJson('/api/public/rooms/search?' . http_build_query([
+            'check_in_date' => $checkIn,
+            'check_out_date' => $checkOut,
+            'guest_count' => 2,
+            'per_page' => 2,
+            'page' => 2,
+        ]));
+
+        $response->assertOk()
+            ->assertJsonPath('meta.current_page', 2)
+            ->assertJsonPath('meta.total', 3)
+            ->assertJsonPath('meta.last_page', 2)
+            ->assertJsonPath('meta.per_page', 2)
+            ->assertJsonPath('data.0.id', $rooms[2]->id)
+            ->assertJsonPath('data.0.price_per_night', '900000.00');
+        $this->assertCount(1, $response->json('data'));
     }
 }
