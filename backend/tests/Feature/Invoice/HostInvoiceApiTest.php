@@ -412,4 +412,83 @@ class HostInvoiceApiTest extends TestCase
             $this->assertMatchesRegularExpression('/^\d+\.\d{2}$/', $item['amount']);
         }
     }
+
+    public function test_create_uses_typed_command_and_keeps_the_exact_public_payload(): void
+    {
+        $service = new class(
+            app(\App\Repositories\Invoice\InvoiceRepository::class),
+            app(\App\Validators\Invoice\InvoiceValidator::class),
+            app(\App\Services\Invoice\InvoiceCalculationService::class),
+            app(\App\Mappers\Invoice\InvoiceMapper::class), app(\Psr\Log\LoggerInterface::class),
+        ) extends \App\Services\Invoice\InvoiceService {
+            public ?\App\DTOs\Invoice\Requests\CreateInvoiceRequest $received = null;
+            public ?User $actor = null;
+            public function createInvoice(int $bookingId, User $hostActor): Invoice
+            {
+                throw new \LogicException('HTTP must call the typed entry point.');
+            }
+            public function createInvoiceFromRequest(\App\DTOs\Invoice\Requests\CreateInvoiceRequest $request, User $hostActor): Invoice
+            {
+                $this->received = $request;
+                $this->actor = $hostActor;
+                return parent::createInvoiceFromRequest($request, $hostActor);
+            }
+        };
+        app()->instance(\App\Services\Invoice\InvoiceService::class, $service);
+        $this->travelTo(Carbon::parse('2026-11-14T01:02:03Z'));
+        $response = $this->actingAs($this->host)->postJson("/api/host/bookings/{$this->booking->id}/invoice", [
+            // Server snapshots/defaults must win over unsolicited client financial/owner fields.
+            'booking_id' => 999999, 'total_amount' => '0.01', 'payment_status' => 'PAID', 'customer_name' => 'Untrusted',
+        ])->assertStatus(201)->assertHeader('Content-Type', 'application/json');
+        $this->assertSame($this->booking->id, $service->received?->bookingId);
+        $this->assertSame($this->host->id, $service->actor?->id);
+        $invoice = Invoice::with('items')->where('booking_id', $this->booking->id)->firstOrFail();
+        $this->assertMatchesRegularExpression('/^INV-\d{8}-[A-F0-9]{8}$/', $invoice->invoice_code);
+        $items = $invoice->items;
+        $expected = [
+            'id' => $invoice->id, 'invoice_code' => $invoice->invoice_code, 'booking_id' => $this->booking->id,
+            'customer_name' => $this->customer->name, 'customer_email' => $this->customer->email, 'customer_phone' => $this->customer->phone,
+            'property_name' => $this->property->name, 'room_name' => 'Phòng Suite Hướng Biển 501',
+            'subtotal' => '4150000.00', 'discount_amount' => '0.00', 'extra_fee' => '0.00', 'total_amount' => '4150000.00',
+            'payment_status' => 'UNPAID', 'paid_at' => null, 'created_at' => '2026-11-14T01:02:03.000000Z',
+            'items' => [
+                ['id' => $items[0]->id, 'invoice_id' => $invoice->id, 'item_type' => 'ROOM', 'item_name' => 'Phòng Suite Hướng Biển 501',
+                    'description' => 'Tiền phòng (3 đêm × 1200000.00)', 'quantity' => '3.00', 'unit_price' => '1200000.00', 'amount' => '3600000.00'],
+                ['id' => $items[1]->id, 'invoice_id' => $invoice->id, 'item_type' => 'SERVICE', 'item_name' => 'Buffet sáng quốc tế',
+                    'description' => null, 'quantity' => '2.00', 'unit_price' => '150000.00', 'amount' => '300000.00'],
+                ['id' => $items[2]->id, 'invoice_id' => $invoice->id, 'item_type' => 'SERVICE', 'item_name' => 'Đưa đón sân bay',
+                    'description' => null, 'quantity' => '1.00', 'unit_price' => '250000.00', 'amount' => '250000.00'],
+            ],
+        ];
+        $response->assertExactJson(['data' => $expected]);
+        $this->getJson('/api/host/invoices/'.$invoice->id)->assertOk()->assertExactJson(['data' => $expected]);
+        $listRow = $expected;
+        unset($listRow['items']);
+        $this->assertSame($listRow, $this->getJson('/api/host/invoices')->assertOk()->json('data.0'));
+        $this->actingAs($this->customer)->getJson('/api/customer/invoices/'.$invoice->id)->assertOk()->assertExactJson(['data' => $expected]);
+        $this->assertSame($listRow, $this->getJson('/api/customer/invoices')->assertOk()->json('data.0'));
+    }
+
+    public function test_raw_booking_ids_preserve_canonical_validation_and_missing_id_classification(): void
+    {
+        $this->actingAs($this->host);
+        foreach (['0', '-1', '1.5', '1e2', '01', '+1', ' 1 ', 'abc', (string) PHP_INT_MAX.'0'] as $id) {
+            $this->postJson('/api/host/bookings/'.rawurlencode($id).'/invoice')->assertStatus(422)
+                ->assertExactJson(['message' => 'Mã đơn đặt phòng không hợp lệ.']);
+        }
+        $this->postJson('/api/host/bookings/'.PHP_INT_MAX.'/invoice')->assertStatus(404)
+            ->assertExactJson(['message' => 'Không tìm thấy đơn đặt phòng.']);
+        $this->assertDatabaseCount('invoices', 0);
+    }
+
+    public function test_guest_auth_precedes_malformed_id_and_role_denial_keeps_the_session(): void
+    {
+        $this->postJson('/api/host/bookings/invalid/invoice')->assertStatus(401);
+        $this->actingAs($this->admin)->postJson('/api/host/bookings/invalid/invoice')->assertStatus(422)
+            ->assertExactJson(['message' => 'Mã đơn đặt phòng không hợp lệ.']);
+        $this->postJson("/api/host/bookings/{$this->booking->id}/invoice")->assertStatus(403)
+            ->assertExactJson(['message' => 'Chỉ tài khoản đối tác (HOST) sở hữu cơ sở lưu trú mới có quyền tạo hóa đơn.']);
+        $this->getJson('/api/me')->assertOk()->assertJsonPath('user.id', $this->admin->id);
+        $this->assertDatabaseCount('invoices', 0);
+    }
 }

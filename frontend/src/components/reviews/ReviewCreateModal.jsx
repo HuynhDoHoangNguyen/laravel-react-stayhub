@@ -87,12 +87,11 @@ export function ReviewCreateModal({
     setErrorMessage(null);
 
     try {
-      const response = await reviewService.createBookingReview(booking.id, {
+      const { data: createdReview } = await reviewService.createBookingReview(booking.id, {
         rating,
         comment: trimmedComment,
       });
 
-      const createdReview = response?.data || response;
       if (onSuccess) {
         onSuccess(createdReview);
       }

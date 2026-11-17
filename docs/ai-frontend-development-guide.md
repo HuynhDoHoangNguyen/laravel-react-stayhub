@@ -368,3 +368,36 @@ Trước khi trả lời hoàn tất, tự hỏi:
 - Có sót chữ StayNest, manager, API demo hoặc dữ liệu mẫu không?
 - Lint và build đã pass chưa?
 
+## 17. ARCH-01 — cấu trúc mục tiêu dùng chung
+
+Owner áp Repository/DTO/Mapper toàn StayHub. Đối chiếu [kiến trúc](../ARCHITECTURE.md#13-arch-01--kiến-trúc-mục-tiêu-toàn-dự-án) và [checklist](TV3/TV3_CHECKLIST.md); pattern chung không mở quyền sửa module TV1/TV2.
+
+Luồng Invoice hiện tại: Page/Component -> services/invoiceService.js -> api/invoiceApi.js -> api/axios.js. Service gọi mappers/invoiceMapper.js, API giữ transport. createInvoiceService(invoiceApi) factory và public named exports ở cùng một file, gom create/list/detail Host-Customer. Không tạo read/create forwarding modules theo thói quen. Các API/error/id modules hiện có giữ trách nhiệm và Auth interceptors/session version/cookies/XSRF.
+
+Create/detail trả {data: Invoice}, list trả {data,meta,links} và metadata bổ sung. mapInvoiceDetailResponse phục vụ cả create/detail; mapInvoiceListResponse phục vụ lists. Component nhận result.data; không data || response fallback. Giữ snake_case, decimal strings/null/date/items và SERVICE names empty/whitespace/'0'. Mapper không HTTP/tính tổng; formatVnd chỉ hiển thị, không quyết định giá. Unknown nonempty payment status giữ nguyên; malformed success reject INVALID_INVOICE_RESPONSE thay vì fake empty data.
+
+HTTP/network/timeout/cancel errors pass through; giữ error normalization/status/code/fields/retryAfter và distinguish cancellation. Mutation không tự replay khi mất response. UI loading/disabled/callbacks hiện có vẫn cần browser test để chứng minh double-click/stale-result/unmount/auth-change behavior; Node adapters không đủ đóng gate đó.
+
+## 18. STRUCT-01 — Common/Exceptions Backend hiện hành
+
+VAL-STRUCT-01 thống nhất Backend app/Validators/: AttributeValidator ở root, custom constraints ở Constraints/, Invoice/Review validators theo domain. Imports là App\Validators và App\Validators\Constraints; việc đổi namespace không đổi route, payload, status/errors hoặc Auth và không cần sửa Frontend.
+
+Invoice read/create dùng InvoiceValidator/InvoiceMapper, typed DTO, concrete InvoiceRepository và Common/ApiResponse/PageResponse. Create HTTP nhận raw route ID qua attributes trước normalize, actor lấy session; không gửi nguyên application DTO như một body mới hoặc tin owner/giá từ client. Không đổi URL hoặc thêm /api/v1 vì backend đổi lớp.
+
+Read errors giữ INVOICE_READ_FORBIDDEN/INVOICE_NOT_FOUND và query 422 fields. Expected create errors vẫn message-only 403/404/409/422; create success 201 với một data envelope. GlobalExceptionHandler chỉ allowlist Invoice/Review, không thay Auth user/message/account codes hoặc Web redirects. Invoice Resources đã xóa; Common vẫn phục vụ legacy Resource consumers Auth/Review. Không suy toàn bộ errors đã migrate sang AppException.
+
+Model groups active ở Invoice/ROOM không phát sinh NotBlank tên SERVICE. Snapshot Booking/BookingService và financial/payment rules không đổi; Frontend không tính lại tiền hoặc tự suy transition từ enum. Review/TV1/TV2 refactor theo scope riêng.
+
+## 19. SIMPLIFY-01 — kiểm chứng và nghiệm thu
+
+Tại frontend:
+
+```powershell
+node --experimental-test-module-mocks --test tests/*.test.js
+npm run lint
+npm run build
+```
+
+Flag module mocks cần cho tests/invoiceService.test.js: chỉ thay Vite-configured Axios module trước dynamic import, service/factory/public exports thật được kiểm tra bằng adapter fixtures. Không sửa shared Axios để chạy Node, không thêm dependency chỉ vì package.json chưa có test script. Lint/build là compile/static evidence, không browser E2E.
+
+02C.1 có evidence lịch sử 492 PHP tests/2860 assertions và 75 Node tests; 02C.2 lint/build PASS với 3 Fast Refresh warnings và chunk >500 kB. 02C.3 chỉ đồng bộ tài liệu/skills, không chạy lại các suites này. Browser/real Auth backend/MySQL concurrency/responsive vẫn NOT VERIFIED. Parent INV-ARCH-02 đã CLOSED / ACCEPTED sau audit và yêu cầu owner; VAL-STRUCT-01 giữ trạng thái này, có acceptance riêng. Owner acceptance và technical PASS tiếp tục ghi riêng trong checklist. Plan/Task Result chỉ trên chat; giữ AGENTS.md theo yêu cầu owner.

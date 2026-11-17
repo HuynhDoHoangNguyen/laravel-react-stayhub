@@ -2,44 +2,33 @@
 
 namespace App\Services\Invoice;
 
-use App\Models\Booking;
 use App\Models\Invoice;
+use App\Models\InvoiceItem;
+use App\DTOs\Invoice\Requests\CreateInvoiceRequest;
+use App\Mappers\Invoice\InvoiceMapper;
+use App\Repositories\Invoice\InvoiceRepository;
 use App\Models\User;
-use App\Validators\Invoice\InvoiceCreationValidator;
-use DomainException;
+use App\Exceptions\Invoice\DuplicateInvoiceException;
+use App\Validators\Invoice\InvoiceValidator;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Facade;
-use Illuminate\Support\Facades\Log;
 use Psr\Log\LoggerInterface;
-
-if (!class_exists(\App\Services\Invoice\DuplicateInvoiceException::class, false)) {
-    class DuplicateInvoiceException extends DomainException
-    {
-    }
-}
 
 class InvoiceService
 {
-    protected InvoiceCreationValidator $validator;
-    protected InvoiceCalculationService $calculationService;
-    protected ?LoggerInterface $logger;
-
     public function __construct(
-        ?InvoiceCreationValidator $validator = null,
-        ?InvoiceCalculationService $calculationService = null,
-        ?LoggerInterface $logger = null
-    ) {
-        $this->calculationService = $calculationService ?? new InvoiceCalculationService();
-        $this->validator = $validator ?? new InvoiceCreationValidator($this->calculationService);
-        $this->logger = $logger;
-    }
+        protected readonly InvoiceRepository $repository,
+        protected readonly InvoiceValidator $validator,
+        protected readonly InvoiceCalculationService $calculationService,
+        protected readonly InvoiceMapper $mapper,
+        protected readonly LoggerInterface $logger,
+    ) {}
 
     /**
      * Lấy đối tượng Validator đang sử dụng.
      */
-    public function getValidator(): InvoiceCreationValidator
+    public function getValidator(): InvoiceValidator
     {
         return $this->validator;
     }
@@ -67,44 +56,46 @@ class InvoiceService
      */
     public function createInvoice(int $bookingId, User $hostActor): Invoice
     {
-        return DB::transaction(function () use ($bookingId, $hostActor) {
+        return $this->createInvoiceFromRequest($this->mapper->toCreateRequest($bookingId), $hostActor);
+    }
+
+    /** Typed application entry point; HTTP normalization remains at the existing boundary. */
+    public function createInvoiceFromRequest(CreateInvoiceRequest $request, User $hostActor): Invoice
+    {
+        return DB::transaction(function () use ($request, $hostActor) {
+            $bookingId = $request->bookingId;
             // 1. Khóa bản ghi Booking bằng lockForUpdate() chống concurrent requests
-            $booking = Booking::with(['customer', 'room.property', 'bookingServices'])
-                ->where('id', $bookingId)
-                ->lockForUpdate()
-                ->first();
+            $booking = $this->repository->findBookingForInvoiceWithLock($bookingId);
 
             if (!$booking) {
                 throw new ModelNotFoundException("Không tìm thấy đơn đặt phòng với ID: {$bookingId}");
             }
 
             // 2. Xác thực toàn bộ điều kiện nghiệp vụ và phân quyền
-            $this->validator->validateForCreation($booking, $hostActor);
+            $this->validator->validateCreationEligibility($booking, $hostActor);
+            $this->validator->validateInvoiceNotExists(
+                $bookingId,
+                $this->repository->invoiceExistsForBooking($bookingId),
+            );
+            $this->validator->validateCreationSnapshots($booking);
 
             // 3. Kiểm tra lại sự tồn tại của Invoice ngay trong phạm vi transaction được khóa
-            if (Invoice::where('booking_id', $bookingId)->exists()) {
+            if ($this->repository->invoiceExistsForBooking($bookingId)) {
                 throw new DuplicateInvoiceException("Đơn đặt phòng #{$bookingId} đã có hóa đơn.");
             }
 
             // 4. Chuẩn bị danh sách dịch vụ snapshot
-            $servicesPayload = [];
-            foreach ($booking->bookingServices as $svc) {
-                $servicesPayload[] = [
-                    'service_id' => $svc->service_id,
-                    'service_name' => $svc->service_name,
-                    'quantity' => (string) $svc->quantity,
-                    'unit_price' => (string) $svc->unit_price,
-                    'amount' => (string) $svc->amount,
-                ];
-            }
+            $servicesPayload = $this->mapper->toServiceSnapshots($booking);
+            $discountAmount = '0.00';
+            $extraFee = '0.00';
 
             // 5. Tính toán tài chính bằng InvoiceCalculationService thuần BCMath
             $calcResult = $this->calculationService->calculate(
                 (int) $booking->number_of_nights,
                 (string) $booking->price_per_night,
                 $servicesPayload,
-                '0.00',
-                '0.00'
+                $discountAmount,
+                $extraFee
             );
 
             // 6. Sinh mã hóa đơn duy nhất (tối đa 50 ký tự)
@@ -112,42 +103,17 @@ class InvoiceService
 
             // 7. Tạo bản ghi Invoice và InvoiceItems atomically
             try {
-                $invoice = Invoice::create([
-                    'invoice_code' => $invoiceCode,
-                    'booking_id' => $booking->id,
-                    'customer_name' => (string) $booking->customer->name,
-                    'customer_email' => (string) $booking->customer->email,
-                    'customer_phone' => (string) $booking->customer->phone,
-                    'property_name' => (string) $booking->room->property->name,
-                    'room_name' => (string) $booking->room->name,
-                    'subtotal' => $calcResult['subtotal'],
-                    'discount_amount' => '0.00',
-                    'extra_fee' => '0.00',
-                    'total_amount' => $calcResult['total_amount'],
-                    'payment_status' => 'UNPAID',
-                    'paid_at' => null,
-                ]);
+                $invoiceAttributes = $this->mapper->toInvoiceAttributes(
+                    $booking, $invoiceCode, $calcResult, $discountAmount, $extraFee, 'UNPAID', null,
+                );
+                $this->validator->validateInvoiceModel(new Invoice($invoiceAttributes));
+                $invoice = $this->repository->createInvoice($invoiceAttributes);
 
-                // Tạo InvoiceItem cho phòng (ROOM)
-                $invoice->items()->create([
-                    'item_type' => 'ROOM',
-                    'item_name' => (string) $booking->room->name,
-                    'description' => "Tiền phòng ({$booking->number_of_nights} đêm × {$booking->price_per_night})",
-                    'quantity' => (string) $booking->number_of_nights,
-                    'unit_price' => (string) $booking->price_per_night,
-                    'amount' => $calcResult['room_total'],
-                ]);
-
-                // Tạo các InvoiceItems cho dịch vụ (SERVICE)
+                $roomAttributes = $this->mapper->toRoomItemAttributes($booking, $calcResult);
+                $this->validator->validateRoomItemModel(new InvoiceItem($roomAttributes));
+                $this->repository->createInvoiceItem($invoice, $roomAttributes);
                 foreach ($calcResult['service_items'] as $svcItem) {
-                    $invoice->items()->create([
-                        'item_type' => 'SERVICE',
-                        'item_name' => $svcItem['service_name'],
-                        'description' => null,
-                        'quantity' => $svcItem['quantity'],
-                        'unit_price' => $svcItem['unit_price'],
-                        'amount' => $svcItem['amount'],
-                    ]);
+                    $this->repository->createInvoiceItem($invoice, $this->mapper->toServiceItemAttributes($svcItem));
                 }
             } catch (QueryException $e) {
                 $this->handleQueryException($e, $booking->id);
@@ -163,7 +129,7 @@ class InvoiceService
                 ]);
             });
 
-            return $invoice->load('items');
+            return $this->repository->loadInvoiceItems($invoice);
         });
     }
 
@@ -177,7 +143,7 @@ class InvoiceService
             $randomPart = strtoupper(bin2hex(random_bytes(4)));
             $code = 'INV-' . date('Ymd') . '-' . $randomPart;
 
-            if (!Invoice::where('invoice_code', $code)->exists()) {
+            if (!$this->repository->invoiceCodeExists($code)) {
                 return $code;
             }
         }
@@ -228,10 +194,6 @@ class InvoiceService
      */
     protected function logInfo(string $message, array $context = []): void
     {
-        if ($this->logger !== null) {
-            $this->logger->info($message, $context);
-        } elseif (class_exists(Log::class) && Facade::getFacadeApplication() !== null) {
-            Log::info($message, $context);
-        }
+        $this->logger->info($message, $context);
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Services\Auth;
 
+use App\DTOs\Auth\Requests\LoginRequest;
 use App\Enums\UserRole;
 use App\Enums\UserStatus;
 use App\Models\User;
@@ -12,17 +13,17 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use SensitiveParameter;
 
 class AuthService
 {
     private const MAX_FAILURES = 5;
     private const DECAY_SECONDS = 60;
 
-    /** @param array{email: string, password: string, expected_role?: string} $credentials */
-    public function login(array $credentials, string $ip, Session $session): User
+    public function login(#[SensitiveParameter] LoginRequest $request, string $ip, Session $session): User
     {
         // Hash the identifier so the cache key does not contain an email or IP.
-        $key = 'auth:login:'.hash('sha256', Str::lower(trim($credentials['email'])).'|'.$ip);
+        $key = 'auth:login:'.hash('sha256', Str::lower(trim($request->email)).'|'.$ip);
 
         if (RateLimiter::tooManyAttempts($key, self::MAX_FAILURES)) {
             $retryAfter = max(1, RateLimiter::availableIn($key));
@@ -33,8 +34,8 @@ class AuthService
         }
 
         // Login context can restrict access; it never grants or changes a user's role.
-        $expectedRole = isset($credentials['expected_role']) ? UserRole::from($credentials['expected_role']) : null;
-        unset($credentials['expected_role']);
+        $expectedRole = $request->expectedRole;
+        $credentials = ['email' => $request->email, 'password' => $request->password];
         $rejectedStatus = null;
         $roleMismatch = false;
         $guard = Auth::guard('web');

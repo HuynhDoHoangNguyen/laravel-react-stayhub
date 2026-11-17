@@ -2,6 +2,10 @@
 
 namespace Tests\Feature\Catalog;
 
+use App\DTOs\Catalog\Responses\PublicPropertyDetailResponse;
+use App\DTOs\Catalog\Responses\PublicPropertyListItemResponse;
+use App\DTOs\Catalog\Responses\PublicRoomResponse;
+use App\Mappers\Catalog\CatalogMapper;
 use App\Models\User;
 use App\Models\Property;
 use App\Models\PropertyImage;
@@ -11,6 +15,7 @@ use App\Models\RoomImage;
 use App\Models\Amenity;
 use App\Models\Review;
 use App\Models\Booking;
+use App\Repositories\Catalog\CatalogRepository;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\TestCase;
 use Illuminate\Support\Facades\Auth;
@@ -18,6 +23,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
+use Symfony\Component\ObjectMapper\ObjectMapper;
+use Symfony\Component\ObjectMapper\ObjectMapperInterface;
 
 class PublicPropertyTest extends TestCase
 {
@@ -53,6 +60,98 @@ class PublicPropertyTest extends TestCase
             ->assertJsonPath('meta.last_page', 2)->assertJsonPath('data.0.id', $first->id);
         $this->getJson('/api/public/properties?page=2&per_page=1')->assertOk()->assertJsonPath('data.0.id', $last->id);
         $this->getJson('/api/public/properties?page=3&per_page=1')->assertOk()->assertJsonCount(0, 'data');
+    }
+
+    public function test_list_keeps_the_exact_item_and_paginator_contract(): void
+    {
+        $this->property();
+        $property = $this->property();
+        $this->property();
+        $this->room($property, '0.00');
+        PropertyImage::create([
+            'property_id' => $property->id,
+            'image_path' => 'https://example.com/primary.jpg',
+            'is_primary' => true,
+        ]);
+
+        $response = $this->getJson('/api/public/properties?page=2&per_page=1')->assertOk();
+        $this->assertEqualsCanonicalizing(['data', 'links', 'meta'], array_keys($response->json()));
+        $this->assertEqualsCanonicalizing(
+            ['current_page', 'from', 'last_page', 'links', 'path', 'per_page', 'to', 'total'],
+            array_keys($response->json('meta')),
+        );
+        $response->assertJsonPath('data', [[
+            'id' => $property->id,
+            'name' => 'Catalog fixture',
+            'type' => 'HOTEL',
+            'address' => 'Public property address',
+            'description' => '<script>fixture</script>',
+            'check_in_time' => '14:00:00',
+            'check_out_time' => '12:00:00',
+            'primary_image' => 'https://example.com/primary.jpg',
+            'starting_price' => '0.00',
+            'currency' => 'VND',
+            'price_unit' => 'night',
+            'rating' => null,
+            'review_count' => 0,
+        ]])->assertJsonPath('meta.current_page', 2)
+            ->assertJsonPath('meta.total', 3)
+            ->assertJsonPath('meta.links.2.active', true);
+
+        $path = url('/api/public/properties');
+        $response->assertJsonPath('links', [
+            'first' => $path.'?per_page=1&page=1',
+            'last' => $path.'?per_page=1&page=3',
+            'prev' => $path.'?per_page=1&page=1',
+            'next' => $path.'?per_page=1&page=3',
+        ])->assertJsonPath('meta.links.2.url', $path.'?per_page=1&page=2');
+    }
+
+    public function test_list_keeps_json_field_messages_and_the_html_redirect(): void
+    {
+        $path = '/api/public/properties?page=0&city=Hue';
+        $errors = [
+            'page' => ['Trang phải là số nguyên từ 1 đến 2147483647.'],
+            'city' => ['Danh sách cơ sở chỉ hỗ trợ page và per_page; chưa lọc phòng trống theo ngày.'],
+        ];
+
+        $this->getJson($path)->assertUnprocessable()->assertJsonPath('errors', $errors);
+        $this->from('/properties')->get($path, ['Accept' => 'text/html', 'Origin' => 'http://localhost:5173'])
+            ->assertRedirect('/properties')
+            ->assertSessionHasErrors(['page' => $errors['page'][0], 'city' => $errors['city'][0]])
+            ->assertSessionHasInput('page', '0')
+            ->assertSessionHasInput('city', 'Hue');
+    }
+
+    public function test_container_maps_a_loaded_public_property_through_symfony_without_queries(): void
+    {
+        $this->property();
+        $property = $this->app->make(CatalogRepository::class)->paginatePublicProperties(12, 1)->items()[0];
+        $symfony = $this->app->make(ObjectMapperInterface::class);
+        $this->assertInstanceOf(ObjectMapper::class, $symfony);
+        $mapper = $this->createMock(ObjectMapperInterface::class);
+        $mapper->expects($this->once())->method('map')->willReturnCallback(
+            function (object $source, string $target) use ($symfony): object {
+                $this->assertSame(PublicPropertyListItemResponse::class, $target);
+                $this->assertFalse(property_exists($source, 'host_id'));
+                $this->assertFalse(property_exists($source, 'phone'));
+
+                return $symfony->map($source, $target);
+            },
+        );
+        $this->app->instance(ObjectMapperInterface::class, $mapper);
+
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        try {
+            $item = $this->app->make(CatalogMapper::class)->toPublicListItem($property);
+            $this->assertSame($property->id, $item->id);
+            $this->assertNull($item->primary_image);
+            $this->assertNull($item->starting_price);
+            $this->assertSame([], DB::getQueryLog());
+        } finally {
+            DB::disableQueryLog();
+        }
     }
 
     public static function invalidQueries(): array
@@ -207,6 +306,111 @@ class PublicPropertyTest extends TestCase
     {
         $property = $this->property();
         $this->getJson('/api/public/properties/'.$property->id.'?startDate=2026-12-01')->assertUnprocessable()->assertJsonValidationErrors('startDate');
+    }
+
+    public function test_detail_preserves_the_exact_nested_response_contract(): void
+    {
+        $property = $this->property();
+        $room = $this->room($property);
+        $first = Amenity::create(['name' => 'Wifi', 'status' => true]);
+        $second = Amenity::create(['name' => 'Bếp', 'status' => true]);
+        $room->amenities()->attach([$second->id, $first->id]);
+        $anotherRoom = $this->room($property, '900000.00');
+        $anotherRoom->amenities()->attach($first->id);
+        PropertyImage::create([
+            'property_id' => $property->id, 'image_path' => 'https://example.com/property.jpg', 'is_primary' => true,
+        ]);
+        RoomImage::create(['room_id' => $room->id, 'image_path' => 'https://example.com/room.jpg']);
+
+        $amenities = [['id' => $first->id, 'name' => 'Wifi'], ['id' => $second->id, 'name' => 'Bếp']];
+        $this->getJson('/api/public/properties/'.$property->id)->assertOk()->assertExactJson(['data' => [
+            'id' => $property->id,
+            'name' => 'Catalog fixture',
+            'type' => 'HOTEL',
+            'address' => 'Public property address',
+            'description' => '<script>fixture</script>',
+            'check_in_time' => '14:00:00',
+            'check_out_time' => '12:00:00',
+            'primary_image' => 'https://example.com/property.jpg',
+            'starting_price' => '500000.25',
+            'currency' => 'VND',
+            'price_unit' => 'night',
+            'rating' => null,
+            'review_count' => 0,
+            'images' => ['https://example.com/property.jpg'],
+            'rooms' => [
+                [
+                    'id' => $room->id, 'room_number' => '101', 'name' => 'Public room',
+                    'description' => null, 'capacity' => 2, 'price_per_night' => '500000.25',
+                    'room_type' => ['id' => $room->room_type_id, 'name' => 'Public room type'],
+                    'images' => ['https://example.com/room.jpg'], 'amenities' => $amenities,
+                ],
+                [
+                    'id' => $anotherRoom->id, 'room_number' => '101', 'name' => 'Public room',
+                    'description' => null, 'capacity' => 2, 'price_per_night' => '900000.00',
+                    'room_type' => ['id' => $anotherRoom->room_type_id, 'name' => 'Public room type'],
+                    'images' => [], 'amenities' => [$amenities[0]],
+                ],
+            ],
+            'amenities' => $amenities,
+        ]]);
+    }
+
+    public function test_detail_keeps_route_then_query_then_property_id_precedence(): void
+    {
+        $path = '/api/public/properties/';
+        $message = 'Chi tiết cơ sở không nhận bộ lọc phòng trống hoặc tham số truy vấn.';
+        $this->getJson($path.'abc?city=Hue')->assertNotFound();
+        foreach (['0', '01', str_repeat('9', 40), '999999'] as $id) {
+            $this->getJson($path.$id.'?city=Hue')->assertUnprocessable()
+                ->assertJsonPath('errors', ['city' => [$message]]);
+            $this->getJson($path.$id)->assertNotFound()
+                ->assertExactJson(['message' => 'Không tìm thấy cơ sở lưu trú.']);
+        }
+        $this->from('/properties')->get($path.'01?city=Hue', ['Accept' => 'text/html', 'Origin' => 'http://localhost:5173'])
+            ->assertRedirect('/properties')
+            ->assertSessionHasErrors(['city' => $message])
+            ->assertSessionHasInput('city', 'Hue');
+    }
+
+    public function test_container_maps_and_serializes_detail_and_rooms_through_symfony_without_queries(): void
+    {
+        $property = $this->property();
+        $room = $this->room($property);
+        $amenity = Amenity::create(['name' => 'Wifi', 'status' => true]);
+        $room->amenities()->attach($amenity->id);
+        $loaded = $this->app->make(CatalogRepository::class)->findPublicProperty($property->id);
+        $symfony = $this->app->make(ObjectMapperInterface::class);
+        $this->assertInstanceOf(ObjectMapper::class, $symfony);
+        $targets = [];
+        $mapper = $this->createMock(ObjectMapperInterface::class);
+        $mapper->expects($this->exactly(3))->method('map')->willReturnCallback(
+            function (object $source, string $target) use ($symfony, &$targets): object {
+                $targets[] = $target;
+                $this->assertFalse(property_exists($source, 'host_id'));
+                $this->assertFalse(property_exists($source, 'phone'));
+
+                return $symfony->map($source, $target);
+            },
+        );
+        $this->app->instance(ObjectMapperInterface::class, $mapper);
+
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        try {
+            $detail = $this->app->make(CatalogMapper::class)->toPublicDetail($loaded);
+            $json = json_decode(json_encode($detail, JSON_THROW_ON_ERROR), true, 512, JSON_THROW_ON_ERROR);
+            $this->assertSame([
+                PublicRoomResponse::class, PublicPropertyListItemResponse::class, PublicPropertyDetailResponse::class,
+            ], $targets);
+            $this->assertInstanceOf(PublicRoomResponse::class, $detail->rooms[0]);
+            $this->assertSame($property->id, $json['id']);
+            $this->assertSame('500000.25', $json['rooms'][0]['price_per_night']);
+            $this->assertSame([['id' => $amenity->id, 'name' => 'Wifi']], $json['amenities']);
+            $this->assertSame([], DB::getQueryLog());
+        } finally {
+            DB::disableQueryLog();
+        }
     }
 
     public function test_image_loading_is_batched_for_a_full_page_instead_of_one_query_per_property(): void

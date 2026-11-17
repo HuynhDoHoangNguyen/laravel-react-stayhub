@@ -17,7 +17,7 @@ use App\Models\Room;
 use App\Models\RoomType;
 use App\Models\Service;
 use App\Models\User;
-use App\Services\Invoice\DuplicateInvoiceException;
+use App\Exceptions\Invoice\DuplicateInvoiceException;
 use App\Services\Invoice\InvoiceService;
 use Carbon\Carbon;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -289,7 +289,7 @@ class InvoiceCreationTest extends TestCase
     public function test_database_unique_constraint_on_invoice_code_throws_runtime_exception(): void
     {
         // Mock method generateUniqueInvoiceCode để cố tình trả về mã đã tồn tại
-        $mockService = new class($this->invoiceService->getValidator(), $this->invoiceService->getCalculationService()) extends InvoiceService {
+        $mockService = new class(app(\App\Repositories\Invoice\InvoiceRepository::class), $this->invoiceService->getValidator(), $this->invoiceService->getCalculationService(), app(\App\Mappers\Invoice\InvoiceMapper::class), app(\Psr\Log\LoggerInterface::class)) extends InvoiceService {
             public function generateUniqueInvoiceCode(): string
             {
                 return 'INV-DUPLICATE-CODE-001';
@@ -428,5 +428,229 @@ class InvoiceCreationTest extends TestCase
         $this->assertSame($bookingBefore, $bookingAfter, 'Dữ liệu Booking không được phép bị sửa đổi khi tạo hóa đơn.');
         $this->assertSame($roomBefore, $roomAfter, 'Dữ liệu Room không được phép bị sửa đổi khi tạo hóa đơn.');
         $this->assertSame($servicesBefore, $servicesAfter, 'Dữ liệu BookingServices không được phép bị sửa đổi khi tạo hóa đơn.');
+    }
+
+    public function test_canonical_duplicate_exception_is_autoloadable_domain_exception(): void
+    {
+        $this->assertTrue(class_exists(DuplicateInvoiceException::class));
+        $this->assertSame(\DomainException::class, get_parent_class(DuplicateInvoiceException::class));
+        $this->assertSame('App\Exceptions\Invoice\DuplicateInvoiceException', DuplicateInvoiceException::class);
+    }
+
+    public function test_real_booking_unique_failure_is_translated_and_entire_transaction_rolls_back(): void
+    {
+        $dispatcher = Invoice::getEventDispatcher();
+        Invoice::setEventDispatcher(clone $dispatcher);
+        try {
+            // Controlled competing write inside this test's transaction, not a concurrency proof.
+            Invoice::creating(function (Invoice $invoice) {
+                $attributes = $invoice->getAttributes();
+                $attributes['invoice_code'] = 'INV-CONTROLLED-COMPETITOR';
+                DB::table('invoices')->insert($attributes);
+            });
+            try {
+                $this->invoiceService->createInvoice($this->booking->id, $this->host);
+                $this->fail('Expected booking unique failure.');
+            } catch (DuplicateInvoiceException $error) {
+                $this->assertSame("Đơn đặt phòng #{$this->booking->id} đã có hóa đơn trong hệ thống (vi phạm ràng buộc duy nhất).", $error->getMessage());
+                $this->assertInstanceOf(\Illuminate\Database\QueryException::class, $error->getPrevious());
+            }
+        } finally {
+            Invoice::setEventDispatcher($dispatcher);
+        }
+        $this->assertDatabaseCount('invoices', 0);
+        $this->assertDatabaseCount('invoice_items', 0);
+    }
+
+    public function test_non_unique_database_failure_is_rethrown_and_creation_rolls_back(): void
+    {
+        $dispatcher = InvoiceItem::getEventDispatcher();
+        InvoiceItem::setEventDispatcher(clone $dispatcher);
+        try {
+            InvoiceItem::creating(function (InvoiceItem $item) {
+                $item->item_name = null;
+            });
+            try {
+                $this->invoiceService->createInvoice($this->booking->id, $this->host);
+                $this->fail('Expected NOT NULL failure.');
+            } catch (\Illuminate\Database\QueryException $error) {
+                $this->assertStringContainsString('NOT NULL', $error->errorInfo[2]);
+            }
+        } finally {
+            InvoiceItem::setEventDispatcher($dispatcher);
+        }
+        $this->assertDatabaseCount('invoices', 0);
+        $this->assertDatabaseCount('invoice_items', 0);
+    }
+
+
+    public function test_typed_create_entry_point_preserves_persisted_result_and_loaded_items(): void
+    {
+        $invoice = $this->invoiceService->createInvoiceFromRequest(
+            new \App\DTOs\Invoice\Requests\CreateInvoiceRequest($this->booking->id), $this->host,
+        );
+        $this->assertInstanceOf(Invoice::class, $invoice);
+        $this->assertTrue($invoice->relationLoaded('items'));
+        $this->assertCount(3, $invoice->items);
+        $this->assertSame('4150000.00', $invoice->total_amount);
+        $this->assertSame('UNPAID', $invoice->payment_status);
+        $this->assertNull($invoice->paid_at);
+        $this->assertDatabaseCount('invoices', 1);
+    }
+
+    public function test_loaded_creation_validation_and_mapping_execute_no_queries(): void
+    {
+        $booking = app(\App\Repositories\Invoice\InvoiceRepository::class)->findBookingForInvoiceWithLock($this->booking->id);
+        $validator = $this->invoiceService->getValidator();
+        $mapper = app(\App\Mappers\Invoice\InvoiceMapper::class);
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        try {
+            $validator->validateCreationEligibility($booking, $this->host);
+            $validator->validateInvoiceNotExists($booking->id, false);
+            $validator->validateCreationSnapshots($booking);
+            $services = $mapper->toServiceSnapshots($booking);
+            $calculation = $this->invoiceService->getCalculationService()->calculate(3, '1200000.00', $services, '0.00', '0.00');
+            $mapper->toInvoiceAttributes($booking, 'INV-TEST', $calculation, '0.00', '0.00', 'UNPAID', null);
+            $mapper->toRoomItemAttributes($booking, $calculation);
+            foreach ($calculation['service_items'] as $service) {
+                $mapper->toServiceItemAttributes($service);
+            }
+            $this->assertSame([], DB::getQueryLog());
+        } finally {
+            DB::disableQueryLog();
+            DB::flushQueryLog();
+        }
+    }
+
+    public function test_role_status_and_duplicate_error_precedence_is_preserved(): void
+    {
+        $this->invoiceService->createInvoice($this->booking->id, $this->host);
+        foreach ([$this->admin, $this->otherHost] as $actor) {
+            DB::enableQueryLog();
+            DB::flushQueryLog();
+            try {
+                $this->invoiceService->createInvoice($this->booking->id, $actor);
+                $this->fail('Expected authorization failure before duplicate lookup.');
+            } catch (AuthorizationException $error) {
+                $this->assertNotEmpty($error->getMessage());
+                $duplicateQueries = array_filter(DB::getQueryLog(), fn ($entry) => str_contains(strtolower($entry['query']), 'exists') && str_contains($entry['query'], 'invoices'));
+                $this->assertSame([], array_values($duplicateQueries));
+            } finally {
+                DB::disableQueryLog();
+                DB::flushQueryLog();
+            }
+        }
+        $this->booking->update(['status' => BookingStatus::CHECKED_IN]);
+        try {
+            $this->invoiceService->createInvoice($this->booking->id, $this->host);
+            $this->fail('Expected status failure before duplicate failure.');
+        } catch (InvalidArgumentException $error) {
+            $this->assertSame("Chỉ có thể tạo hóa đơn cho đơn đặt phòng đã hoàn tất (COMPLETED). Trạng thái hiện tại: 'CHECKED_IN'.", $error->getMessage());
+        }
+        $this->booking->update(['status' => BookingStatus::COMPLETED]);
+        $this->customer->update(['phone' => '']);
+        try {
+            $this->invoiceService->createInvoice($this->booking->id, $this->host);
+            $this->fail('Expected duplicate failure before snapshot failure.');
+        } catch (DuplicateInvoiceException $error) {
+            $this->assertSame("Đơn đặt phòng #{$this->booking->id} đã có hóa đơn. Không thể tạo hóa đơn thứ hai.", $error->getMessage());
+        }
+    }
+
+    public function test_legacy_nonpositive_id_retains_missing_booking_exception(): void
+    {
+        $this->expectException(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+        $this->expectExceptionMessage('Không tìm thấy đơn đặt phòng với ID: 0');
+        $this->invoiceService->createInvoice(0, $this->host);
+    }
+
+    public function test_invalid_generated_invoice_code_is_rejected_before_header_insert(): void
+    {
+        $service = new class(
+            app(\App\Repositories\Invoice\InvoiceRepository::class),
+            app(\App\Validators\Invoice\InvoiceValidator::class),
+            app(\App\Services\Invoice\InvoiceCalculationService::class),
+            app(\App\Mappers\Invoice\InvoiceMapper::class), app(\Psr\Log\LoggerInterface::class),
+        ) extends InvoiceService {
+            public function generateUniqueInvoiceCode(): string { return '   '; }
+        };
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        try {
+            try {
+                $service->createInvoice($this->booking->id, $this->host);
+                $this->fail('Expected Model attributes to reject the generated code.');
+            } catch (InvalidArgumentException $error) {
+                $this->assertSame('Dữ liệu hóa đơn không hợp lệ.', $error->getMessage());
+            }
+            $inserts = array_filter(DB::getQueryLog(), fn ($entry) => str_starts_with(strtolower($entry['query']), 'insert into'));
+            $this->assertSame([], array_values($inserts));
+        } finally {
+            DB::disableQueryLog();
+            DB::flushQueryLog();
+        }
+        $this->assertDatabaseCount('invoices', 0);
+        $this->assertDatabaseCount('invoice_items', 0);
+        app()->instance(InvoiceService::class, $service);
+        $this->actingAs($this->host)->postJson("/api/host/bookings/{$this->booking->id}/invoice")
+            ->assertStatus(422)->assertExactJson(['message' => 'Dữ liệu hóa đơn không hợp lệ.']);
+        $this->assertDatabaseCount('invoices', 0);
+        $this->assertDatabaseCount('invoice_items', 0);
+    }
+
+    public function test_invalid_room_candidate_uses_real_constraints_and_rolls_back_inserted_header(): void
+    {
+        // Test-only candidate corruption immediately before the real attributes engine runs.
+        $validator = new class(app(\App\Validators\AttributeValidator::class), app(\App\Services\Invoice\InvoiceCalculationService::class)) extends \App\Validators\Invoice\InvoiceValidator {
+            public function validateRoomItemModel(InvoiceItem $item): void
+            {
+                $item->item_name = '   ';
+                parent::validateRoomItemModel($item);
+            }
+        };
+        $service = app()->make(InvoiceService::class, ['validator' => $validator]);
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        try {
+            try {
+                $service->createInvoice($this->booking->id, $this->host);
+                $this->fail('Expected real ROOM Model constraint failure.');
+            } catch (InvalidArgumentException $error) {
+                $this->assertSame('Dữ liệu dòng hóa đơn không hợp lệ.', $error->getMessage());
+            }
+            $insertQueries = array_values(array_filter(array_column(DB::getQueryLog(), 'query'), fn ($sql) => str_starts_with(strtolower($sql), 'insert into')));
+            $this->assertCount(1, $insertQueries, 'Header inserted, but ROOM must be rejected before its insert.');
+            $this->assertStringContainsString('invoices', $insertQueries[0]);
+        } finally {
+            DB::disableQueryLog();
+            DB::flushQueryLog();
+        }
+        $this->assertDatabaseCount('invoices', 0);
+        $this->assertDatabaseCount('invoice_items', 0);
+        app()->instance(InvoiceService::class, $service);
+        $this->actingAs($this->host)->postJson("/api/host/bookings/{$this->booking->id}/invoice")
+            ->assertStatus(422)->assertExactJson(['message' => 'Dữ liệu dòng hóa đơn không hợp lệ.']);
+        $this->assertDatabaseCount('invoices', 0);
+        $this->assertDatabaseCount('invoice_items', 0);
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('legacyServiceNames')]
+    public function test_service_names_keep_the_existing_snapshot_behavior(string $name): void
+    {
+        BookingService::where('booking_id', $this->booking->id)->where('service_id', $this->breakfastService->id)->update(['service_name' => $name]);
+        $response = $this->actingAs($this->host)->postJson("/api/host/bookings/{$this->booking->id}/invoice");
+        $response->assertStatus(201)->assertJsonPath('data.total_amount', '4150000.00');
+        $invoice = Invoice::with('items')->where('booking_id', $this->booking->id)->firstOrFail();
+        $this->assertSame($name, collect($response->json('data.items'))->firstWhere('item_type', 'SERVICE')['item_name']);
+        $this->assertSame($name, $invoice->items->where('item_type', 'SERVICE')->first()->item_name);
+        $this->assertSame('4150000.00', $invoice->total_amount);
+        $this->assertSame('UNPAID', $invoice->payment_status);
+        $this->assertCount(3, $invoice->items);
+    }
+
+    public static function legacyServiceNames(): array
+    {
+        return ['empty' => [''], 'whitespace' => ['   '], 'literal zero' => ['0']];
     }
 }

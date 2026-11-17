@@ -2,44 +2,32 @@
 
 namespace App\Services\Catalog;
 
-use App\Enums\PropertyStatus;
-use App\Enums\RoomStatus;
-use App\Models\Property;
-use Illuminate\Database\Eloquent\Builder;
+use App\DTOs\Catalog\Requests\PublicPropertyDetailQuery;
+use App\DTOs\Catalog\Requests\PublicPropertyListQuery;
+use App\DTOs\Catalog\Responses\PublicPropertyDetailResponse;
+use App\Mappers\Catalog\CatalogMapper;
+use App\Repositories\Catalog\CatalogRepository;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class PublicPropertyQuery
 {
-    private static function publicRooms(Builder $query): void
+    public function __construct(
+        private readonly CatalogRepository $repository,
+        private readonly CatalogMapper $mapper,
+    ) {}
+
+    public function listing(PublicPropertyListQuery $filters): LengthAwarePaginator
     {
-        $query->where('rooms.status', RoomStatus::ACTIVE->value)
-            ->whereHas('roomType', fn (Builder $type) => $type->whereColumn('room_types.property_id', 'rooms.property_id'));
+        $page = $this->repository->paginatePublicProperties($filters->perPage, $filters->page);
+        $page->setCollection($page->getCollection()->map($this->mapper->toPublicListItem(...)));
+
+        return $page->withQueryString();
     }
 
-    private function base(): Builder
+    public function detail(PublicPropertyDetailQuery $input): ?PublicPropertyDetailResponse
     {
-        return Property::query()->where('status', PropertyStatus::ACTIVE->value)
-            ->with(['images' => fn ($images) => $images->select(['id', 'property_id', 'image_path', 'is_primary'])
-                ->orderByDesc('is_primary')->orderBy('id')])
-            ->withMin(['rooms as starting_price' => self::publicRooms(...)], 'price_per_night')
-            // TV3 public review semantics currently have no moderation/status filter.
-            ->withCount(['reviews as review_count'])->withAvg('reviews as rating', 'rating');
-    }
+        $property = $this->repository->findPublicProperty($input->propertyId);
 
-    public function listing(int $perPage = 12, int $page = 1): LengthAwarePaginator
-    {
-        return $this->base()->orderBy('properties.id')->paginate($perPage, ['properties.*'], 'page', $page)->withQueryString();
-    }
-
-    public function detail(int $id): ?Property
-    {
-        return $this->base()->with(['rooms' => function ($rooms): void {
-            self::publicRooms($rooms->getQuery());
-            $rooms->orderBy('rooms.id')->with([
-                'roomType:id,property_id,name,description',
-                'images' => fn ($images) => $images->orderByDesc('is_primary')->orderBy('id'),
-                'amenities' => fn ($amenities) => $amenities->where('amenities.status', true)->orderBy('amenities.id'),
-            ]);
-        }])->find($id);
+        return $property === null ? null : $this->mapper->toPublicDetail($property);
     }
 }

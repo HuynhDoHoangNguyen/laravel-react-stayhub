@@ -2,15 +2,22 @@
 
 namespace Tests\Feature\Auth;
 
+use App\DTOs\Auth\Requests\LoginRequest;
+use App\DTOs\Auth\Responses\AuthUserResponse;
 use App\Enums\UserRole;
 use App\Enums\UserStatus;
 use App\Models\User;
+use App\Mappers\Auth\AuthUserMapper;
+use App\Services\Auth\AuthService;
+use Illuminate\Contracts\Session\Session;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\TestCase;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
+use Symfony\Component\ObjectMapper\ObjectMapperInterface;
 
 class AuthenticationTest extends TestCase
 {
@@ -112,13 +119,53 @@ class AuthenticationTest extends TestCase
 
     public function test_login_response_only_serializes_the_allowed_user_fields(): void
     {
-        $response = $this->login($this->user())->assertOk();
-        $keys = array_keys($response->json('user'));
-        sort($keys);
-        $expected = ['id', 'name', 'email', 'phone', 'address', 'avatar', 'role', 'status',
-            'email_verified_at', 'created_at', 'updated_at', 'gender', 'date_of_birth'];
-        sort($expected);
-        $this->assertSame($expected, $keys);
+        $this->freezeSecond();
+        $user = $this->user();
+        $timestamp = now()->toISOString();
+        $expected = [
+            'id' => $user->id, 'name' => 'UC2 Fixture', 'email' => $user->email,
+            'phone' => null, 'address' => null, 'avatar' => null, 'gender' => null,
+            'date_of_birth' => null, 'role' => 'CUSTOMER', 'status' => 'ACTIVE',
+            'email_verified_at' => null, 'created_at' => $timestamp, 'updated_at' => $timestamp,
+        ];
+        $this->login($user)->assertOk()
+            ->assertExactJson(['message' => 'Đăng nhập thành công.', 'user' => $expected]);
+        $this->browser('GET', '/api/me')->assertOk()->assertExactJson(['user' => $expected]);
+    }
+
+    public function test_container_maps_allowlisted_user_fields_through_symfony_without_queries(): void
+    {
+        $user = $this->user()->forceFill(['remember_token' => 'fixture-remember-token']);
+        $before = $user->getAttributes();
+        $engine = app(ObjectMapperInterface::class);
+        $spy = $this->createMock(ObjectMapperInterface::class);
+        $spy->expects($this->once())->method('map')->willReturnCallback(function (object $source, $target) use ($engine) {
+            $this->assertInstanceOf(\stdClass::class, $source);
+            $this->assertSame(AuthUserResponse::class, $target);
+            $fields = get_object_vars($source);
+            $this->assertCount(13, $fields);
+            $this->assertArrayNotHasKey('password', $fields);
+            $this->assertArrayNotHasKey('remember_token', $fields);
+            $this->assertSame(UserRole::CUSTOMER, $fields['role']);
+
+            return $engine->map($source, $target);
+        });
+        $this->app->instance(ObjectMapperInterface::class, $spy);
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        try {
+            $dto = app(AuthUserMapper::class)->toResponse($user);
+            $data = json_decode(json_encode($dto, JSON_THROW_ON_ERROR), true, flags: JSON_THROW_ON_ERROR);
+            $this->assertTrue((new \ReflectionClass($dto))->isReadOnly());
+            $this->assertSame('CUSTOMER', $data['role']);
+            $this->assertNull($data['email_verified_at']);
+            $this->assertSame([], DB::getQueryLog());
+            $this->assertSame($before, $user->getAttributes());
+            $this->assertSame([], $user->getRelations());
+        } finally {
+            DB::disableQueryLog();
+            DB::flushQueryLog();
+        }
     }
 
     public function test_invalid_credentials_do_not_reveal_whether_the_email_exists(): void
@@ -156,6 +203,67 @@ class AuthenticationTest extends TestCase
             ->assertJsonPath('user.id', $user->id);
         $this->assertDatabaseHas('users', ['id' => $user->id, 'role' => 'CUSTOMER', 'status' => 'ACTIVE']);
         $this->assertNull($user->fresh()->remember_token);
+    }
+
+    public function test_login_keeps_email_case_password_spaces_and_body_over_query(): void
+    {
+        $user = $this->user(UserRole::HOST);
+        $password = '  spaced fixture password  ';
+        $user->update(['email' => 'MixedCase@example.test', 'password' => $password]);
+
+        $this->browser('POST', '/login?email=query@example.test&password=wrong&expected_role=ADMIN', [
+            'email' => '  MixedCase@example.test  ',
+            'password' => $password,
+            'expected_role' => 'HOST',
+        ])->assertOk()->assertJsonPath('user.email', 'MixedCase@example.test')->assertJsonPath('user.role', 'HOST');
+        $this->browser('GET', '/api/me')->assertOk()->assertJsonPath('user.id', $user->id);
+    }
+
+    public function test_login_validation_preserves_json_errors_and_html_old_input(): void
+    {
+        $this->browser('POST', '/login', ['expected_role' => null])
+            ->assertUnprocessable()->assertExactJson([
+                'message' => 'Vui lòng nhập địa chỉ email. (and 2 more errors)',
+                'errors' => [
+                    'email' => ['Vui lòng nhập địa chỉ email.'],
+                    'password' => ['Vui lòng nhập mật khẩu.'],
+                    'expected_role' => ['Vui lòng chọn khu vực đăng nhập.'],
+                ],
+            ]);
+
+        $this->from('/login')->post('/login', [
+            'email' => '  MixedCase@example.test  ',
+            'password' => 'fixture password',
+            'expected_role' => 'OTHER',
+        ])->assertRedirect('/login')->assertSessionHasErrors(['expected_role' => 'Khu vực đăng nhập không hợp lệ.'])
+            ->assertSessionHasInput('email', 'MixedCase@example.test')
+            ->assertSessionHasInput('expected_role', 'OTHER')
+            ->assertSessionMissing('_old_input.password');
+    }
+
+    public function test_login_passes_validated_dto_request_ip_and_session_to_service(): void
+    {
+        $user = $this->user(UserRole::HOST);
+        $workflow = app(AuthService::class);
+        $service = $this->createPartialMock(AuthService::class, ['login']);
+        $seenRoles = [];
+        $service->expects($this->exactly(2))->method('login')
+            ->willReturnCallback(function (LoginRequest $credentials, string $ip, Session $session) use ($workflow, $user, &$seenRoles): User {
+                $this->assertSame(['email', 'password', 'expectedRole'], array_keys(get_object_vars($credentials)));
+                $this->assertSame($user->email, $credentials->email);
+                $this->assertTrue(hash_equals(self::PASSWORD, $credentials->password));
+                $this->assertSame('127.0.0.1', $ip);
+                $this->assertSame(request()->session(), $session);
+                $seenRoles[] = $credentials->expectedRole;
+
+                return $workflow->login($credentials, $ip, $session);
+            });
+        $this->app->instance(AuthService::class, $service);
+
+        $this->login($user, ['expected_role' => null])->assertUnprocessable();
+        $this->login($user, ['role' => 'ADMIN', 'remember' => true])->assertOk();
+        $this->login($user, ['expected_role' => 'HOST'])->assertOk();
+        $this->assertSame([null, UserRole::HOST], $seenRoles);
     }
 
     public function test_login_regenerates_the_session_id_and_logout_invalidates_it(): void
@@ -296,7 +404,7 @@ class AuthenticationTest extends TestCase
     public function test_role_denial_keeps_the_session_and_public_routes_remain_public(): void
     {
         $this->login($this->user())->assertOk();
-        $this->browser('GET', '/api/host/invoices')->assertForbidden()->assertJsonMissingPath('code');
+        $this->browser('GET', '/api/host/invoices')->assertForbidden()->assertJsonPath('code', 'INVOICE_READ_FORBIDDEN');
         $this->browser('GET', '/api/me')->assertOk();
         $this->browser('GET', '/api/test')->assertOk();
         $this->browser('GET', '/api/public/properties/999999/reviews')->assertNotFound();
@@ -412,6 +520,6 @@ class AuthenticationTest extends TestCase
                 $this->assertNotContains('account.active', $middleware);
             }
         }
-        $this->assertSame(14, $protected);
+        $this->assertSame(32, $protected);
     }
 }
