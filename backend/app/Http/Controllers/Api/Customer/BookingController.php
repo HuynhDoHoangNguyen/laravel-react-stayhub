@@ -53,9 +53,7 @@ class BookingController extends Controller
     public function show(Request $request, Booking $booking): JsonResponse
     {
         Gate::authorize('view', $booking);
-
-        $booking->load(['room.property', 'bookingServices']);
-        $booking->services_total = $booking->bookingServices->sum('amount');
+        $booking = $this->bookingService->detailForCustomer($request->user(), $booking->id);
 
         return $this->successResponse(
             new BookingResource($booking),

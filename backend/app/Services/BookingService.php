@@ -122,21 +122,20 @@ class BookingService
      */
     public function listForCustomer(User $customer, array $filters): LengthAwarePaginator
     {
-        $query = Booking::query()
-            ->forCustomer($customer->id)
-            ->with(['room.property', 'bookingServices'])
-            ->orderBy('created_at', 'desc');
-
-        if (! empty($filters['status'])) {
-            $query->where('status', $filters['status']);
-        }
-
         $perPage = min((int) ($filters['per_page'] ?? 15), 50);
         if ($perPage < 1) {
             $perPage = 15;
         }
 
-        return $query->paginate($perPage);
+        return $this->bookingRepository->listForCustomer($customer->id, $filters, $perPage);
+    }
+
+    public function detailForCustomer(User $customer, int $bookingId): Booking
+    {
+        $booking = $this->bookingRepository->findForCustomer($bookingId, $customer->id);
+        $booking->services_total = $booking->bookingServices->sum('amount');
+
+        return $booking;
     }
 
     /**

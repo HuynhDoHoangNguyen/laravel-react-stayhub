@@ -27,6 +27,7 @@ import {
 } from '@/services/bookingService';
 import { reviewService } from '@/services/reviewService';
 import { ReviewCreateModal } from '@/components/reviews/ReviewCreateModal';
+import { bookingDisplayError } from '@/utils/bookingDisplayError';
 
 function FieldItem({ icon: Icon, label, value }) {
   return (
@@ -125,7 +126,7 @@ export default function CustomerBookingDetailPage() {
       const updatedBooking = await bookingService.cancelBooking(booking.id);
       setBooking((current) => ({ ...current, ...updatedBooking }));
     } catch (error) {
-      setCancelError(error.message || 'Không thể hủy đơn đặt phòng. Vui lòng thử lại.');
+      setCancelError(bookingDisplayError(error, 'Không thể hủy đơn đặt phòng. Vui lòng thử lại.'));
     } finally {
       cancelLock.current = false;
       setIsCancelling(false);
@@ -147,7 +148,10 @@ export default function CustomerBookingDetailPage() {
       } catch (err) {
         if (!ignore) {
           setBooking(null);
-          setErrorMessage(err.message || 'Không tìm thấy thông tin đơn đặt phòng.');
+          setErrorMessage(bookingDisplayError(err, 'Không thể tải chi tiết đơn đặt phòng.', {
+            notFoundMessage: 'Không tìm thấy thông tin đơn đặt phòng này.',
+            useStatusMessages: false,
+          }));
           setIsLoading(false);
         }
       }

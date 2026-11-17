@@ -15,6 +15,7 @@ import { BookingStats } from '@/components/bookings/BookingStats';
 import { BookingCard } from '@/components/bookings/BookingCard';
 import { QuickPicks } from '@/components/bookings/QuickPicks';
 import { bookingService } from '@/services/bookingService';
+import { bookingDisplayError } from '@/utils/bookingDisplayError';
 
 const TABS = [
   { key: 'PENDING', label: 'Chờ xác nhận' },
@@ -81,7 +82,7 @@ export default function CustomerBookingsPage() {
           setStats(null);
           setTotalCount(0);
           setTotalPages(1);
-          setErrorMessage(err.message || 'Không thể tải danh sách đơn đặt phòng.');
+          setErrorMessage(bookingDisplayError(err, 'Không thể tải danh sách đơn đặt phòng.'));
           setIsLoading(false);
         }
       }

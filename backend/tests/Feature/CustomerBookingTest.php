@@ -322,6 +322,170 @@ class CustomerBookingTest extends TestCase
             ->assertJsonPath('data.id', $bookingPending->id);
     }
 
+    public function test_customer_list_is_scoped_ordered_filtered_and_paginated_with_real_meta(): void
+    {
+        $customer = User::factory()->customer()->create();
+        $otherCustomer = User::factory()->customer()->create();
+        $older = Booking::factory()->pending()->create([
+            'customer_id' => $customer->id,
+            'created_at' => Carbon::now()->subDays(3),
+        ]);
+        $middle = Booking::factory()->confirmed()->create([
+            'customer_id' => $customer->id,
+            'created_at' => Carbon::now()->subDays(2),
+        ]);
+        $newer = Booking::factory()->pending()->create([
+            'customer_id' => $customer->id,
+            'created_at' => Carbon::now()->subDay(),
+        ]);
+        Booking::factory()->pending()->create([
+            'customer_id' => $otherCustomer->id,
+            'created_at' => Carbon::now(),
+        ]);
+
+        $pageOne = $this->actingAs($customer)->getJson('/api/customer/bookings?page=1&per_page=2')
+            ->assertOk()
+            ->assertJsonPath('meta.current_page', 1)
+            ->assertJsonPath('meta.last_page', 2)
+            ->assertJsonPath('meta.per_page', 2)
+            ->assertJsonPath('meta.total', 3)
+            ->assertJsonPath('data.0.id', $newer->id)
+            ->assertJsonPath('data.1.id', $middle->id)
+            ->assertJsonMissingPath('links');
+
+        $this->assertCount(2, $pageOne->json('data'));
+        $this->getJson('/api/customer/bookings?page=2&per_page=2')
+            ->assertOk()
+            ->assertJsonPath('meta.current_page', 2)
+            ->assertJsonPath('meta.total', 3)
+            ->assertJsonPath('data.0.id', $older->id);
+
+        $this->getJson('/api/customer/bookings?status=PENDING&page=1&per_page=5')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 2)
+            ->assertJsonPath('data.0.id', $newer->id)
+            ->assertJsonPath('data.1.id', $older->id);
+    }
+
+    public function test_customer_detail_includes_service_snapshots_and_decimal_booking_prices(): void
+    {
+        $customer = User::factory()->customer()->create();
+        $booking = Booking::factory()->pending()->create([
+            'customer_id' => $customer->id,
+            'price_per_night' => '123456.78',
+            'room_total' => '370370.34',
+            'number_of_nights' => 3,
+        ]);
+        $service = Service::factory()->create(['price' => '62500.25']);
+        $bookingService = BookingService::factory()->forService($service, '2.00')->create([
+            'booking_id' => $booking->id,
+            'unit_price' => '62500.25',
+            'amount' => '125000.50',
+        ]);
+
+        $this->actingAs($customer)->getJson("/api/customer/bookings/{$booking->id}")
+            ->assertOk()
+            ->assertJsonPath('data.id', $booking->id)
+            ->assertJsonPath('data.price_per_night', '123456.78')
+            ->assertJsonPath('data.room_total', '370370.34')
+            ->assertJsonPath('data.services_total', '125000.50')
+            ->assertJsonPath('data.booking_services.0.id', $bookingService->id)
+            ->assertJsonPath('data.booking_services.0.service_name', $bookingService->service_name)
+            ->assertJsonPath('data.booking_services.0.quantity', '2.00')
+            ->assertJsonPath('data.booking_services.0.unit_price', '62500.25')
+            ->assertJsonPath('data.booking_services.0.amount', '125000.50');
+    }
+
+    public function test_customer_detail_and_cancel_keep_authentication_and_role_statuses(): void
+    {
+        $customer = User::factory()->customer()->create();
+        $host = User::factory()->host()->create();
+        $booking = Booking::factory()->pending()->create(['customer_id' => $customer->id]);
+
+        $this->getJson("/api/customer/bookings/{$booking->id}")->assertUnauthorized();
+        $this->postJson("/api/customer/bookings/{$booking->id}/cancel")->assertUnauthorized();
+
+        $this->actingAs($host)->getJson("/api/customer/bookings/{$booking->id}")
+            ->assertForbidden()
+            ->assertJson(['message' => 'Bạn không có quyền truy cập.']);
+        $this->actingAs($host)->postJson("/api/customer/bookings/{$booking->id}/cancel")
+            ->assertForbidden()
+            ->assertJson(['message' => 'Bạn không có quyền truy cập.']);
+    }
+
+    public function test_cancel_rejects_every_non_cancellable_status_with_existing_422_shape(): void
+    {
+        $customer = User::factory()->customer()->create();
+        $labels = [
+            BookingStatus::CHECKED_IN->value => 'Đã nhận phòng',
+            BookingStatus::COMPLETED->value => 'Đã hoàn thành',
+            BookingStatus::CANCELLED->value => 'Đã hủy',
+            BookingStatus::REJECTED->value => 'Từ chối',
+        ];
+
+        foreach ($labels as $status => $label) {
+            $booking = Booking::factory()->create([
+                'customer_id' => $customer->id,
+                'status' => $status,
+            ]);
+
+            $this->actingAs($customer)->postJson("/api/customer/bookings/{$booking->id}/cancel")
+                ->assertUnprocessable()
+                ->assertJson([
+                    'success' => false,
+                    'message' => "Không thể chuyển trạng thái đặt phòng từ {$label} sang Đã hủy.",
+                    'errors' => [],
+                ]);
+            $this->assertSame($status, Booking::findOrFail($booking->id)->status->value);
+        }
+    }
+
+    public function test_confirmed_booking_can_be_cancelled_at_exact_one_day_deadline(): void
+    {
+        $customer = User::factory()->customer()->create();
+        $booking = Booking::factory()->confirmed()->create([
+            'customer_id' => $customer->id,
+            'check_in_date' => Carbon::now()->addDay()->format('Y-m-d'),
+        ]);
+
+        $this->actingAs($customer)->postJson("/api/customer/bookings/{$booking->id}/cancel")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'CANCELLED');
+    }
+
+    public function test_cancel_failure_after_update_rolls_back_and_repeat_cancel_keeps_valid_state(): void
+    {
+        $customer = User::factory()->customer()->create();
+        $booking = Booking::factory()->pending()->create(['customer_id' => $customer->id]);
+        $shouldFail = true;
+        DB::listen(static function (QueryExecuted $query) use (&$shouldFail): void {
+            if ($shouldFail && str_starts_with(strtolower(ltrim($query->sql)), 'update')
+                && str_contains(strtolower($query->sql), 'bookings')) {
+                $shouldFail = false;
+                throw new RuntimeException('Forced failure after cancellation update.');
+            }
+        });
+
+        $this->withoutExceptionHandling();
+        try {
+            $this->actingAs($customer)->postJson("/api/customer/bookings/{$booking->id}/cancel");
+            $this->fail('Expected the forced post-update failure.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('Forced failure after cancellation update.', $exception->getMessage());
+        }
+        $this->assertSame(BookingStatus::PENDING, Booking::findOrFail($booking->id)->status);
+        $this->withExceptionHandling();
+
+        $this->postJson("/api/customer/bookings/{$booking->id}/cancel")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'CANCELLED');
+        $this->postJson("/api/customer/bookings/{$booking->id}/cancel")
+            ->assertUnprocessable()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('errors', []);
+        $this->assertSame(BookingStatus::CANCELLED, Booking::findOrFail($booking->id)->status);
+    }
+
     public function test_view_booking_services(): void
     {
         $customer = User::factory()->customer()->create();

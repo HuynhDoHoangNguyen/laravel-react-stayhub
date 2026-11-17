@@ -1,7 +1,11 @@
 import api from '@/api/axios';
 import { MOCK_BOOKINGS } from '@/mocks/bookingMockData';
 import { bookingApi } from '@/api/bookingApi';
-import { mapBookingCommandResponse } from '@/mappers/bookingMapper';
+import {
+  mapBookingCommandResponse,
+  mapCustomerBookingDetailResponse,
+  mapCustomerBookingListResponse,
+} from '@/mappers/bookingMapper';
 
 /**
  * Cấu hình hiển thị chuẩn hóa 6 trạng thái từ Backend BookingStatus:
@@ -154,9 +158,6 @@ function sortBookings(list, sort) {
  * Tách biệt Adapter gọi API để dễ dàng thay đổi endpoint khi TV2 bàn giao.
  */
 const ENDPOINTS = {
-  customerBookings: '/api/customer/bookings',
-  customerBookingDetail: (id) => `/api/customer/bookings/${id}`,
-  customerBookingCancel: (id) => `/api/customer/bookings/${id}/cancel`,
   customerBookingServices: (id) => `/api/customer/bookings/${id}/services`,
 };
 
@@ -239,49 +240,19 @@ export const bookingService = {
     }
 
     // Khi không bật mock (hoặc trên production) -> Gọi API thật
-    try {
-      const statusByTab = {
-        PENDING: 'PENDING',
-        UPCOMING: 'CONFIRMED',
-        CHECKED_IN: 'CHECKED_IN',
-        COMPLETED: 'COMPLETED',
-        CANCELLED: 'CANCELLED',
-        REJECTED: 'REJECTED',
-      };
-      const params = { page, per_page: perPage };
-      if (statusByTab[tab]) params.status = statusByTab[tab];
+    const statusByTab = {
+      PENDING: 'PENDING',
+      UPCOMING: 'CONFIRMED',
+      CHECKED_IN: 'CHECKED_IN',
+      COMPLETED: 'COMPLETED',
+      CANCELLED: 'CANCELLED',
+      REJECTED: 'REJECTED',
+    };
+    const params = { page, per_page: perPage };
+    if (statusByTab[tab]) params.status = statusByTab[tab];
 
-      const response = await api.get(ENDPOINTS.customerBookings, {
-        params,
-      });
-
-      const resData = response.data;
-      const list = resData?.data || (Array.isArray(resData) ? resData : []);
-      const apiMeta = resData?.meta || {};
-      const meta = {
-        ...apiMeta,
-        total: apiMeta.total ?? list.length,
-        page: apiMeta.current_page || apiMeta.page || page,
-        per_page: apiMeta.per_page || perPage,
-        total_pages: apiMeta.last_page || apiMeta.total_pages || Math.ceil(list.length / perPage) || 1,
-      };
-
-      // Chỉ lấy stats tổng hợp khi backend có cung cấp aggregate metadata
-      const aggregateStats = resData?.stats || resData?.meta?.stats || null;
-      const fullList = Array.isArray(resData?.all) ? resData.all : null;
-
-      return {
-        data: list,
-        all: fullList, // Tuyệt đối KHÔNG fallback về list phân trang của 1 trang đơn lẻ
-        stats: aggregateStats,
-        meta,
-        source: 'api',
-        isMock: false,
-      };
-    } catch (err) {
-      // Phân loại mã lỗi rõ ràng, không giả mạo thành công hay ngầm tráo mock
-      throw bookingApiError(err, 'Không thể tải danh sách đơn đặt phòng. Vui lòng thử lại sau.');
-    }
+    const response = await bookingApi.getCustomerBookings(params);
+    return mapCustomerBookingListResponse(response, { page, perPage });
   },
 
   /**
@@ -313,25 +284,8 @@ export const bookingService = {
       };
     }
 
-    // Gọi API thật
-    try {
-      const response = await api.get(ENDPOINTS.customerBookingDetail(numericId));
-      return {
-        data: response.data?.data || response.data,
-        source: 'api',
-        isMock: false,
-      };
-    } catch (err) {
-      const status = err.response?.status;
-      const message =
-        status === 404
-          ? 'Không tìm thấy thông tin đơn đặt phòng này.'
-          : err.response?.data?.message || 'Không thể tải chi tiết đơn đặt phòng.';
-
-      const parsedError = new Error(message);
-      parsedError.status = status;
-      throw parsedError;
-    }
+    const response = await bookingApi.getCustomerBookingDetail(numericId);
+    return mapCustomerBookingDetailResponse(response);
   },
 
   async getBookingServices(bookingId) {
@@ -344,12 +298,7 @@ export const bookingService = {
   },
 
   async cancelBooking(bookingId) {
-    try {
-      const response = await api.post(ENDPOINTS.customerBookingCancel(bookingId));
-      return response.data?.data || response.data;
-    } catch (error) {
-      throw bookingApiError(error, 'Không thể hủy đơn đặt phòng. Vui lòng thử lại.');
-    }
+    return mapBookingCommandResponse(await bookingApi.cancelCustomerBooking(bookingId));
   },
 };
 

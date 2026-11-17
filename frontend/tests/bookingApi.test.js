@@ -30,3 +30,17 @@ test('preview and create adapters preserve endpoint, method, and payload', async
     { method: 'post', url: '/api/customer/bookings', data: payload },
   ]);
 });
+
+test('customer list, detail, and cancel adapters use the existing paths and query shape', async () => {
+  const params = { page: 2, per_page: 5, status: 'CONFIRMED' };
+
+  await bookingApi.getCustomerBookings(params);
+  await bookingApi.getCustomerBookingDetail(17);
+  await bookingApi.cancelCustomerBooking(17);
+
+  assert.deepEqual(requests.slice(-3).map(({ method, url, params: query, data }) => ({ method, url, params: query, data })), [
+    { method: 'get', url: '/api/customer/bookings', params, data: undefined },
+    { method: 'get', url: '/api/customer/bookings/17', params: undefined, data: undefined },
+    { method: 'post', url: '/api/customer/bookings/17/cancel', params: undefined, data: undefined },
+  ]);
+});

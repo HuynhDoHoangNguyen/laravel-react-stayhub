@@ -8,12 +8,15 @@ use App\Exceptions\InvalidBookingTransitionException;
 use App\Exceptions\RoomNotAvailableException;
 use App\Models\Booking;
 use App\Models\User;
+use App\Repositories\Booking\BookingRepository;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\DB;
 
 class BookingWorkflowService
 {
     public function __construct(
-        protected AvailabilityService $availabilityService
+        protected AvailabilityService $availabilityService,
+        protected BookingRepository $bookingRepository
     ) {}
 
     /**
@@ -156,10 +159,9 @@ class BookingWorkflowService
     public function cancel(Booking $booking, User $user, ?BookingService $bookingService = null): Booking
     {
         return DB::transaction(function () use ($booking, $user, $bookingService) {
-            $currentBooking = Booking::query()
-                ->where('id', $booking->id)
-                ->lockForUpdate()
-                ->firstOrFail();
+            $currentBooking = $this->bookingRepository->lockForUpdate($booking->id);
+
+            Gate::authorize('cancel', $currentBooking);
 
             $currentStatus = $currentBooking->status instanceof BookingStatus
                 ? $currentBooking->status
@@ -177,7 +179,7 @@ class BookingWorkflowService
             }
 
             $currentBooking->status = BookingStatus::CANCELLED;
-            $currentBooking->save();
+            $this->bookingRepository->save($currentBooking);
 
             return $currentBooking;
         });
