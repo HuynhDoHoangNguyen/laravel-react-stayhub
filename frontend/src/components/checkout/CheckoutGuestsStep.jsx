@@ -1,4 +1,7 @@
 import { User, Phone, Mail, Users, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 
 export function CheckoutGuestsStep({
   user,
@@ -26,7 +29,7 @@ export function CheckoutGuestsStep({
   return (
     <form onSubmit={handleNext} className="space-y-6">
       {/* 1. Primary Guest / Contact Information Card */}
-      <div className="rounded-3xl border border-border/70 bg-white p-6 sm:p-8 shadow-xs">
+      <Card className="rounded-3xl border-border/70 bg-white p-6 shadow-xs sm:p-8">
         <div className="flex items-center justify-between border-b border-border/60 pb-4">
           <div>
             <span className="text-[10.5px] font-semibold uppercase tracking-[0.2em] text-accent">
@@ -45,55 +48,58 @@ export function CheckoutGuestsStep({
         <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2">
           {/* Full Name */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-ink flex items-center gap-1.5">
+            <label htmlFor="checkout-booker-name" className="text-xs font-semibold text-ink flex items-center gap-1.5">
               <User className="h-3.5 w-3.5 text-muted-foreground" />
               <span>Họ và tên người đặt</span>
             </label>
-            <input
+            <Input
+              id="checkout-booker-name"
               type="text"
               readOnly
               value={user?.name || 'Khách hàng StayHub'}
-              className="w-full rounded-xl border border-border/70 bg-surface/60 px-3.5 py-2.5 text-xs font-medium text-ink/80 cursor-not-allowed focus:outline-none"
+              className="h-11 w-full rounded-xl border-border/70 bg-surface/60 text-xs font-medium text-ink/80 read-only:cursor-not-allowed"
             />
             <p className="text-[11px] text-muted-foreground">Lấy từ hồ sơ tài khoản đã xác thực</p>
           </div>
 
           {/* Email */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-ink flex items-center gap-1.5">
+            <label htmlFor="checkout-booker-email" className="text-xs font-semibold text-ink flex items-center gap-1.5">
               <Mail className="h-3.5 w-3.5 text-muted-foreground" />
               <span>Email nhận xác nhận</span>
             </label>
-            <input
+            <Input
+              id="checkout-booker-email"
               type="email"
               readOnly
               value={user?.email || ''}
-              className="w-full rounded-xl border border-border/70 bg-surface/60 px-3.5 py-2.5 text-xs font-medium text-ink/80 cursor-not-allowed focus:outline-none"
+              className="h-11 w-full rounded-xl border-border/70 bg-surface/60 text-xs font-medium text-ink/80 read-only:cursor-not-allowed"
             />
             <p className="text-[11px] text-muted-foreground">Email đăng nhập trong hồ sơ tài khoản</p>
           </div>
 
           {/* Contact Phone from the account profile */}
           <div className="space-y-1.5 sm:col-span-2">
-            <label className="text-xs font-semibold text-ink flex items-center gap-1.5">
+            <label htmlFor="checkout-booker-phone" className="text-xs font-semibold text-ink flex items-center gap-1.5">
               <Phone className="h-3.5 w-3.5 text-muted-foreground" />
               <span>Số điện thoại trong hồ sơ</span>
             </label>
-            <input
+            <Input
+              id="checkout-booker-phone"
               type="tel"
               readOnly
               value={user?.phone || ''}
               placeholder="Chưa có số điện thoại trong hồ sơ"
-              className="w-full rounded-xl border border-border/70 bg-surface/60 px-3.5 py-2.5 text-xs font-medium text-ink/80 focus:outline-none"
+              className="h-11 w-full rounded-xl border-border/70 bg-surface/60 text-xs font-medium text-ink/80"
             />
             <p className="text-[11px] text-muted-foreground">
               Thông tin này chỉ được đọc từ hồ sơ tài khoản; booking hiện không lưu số điện thoại riêng.
             </p>
           </div>
         </div>
-      </div>
+      </Card>
       {/* 2. Guest Count & Capacity Card */}
-      <div className="rounded-3xl border border-border/70 bg-white p-6 sm:p-8 shadow-xs">
+      <Card className="rounded-3xl border-border/70 bg-white p-6 shadow-xs sm:p-8">
         <div className="border-b border-border/60 pb-4">
           <span className="text-[10.5px] font-semibold uppercase tracking-[0.2em] text-accent">
             ✦ Quy mô lưu trú
@@ -114,23 +120,29 @@ export function CheckoutGuestsStep({
               <div className="text-[11px] text-muted-foreground">Từ 13 tuổi trở lên</div>
             </div>
             <div className="flex items-center gap-2.5">
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="icon"
+                aria-label="Giảm số người lớn"
                 disabled={adults <= 1}
                 onClick={() => onAdultsChange(Math.max(1, adults - 1))}
                 className="grid h-8 w-8 place-items-center rounded-full border border-border/80 bg-white text-xs font-semibold text-ink shadow-xs hover:border-primary/40 disabled:opacity-40"
               >
                 –
-              </button>
+              </Button>
               <span className="w-6 text-center text-xs font-bold text-ink">{adults}</span>
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="icon"
+                aria-label="Tăng số người lớn"
                 disabled={totalGuests >= maxCapacity}
                 onClick={() => onAdultsChange(adults + 1)}
                 className="grid h-8 w-8 place-items-center rounded-full border border-border/80 bg-white text-xs font-semibold text-ink shadow-xs hover:border-primary/40 disabled:opacity-40"
               >
                 +
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -141,23 +153,29 @@ export function CheckoutGuestsStep({
               <div className="text-[11px] text-muted-foreground">Dưới 13 tuổi</div>
             </div>
             <div className="flex items-center gap-2.5">
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="icon"
+                aria-label="Giảm số trẻ em"
                 disabled={children <= 0}
                 onClick={() => onChildrenChange(Math.max(0, children - 1))}
                 className="grid h-8 w-8 place-items-center rounded-full border border-border/80 bg-white text-xs font-semibold text-ink shadow-xs hover:border-primary/40 disabled:opacity-40"
               >
                 –
-              </button>
+              </Button>
               <span className="w-6 text-center text-xs font-bold text-ink">{children}</span>
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="icon"
+                aria-label="Tăng số trẻ em"
                 disabled={totalGuests >= maxCapacity}
                 onClick={() => onChildrenChange(children + 1)}
                 className="grid h-8 w-8 place-items-center rounded-full border border-border/80 bg-white text-xs font-semibold text-ink shadow-xs hover:border-primary/40 disabled:opacity-40"
               >
                 +
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -176,10 +194,10 @@ export function CheckoutGuestsStep({
           <Users className="h-3.5 w-3.5 text-primary/70 shrink-0" />
           <span>Tổng quy mô đoàn: <strong className="text-ink">{totalGuests} khách</strong> (1 phòng nghỉ)</span>
         </div>
-      </div>
+      </Card>
 
       {/* 3. Special Requests Card */}
-      <div className="rounded-3xl border border-border/70 bg-white p-6 sm:p-8 shadow-xs">
+      <Card className="rounded-3xl border-border/70 bg-white p-6 shadow-xs sm:p-8">
         <div className="border-b border-border/60 pb-4">
           <span className="text-[10.5px] font-semibold uppercase tracking-[0.2em] text-accent">
             ✦ Yêu cầu đặc biệt
@@ -193,7 +211,9 @@ export function CheckoutGuestsStep({
         </div>
 
         <div className="mt-5">
+          <label htmlFor="checkout-special-note" className="sr-only">Ghi chú cho cơ sở lưu trú</label>
           <textarea
+            id="checkout-special-note"
             rows={3}
             maxLength={300}
             value={note || ''}
@@ -206,18 +226,18 @@ export function CheckoutGuestsStep({
             <span>{(note || '').length}/300 ký tự</span>
           </div>
         </div>
-      </div>
+      </Card>
 
       {/* Continue Action Button */}
       <div className="flex items-center justify-end pt-2">
-        <button
+        <Button
           type="submit"
           disabled={isOverCapacity}
-          className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-primary px-6 py-3 text-xs font-semibold text-primary-foreground shadow-xs transition-all hover:bg-primary-mid disabled:cursor-not-allowed disabled:opacity-50"
+          className="h-11 rounded-xl px-6 text-xs font-semibold"
         >
           <span>Tiếp tục kiểm tra đơn</span>
           <ArrowRight className="h-4 w-4" />
-        </button>
+        </Button>
       </div>
     </form>
   );

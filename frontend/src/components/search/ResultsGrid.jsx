@@ -1,37 +1,39 @@
 import { motion } from "framer-motion";
+import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { SearchPropertyCard } from "./SearchPropertyCard";
 
 function CardSkeleton({ view }) {
   const isList = view === "list";
   return (
-    <div
+    <Card
+      aria-hidden="true"
       className={[
-        "overflow-hidden rounded-3xl bg-card ring-1 ring-black/[0.04]",
+        "overflow-hidden rounded-3xl border-border/60 p-0 shadow-sm",
         isList ? "flex flex-col md:flex-row" : "",
       ].join(" ")}
     >
-      <div
+      <Skeleton
         className={[
-          "shimmer w-full shrink-0",
+          "w-full shrink-0 rounded-none bg-surface",
           isList ? "aspect-[16/10] md:w-[320px]" : "aspect-[16/11]",
         ].join(" ")}
       />
       <div className="flex-1 space-y-3 p-5">
-        <div className="shimmer h-5 w-2/3 rounded-lg" />
-        <div className="shimmer h-4 w-1/3 rounded-lg" />
-        <div className="shimmer mt-6 h-9 w-full rounded-full" />
+        <Skeleton className="h-5 w-2/3 rounded-lg" />
+        <Skeleton className="h-4 w-1/3 rounded-lg" />
+        <Skeleton className="mt-6 h-9 w-full rounded-full" />
       </div>
-    </div>
+    </Card>
   );
 }
 
 export function ResultsGrid({ properties, isLoading, context, view = "grid" }) {
-  // Grid columns adapted for the 3-column layout on desktop:
-  // Mobile: 1 col, Tablet: 2 cols, Desktop (lg with 3-col layout): 1 col (320-380px), Wide Desktop (xl+): 2 cols (300-380px)
+  // Wider result column is used until the assistant panel joins the layout at xl.
   const containerClass =
     view === "list"
       ? "flex flex-col gap-5"
-      : "grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 2xl:grid-cols-2";
+      : "grid gap-5 grid-cols-1 sm:grid-cols-2 xl:grid-cols-2";
 
   if (isLoading) {
     return (

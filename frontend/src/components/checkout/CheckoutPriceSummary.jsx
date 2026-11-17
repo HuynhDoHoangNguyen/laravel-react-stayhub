@@ -1,4 +1,5 @@
 import { DoorOpen } from 'lucide-react';
+import { Card } from '@/components/ui/card';
 
 const vndFormatter = new Intl.NumberFormat('vi-VN', {
   style: 'currency',
@@ -17,7 +18,8 @@ export function CheckoutPriceSummary({
   const roomTotal = hasQuote ? Number(quote.room_total) : null;
 
   return (
-    <aside className="space-y-5 rounded-3xl border border-border/70 bg-white p-6 shadow-[0_20px_50px_-24px_rgba(26,46,32,0.22)] ring-1 ring-black/[0.03]">
+    <aside aria-label="Tóm tắt giá phòng">
+      <Card className="space-y-5 rounded-3xl border-border/70 bg-white p-6 shadow-[0_20px_50px_-24px_rgba(26,46,32,0.22)] ring-1 ring-black/[0.03]">
       <div>
         <p className="text-[10.5px] font-semibold uppercase tracking-[0.2em] text-accent">
           ✦ Tạm tính kỳ nghỉ
@@ -76,6 +78,7 @@ export function CheckoutPriceSummary({
       <div className="rounded-2xl bg-surface/70 p-3.5 text-[11px] text-muted-foreground leading-relaxed border border-border/60">
         {hasQuote ? 'Báo giá được hệ thống xác nhận cho khoảng thời gian lưu trú đã chọn.' : 'Mở bước xem lại và yêu cầu báo giá để xem tổng tiền phòng chính thức.'}
       </div>
+      </Card>
     </aside>
   );
 }

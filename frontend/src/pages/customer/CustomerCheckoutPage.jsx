@@ -8,6 +8,9 @@ import { CheckoutStepper } from '@/components/checkout/CheckoutStepper';
 import { CheckoutGuestsStep } from '@/components/checkout/CheckoutGuestsStep';
 import { CheckoutReviewStep } from '@/components/checkout/CheckoutReviewStep';
 import { CheckoutPriceSummary } from '@/components/checkout/CheckoutPriceSummary';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function CustomerCheckoutPage() {
   const [searchParams] = useSearchParams();
@@ -167,14 +170,14 @@ export default function CustomerCheckoutPage() {
   if (isLoading) {
     return (
       <div className="mx-auto max-w-[1240px] px-4 pt-2 pb-20 text-left sm:px-6">
-        <div className="h-4 w-36 animate-pulse rounded bg-surface" />
+        <Skeleton aria-hidden="true" className="h-4 w-36 bg-surface" />
         <div className="mt-6 flex justify-between">
-          <div className="h-10 w-64 animate-pulse rounded-xl bg-surface" />
-          <div className="h-8 w-48 animate-pulse rounded-xl bg-surface" />
+          <Skeleton aria-hidden="true" className="h-10 w-64 rounded-xl bg-surface" />
+          <Skeleton aria-hidden="true" className="h-8 w-48 rounded-xl bg-surface" />
         </div>
         <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_380px]">
-          <div className="h-[460px] animate-pulse rounded-3xl bg-white/70" />
-          <div className="h-[360px] animate-pulse rounded-3xl bg-white/70" />
+          <Skeleton aria-hidden="true" className="h-[460px] rounded-3xl bg-white/70" />
+          <Skeleton aria-hidden="true" className="h-[360px] rounded-3xl bg-white/70" />
         </div>
       </div>
     );
@@ -193,7 +196,7 @@ export default function CustomerCheckoutPage() {
 
     return (
       <div className="mx-auto max-w-xl py-16 text-center">
-        <div className="rounded-3xl border border-border/70 bg-white p-8 shadow-xs sm:p-12">
+        <Card className="rounded-3xl border-border/70 bg-white p-8 shadow-xs sm:p-12">
           <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-amber-50 text-amber-700">
             <AlertCircle className="h-7 w-7" />
           </div>
@@ -207,22 +210,20 @@ export default function CustomerCheckoutPage() {
             {message}
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <Link
-              to={backToPropertyUrl}
-              className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-xs font-semibold text-primary-foreground shadow-xs hover:bg-primary-mid"
-            >
-              <BedDouble className="h-4 w-4" />
-              <span>Quay lại chọn phòng</span>
-            </Link>
-            <Link
-              to="/search"
-              className="inline-flex items-center gap-2 rounded-xl border border-border/80 bg-white px-5 py-2.5 text-xs font-semibold text-ink hover:border-primary/40"
-            >
-              <Compass className="h-4 w-4" />
-              <span>Khám phá chỗ nghỉ khác</span>
-            </Link>
+            <Button asChild className="h-11 rounded-xl px-5 text-xs font-semibold">
+              <Link to={backToPropertyUrl}>
+                <BedDouble className="h-4 w-4" />
+                <span>Quay lại chọn phòng</span>
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="h-11 rounded-xl px-5 text-xs font-semibold">
+              <Link to="/search">
+                <Compass className="h-4 w-4" />
+                <span>Khám phá chỗ nghỉ khác</span>
+              </Link>
+            </Button>
           </div>
-        </div>
+        </Card>
       </div>
     );
   }
@@ -230,7 +231,7 @@ export default function CustomerCheckoutPage() {
   if (createdBooking) {
     return (
       <div className="mx-auto max-w-xl px-4 py-16 text-center sm:px-6">
-        <div className="rounded-3xl border border-emerald-200 bg-white p-8 shadow-xs sm:p-12">
+        <Card className="rounded-3xl border-emerald-200 bg-white p-8 shadow-xs sm:p-12">
           <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-emerald-50 text-emerald-700">
             <CheckCircle2 className="h-7 w-7" />
           </div>
@@ -239,10 +240,10 @@ export default function CustomerCheckoutPage() {
           <p className="mt-3 text-sm text-muted-foreground">Mã booking</p>
           <p className="mt-1 font-mono text-xl font-bold text-ink">{createdBooking.booking_code}</p>
           <p className="mt-4 text-sm text-muted-foreground">Đơn đang chờ cơ sở lưu trú xác nhận.</p>
-          <Link to="/customer/bookings" className="mt-8 inline-flex items-center justify-center rounded-xl bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary-mid">
-            Xem đơn đặt phòng
-          </Link>
-        </div>
+          <Button asChild className="mt-8 h-12 rounded-xl px-6 text-sm font-semibold">
+            <Link to="/customer/bookings">Xem đơn đặt phòng</Link>
+          </Button>
+        </Card>
       </div>
     );
   }

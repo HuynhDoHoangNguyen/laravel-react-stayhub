@@ -14,6 +14,8 @@ import {
   Loader2,
 } from 'lucide-react';
 import { formatLongDateVi } from '@/services/bookingService';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 export function CheckoutReviewStep({
   property,
@@ -67,14 +69,15 @@ export function CheckoutReviewStep({
               Chi tiết chỗ nghỉ & thời gian
             </h2>
           </div>
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            className="h-9 px-2 text-xs font-medium"
             onClick={onBackToProperty}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
           >
             <span>Đổi chỗ nghỉ</span>
             <ExternalLink className="h-3 w-3" />
-          </button>
+          </Button>
         </div>
 
         {/* Property & Room Media Row */}
@@ -92,11 +95,11 @@ export function CheckoutReviewStep({
               <MapPin className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">{property?.address || 'Việt Nam'}</span>
             </p>
-            <div className="mt-2 inline-flex items-center gap-2 rounded-xl bg-surface px-2.5 py-1 text-xs font-semibold text-ink">
+            <Badge variant="secondary" className="mt-2 inline-flex items-center gap-2 rounded-xl px-2.5 py-1 text-xs font-semibold text-ink">
               <BedDouble className="h-3.5 w-3.5 text-primary" />
               <span>{room?.name || 'Hạng phòng nghỉ'}</span>
               <span className="text-muted-foreground font-normal">({room?.room_type_name || 'Tiêu chuẩn'})</span>
-            </div>
+            </Badge>
           </div>
         </div>
 
@@ -141,14 +144,15 @@ export function CheckoutReviewStep({
               Thông tin đón tiếp
             </h2>
           </div>
-          <button
+          <Button
             type="button"
+            variant="outline"
+            className="h-8 rounded-xl px-3 py-1.5 text-xs font-semibold"
             onClick={onEditGuests}
-            className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-border/80 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-surface"
           >
             <Edit2 className="h-3.5 w-3.5" />
             <span>Chỉnh sửa</span>
-          </button>
+          </Button>
         </div>
 
         <div className="mt-6 divide-y divide-border/60 text-xs">
@@ -233,22 +237,24 @@ export function CheckoutReviewStep({
         </div>
 
         <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-border/60 pt-6">
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            className="h-auto px-1 py-1 text-xs font-semibold"
             onClick={onEditGuests}
-            className="cursor-pointer text-xs font-semibold text-muted-foreground hover:text-ink transition-colors"
           >
             ← Quay lại bước thông tin khách
-          </button>
+          </Button>
 
-          <button
+          <Button
             type="button"
+            disabled={isPreviewing || isCreating}
             onClick={handleOpenPreview}
-            className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary px-7 py-3 text-xs font-semibold text-primary-foreground shadow-xs transition-all hover:bg-primary-mid active:scale-95"
+            className="h-11 rounded-xl px-7 text-xs font-semibold"
           >
             <Info className="h-4 w-4" />
             <span>Kiểm tra và đặt phòng</span>
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -268,21 +274,27 @@ export function CheckoutReviewStep({
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="checkout-preview-title"
               className="relative z-10 w-full max-w-md overflow-hidden rounded-3xl border border-border/70 bg-white p-6 sm:p-8 shadow-2xl"
             >
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="Đóng cửa sổ xem trước"
                 onClick={() => setPreviewModalOpen(false)}
-                className="absolute right-4 top-4 grid h-8 w-8 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-surface hover:text-ink transition-colors"
+                className="absolute right-4 top-4 h-8 w-8 rounded-full"
               >
                 <X className="h-4 w-4" />
-              </button>
+              </Button>
 
               <div className="grid h-12 w-12 place-items-center rounded-2xl bg-primary/[0.08] text-primary mb-3">
                 <Info className="h-6 w-6" />
               </div>
 
-              <h4 className="font-display text-2xl font-bold text-primary">
+              <h4 id="checkout-preview-title" className="font-display text-2xl font-bold text-primary">
                 Bản xem trước thông tin lưu trú
               </h4>
               <p className="text-xs text-muted-foreground leading-relaxed pt-2">
@@ -332,23 +344,24 @@ export function CheckoutReviewStep({
               )}
 
               <div className="flex flex-col-reverse gap-2.5 pt-2 sm:flex-row">
-                <button
+                <Button
                   type="button"
+                  variant="outline"
                   onClick={() => setPreviewModalOpen(false)}
-                  className="w-full sm:w-auto cursor-pointer rounded-xl border border-border/80 bg-white px-4 py-2.5 text-xs font-semibold text-ink hover:bg-surface transition-colors"
+                  className="h-10 w-full rounded-xl px-4 text-xs font-semibold sm:w-auto"
                 >
                   Đóng
-                </button>
+                </Button>
                 {preview?.availability?.available && (
-                  <button
+                  <Button
                     type="button"
                     onClick={onCreateBooking}
                     disabled={isCreating || isPreviewing}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-xs font-semibold text-primary-foreground transition-all hover:bg-primary-mid disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                    className="h-10 w-full rounded-xl px-5 text-xs font-semibold sm:w-auto"
                   >
                     {isCreating && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                     <span>{isCreating ? 'Đang tạo booking…' : 'Xác nhận đặt phòng'}</span>
-                  </button>
+                  </Button>
                 )}
               </div>
             </motion.div>

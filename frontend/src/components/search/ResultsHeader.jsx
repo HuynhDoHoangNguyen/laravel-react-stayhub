@@ -1,5 +1,6 @@
 import { LayoutGrid, List } from "lucide-react";
 import { SORT_OPTIONS } from "@/lib/filterConstants";
+import { Button } from "@/components/ui/button";
 
 export function ResultsHeader({
   total,
@@ -31,6 +32,7 @@ export function ResultsHeader({
           Sắp xếp
           <div className="relative">
             <select
+              aria-label="Sắp xếp kết quả"
               value={sortBy}
               onChange={(e) => onSortChange(e.target.value)}
               className="appearance-none rounded-xl border border-border bg-card py-2 pl-3 pr-9 text-[13px] font-medium text-ink focus:border-primary focus:outline-none"
@@ -48,32 +50,28 @@ export function ResultsHeader({
         </label>
 
         <div className="inline-flex overflow-hidden rounded-xl border border-border bg-card">
-          <button
+          <Button
             type="button"
+            variant={view === "grid" ? "default" : "ghost"}
+            size="icon"
             aria-label="Xem dạng lưới"
+            aria-pressed={view === "grid"}
             onClick={() => onViewChange("grid")}
-            className={[
-              "grid h-9 w-9 place-items-center transition-colors",
-              view === "grid"
-                ? "bg-primary text-primary-foreground"
-                : "text-ink hover:bg-surface",
-            ].join(" ")}
+            className="h-9 w-9 rounded-lg"
           >
             <LayoutGrid className="h-4 w-4" aria-hidden />
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant={view === "list" ? "default" : "ghost"}
+            size="icon"
             aria-label="Xem dạng danh sách"
+            aria-pressed={view === "list"}
             onClick={() => onViewChange("list")}
-            className={[
-              "grid h-9 w-9 place-items-center transition-colors",
-              view === "list"
-                ? "bg-primary text-primary-foreground"
-                : "text-ink hover:bg-surface",
-            ].join(" ")}
+            className="h-9 w-9 rounded-lg"
           >
             <List className="h-4 w-4" aria-hidden />
-          </button>
+          </Button>
         </div>
       </div>
     </div>

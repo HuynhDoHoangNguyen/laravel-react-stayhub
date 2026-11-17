@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { DestinationField } from "@/components/landing/search/DestinationField";
 import { DateField } from "@/components/landing/search/DateField";
 import { GuestsField } from "@/components/landing/search/GuestsField";
+import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 function toIsoDate(d) {
@@ -138,13 +139,13 @@ export function SearchSummaryBar({
             <GuestsField value={guests} onChange={setGuests} />
 
             <div className="flex items-center p-2">
-              <button
+              <Button
                 type="submit"
                 className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors duration-200 hover:bg-primary-mid md:h-14 md:w-auto"
               >
                 <Search className="h-4 w-4" aria-hidden />
                 Tìm kiếm
-              </button>
+              </Button>
             </div>
           </div>
         </form>

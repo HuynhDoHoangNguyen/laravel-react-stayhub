@@ -1,5 +1,7 @@
 import { ChevronDown } from "lucide-react";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 function Section({ title, children, defaultOpen = true }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -8,6 +10,7 @@ function Section({ title, children, defaultOpen = true }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
         className="flex w-full items-center justify-between text-left"
       >
         <span className="text-[13px] font-semibold uppercase tracking-[0.14em] text-ink">
@@ -79,19 +82,21 @@ export function FilterSidebar({
         <h3 className="text-[13px] font-semibold uppercase tracking-[0.16em] text-ink">
           Bộ lọc
         </h3>
-        <button
+        <Button
           type="button"
           onClick={onReset}
-          className="text-[12px] text-accent underline-offset-4 transition hover:underline"
+          variant="ghost"
+          className="h-auto px-2 py-1 text-[12px] text-accent underline-offset-4 transition hover:underline"
         >
           Xóa tất cả
-        </button>
+        </Button>
       </div>
 
       <Section title="Giá mỗi đêm">
         <div className="space-y-4">
           <input
             type="range"
+            aria-label="Giá tối đa mỗi đêm"
             min={500000}
             max={20000000}
             step={500000}
@@ -108,30 +113,32 @@ export function FilterSidebar({
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
                 Tối thiểu (₫)
               </div>
-              <input
+              <Input
                 type="number"
                 inputMode="numeric"
+                aria-label="Giá tối thiểu mỗi đêm"
                 placeholder="500,000"
                 value={value.minPrice ?? ""}
                 onChange={(e) =>
                   set("minPrice", e.target.value ? Number(e.target.value) : undefined)
                 }
-                className="w-full bg-transparent text-[13px] font-medium text-ink focus:outline-none"
+                className="h-8 w-full border-0 bg-transparent px-0 text-[13px] font-medium text-ink shadow-none focus-visible:ring-0"
               />
             </label>
             <label className="rounded-xl border border-border bg-background px-3 py-2">
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
                 Tối đa (₫)
               </div>
-              <input
+              <Input
                 type="number"
                 inputMode="numeric"
+                aria-label="Giá tối đa mỗi đêm"
                 placeholder="20,000,000"
                 value={value.maxPrice ?? ""}
                 onChange={(e) =>
                   set("maxPrice", e.target.value ? Number(e.target.value) : undefined)
                 }
-                className="w-full bg-transparent text-[13px] font-medium text-ink focus:outline-none"
+                className="h-8 w-full border-0 bg-transparent px-0 text-[13px] font-medium text-ink shadow-none focus-visible:ring-0"
               />
             </label>
           </div>
@@ -151,6 +158,7 @@ export function FilterSidebar({
                 <label className="inline-flex cursor-pointer items-center gap-2 text-[13px] text-ink">
                   <input
                     type="checkbox"
+                    aria-label={amenity.label}
                     checked={isChecked}
                     onChange={() => toggleAmenity(amenity.id)}
                     className="h-4 w-4 rounded border-border accent-[color:var(--primary)]"
@@ -166,13 +174,13 @@ export function FilterSidebar({
         </ul>
       </Section>
 
-      <button
+      <Button
         type="button"
         onClick={handleApply}
-        className="w-full rounded-full bg-primary px-5 py-3 text-[13px] font-medium text-primary-foreground transition-colors hover:bg-primary-mid"
+        className="h-11 w-full rounded-full px-5 text-[13px] font-medium"
       >
         Áp dụng bộ lọc
-      </button>
+      </Button>
     </aside>
   );
 }

@@ -239,8 +239,8 @@ export default function SearchResultsPage() {
         children={search.children}
       />
 
-      <main className="mx-auto max-w-[1440px] px-6 pb-16 pt-8 md:px-10">
-        <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-[280px_minmax(0,1fr)_340px]">
+      <main className="mx-auto max-w-[1440px] px-4 pb-16 pt-6 sm:px-6 md:px-8 lg:pt-8">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)_320px] xl:gap-8">
           {/* Col 1: Filters */}
           <FilterSidebar
             value={filters}
@@ -314,12 +314,14 @@ export default function SearchResultsPage() {
           </section>
 
           {/* Col 3: Assistant & Quick Refine Panel */}
-          <AssistantPanel
-            filters={filters}
-            onFiltersChange={setFilters}
-            keyword={search.q}
-            onKeywordChange={handleKeywordChange}
-          />
+          <div className="min-w-0 lg:col-span-2 xl:col-span-1">
+            <AssistantPanel
+              filters={filters}
+              onFiltersChange={setFilters}
+              keyword={search.q}
+              onKeywordChange={handleKeywordChange}
+            />
+          </div>
         </div>
       </main>
 

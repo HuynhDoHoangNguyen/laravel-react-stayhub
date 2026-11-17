@@ -2,6 +2,8 @@ import { Heart, Star, Wifi, Waves, Coffee, Sparkles, MapPin } from "lucide-react
 import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 const vndCurrency = new Intl.NumberFormat("vi-VN", {
   style: "currency",
@@ -155,9 +157,11 @@ export function SearchPropertyCard({ property, context, view = "grid" }) {
         </div>
 
         {property.roomName && (
-          <p className="mt-2 truncate text-sm font-semibold text-primary">
-            {property.roomName}{property.roomTypeName ? ` · ${property.roomTypeName}` : ""}
-          </p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <Badge variant="secondary" className="max-w-full truncate rounded-full px-2.5 py-1 text-[11px]">
+              {property.roomName}{property.roomTypeName ? ` · ${property.roomTypeName}` : ""}
+            </Badge>
+          </div>
         )}
 
         <p className="mt-1 inline-flex items-center gap-1 text-[13px] text-muted-foreground">
@@ -168,10 +172,10 @@ export function SearchPropertyCard({ property, context, view = "grid" }) {
         {amenities.length > 0 && (
           <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12px] text-muted-foreground">
             {amenities.map((a, idx) => (
-              <span key={a} className="inline-flex items-center gap-1">
+              <Badge key={a} variant="outline" className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-normal">
                 <AmenityIcon id={property.amenityIds?.[idx] || "spa"} />
                 {a}
-              </span>
+              </Badge>
             ))}
           </div>
         )}
@@ -184,12 +188,9 @@ export function SearchPropertyCard({ property, context, view = "grid" }) {
             </div>
             <div className="text-[11.5px] text-muted-foreground">/ đêm</div>
           </div>
-          <Link
-            to={detailUrl}
-            className="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-primary px-4 py-2 text-[12.5px] font-medium text-primary-foreground shadow-sm transition-all hover:bg-primary-mid active:scale-95"
-          >
-            Xem chi tiết
-          </Link>
+          <Button asChild className="h-10 shrink-0 rounded-full px-4 text-[12.5px] font-medium">
+            <Link to={detailUrl}>Xem chi tiết</Link>
+          </Button>
         </div>
       </div>
     </motion.article>
