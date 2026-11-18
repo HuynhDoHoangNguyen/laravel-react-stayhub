@@ -4,6 +4,7 @@ namespace App\Repositories\Booking;
 
 use App\Models\Booking;
 use App\Models\Room;
+use App\Support\DecimalMoney;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -106,5 +107,36 @@ class BookingRepository
     public function save(Booking $booking): bool
     {
         return $booking->save();
+    }
+
+    public function loadForHost(Booking $booking): Booking
+    {
+        return $booking->loadMissing(['customer', 'room.property', 'bookingServices']);
+    }
+
+    public function loadForCustomer(Booking $booking): Booking
+    {
+        return $booking->loadMissing(['room.property', 'bookingServices']);
+    }
+
+    public function loadForCustomerCreation(Booking $booking): Booking
+    {
+        return $booking->loadMissing(['room.property']);
+    }
+
+    public function calculateServicesTotal(Booking $booking): string
+    {
+        if (! $booking->relationLoaded('bookingServices')) {
+            $booking->loadMissing('bookingServices');
+        }
+
+        return DecimalMoney::sum($booking->bookingServices->pluck('amount'));
+    }
+
+    public function attachServicesTotal(Booking $booking): Booking
+    {
+        $booking->services_total = $this->calculateServicesTotal($booking);
+
+        return $booking;
     }
 }

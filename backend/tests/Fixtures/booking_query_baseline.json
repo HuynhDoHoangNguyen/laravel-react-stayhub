@@ -1,0 +1,422 @@
+{
+    "customer_store": {
+        "success": true,
+        "message": "Đặt phòng thành công.",
+        "data": {
+            "id": "<DYNAMIC>",
+            "booking_code": "<DYNAMIC>",
+            "customer_id": "<DYNAMIC>",
+            "room_id": "<DYNAMIC>",
+            "check_in_date": "2026-12-10",
+            "check_out_date": "2026-12-12",
+            "guest_count": 2,
+            "number_of_nights": 2,
+            "price_per_night": "1000000.00",
+            "room_total": "2000000.00",
+            "status": "PENDING",
+            "status_label": "Chờ xác nhận",
+            "note": "Fixed note",
+            "room": {
+                "id": "<DYNAMIC>",
+                "room_number": "101",
+                "name": "Deluxe Suite",
+                "capacity": 4,
+                "property": {
+                    "id": "<DYNAMIC>",
+                    "name": "Host Villa 1",
+                    "address": "123 Nguyen Trai, Ha Noi",
+                    "phone": "0901234567"
+                }
+            },
+            "created_at": "<DYNAMIC>",
+            "updated_at": "<DYNAMIC>"
+        }
+    },
+    "customer_index": {
+        "success": true,
+        "message": "Lịch sử đặt phòng thành công.",
+        "data": [
+            {
+                "id": "<DYNAMIC>",
+                "booking_code": "<DYNAMIC>",
+                "customer_id": "<DYNAMIC>",
+                "room_id": "<DYNAMIC>",
+                "check_in_date": "2026-12-10",
+                "check_out_date": "2026-12-12",
+                "guest_count": 2,
+                "number_of_nights": 2,
+                "price_per_night": "1000000.00",
+                "room_total": "2000000.00",
+                "status": "PENDING",
+                "status_label": "Chờ xác nhận",
+                "note": "Fixed note",
+                "room": {
+                    "id": "<DYNAMIC>",
+                    "room_number": "101",
+                    "name": "Deluxe Suite",
+                    "capacity": 4,
+                    "property": {
+                        "id": "<DYNAMIC>",
+                        "name": "Host Villa 1",
+                        "address": "123 Nguyen Trai, Ha Noi",
+                        "phone": "0901234567"
+                    }
+                },
+                "booking_services": [],
+                "created_at": "<DYNAMIC>",
+                "updated_at": "<DYNAMIC>"
+            }
+        ],
+        "meta": {
+            "current_page": 1,
+            "last_page": 1,
+            "per_page": 15,
+            "total": 1
+        }
+    },
+    "customer_show": {
+        "success": true,
+        "message": "Chi tiết đặt phòng.",
+        "data": {
+            "id": "<DYNAMIC>",
+            "booking_code": "<DYNAMIC>",
+            "customer_id": "<DYNAMIC>",
+            "room_id": "<DYNAMIC>",
+            "check_in_date": "2026-12-10",
+            "check_out_date": "2026-12-12",
+            "guest_count": 2,
+            "number_of_nights": 2,
+            "price_per_night": "1000000.00",
+            "room_total": "2000000.00",
+            "status": "PENDING",
+            "status_label": "Chờ xác nhận",
+            "note": "Fixed note",
+            "services_total": "0.00",
+            "room": {
+                "id": "<DYNAMIC>",
+                "room_number": "101",
+                "name": "Deluxe Suite",
+                "capacity": 4,
+                "property": {
+                    "id": "<DYNAMIC>",
+                    "name": "Host Villa 1",
+                    "address": "123 Nguyen Trai, Ha Noi",
+                    "phone": "0901234567"
+                }
+            },
+            "booking_services": [],
+            "created_at": "<DYNAMIC>",
+            "updated_at": "<DYNAMIC>"
+        }
+    },
+    "customer_cancel": {
+        "success": true,
+        "message": "Hủy đặt phòng thành công.",
+        "data": {
+            "id": "<DYNAMIC>",
+            "booking_code": "<DYNAMIC>",
+            "customer_id": "<DYNAMIC>",
+            "room_id": "<DYNAMIC>",
+            "check_in_date": "2026-12-20",
+            "check_out_date": "2026-12-22",
+            "guest_count": 2,
+            "number_of_nights": 2,
+            "price_per_night": "1000000.00",
+            "room_total": "2000000.00",
+            "status": "CANCELLED",
+            "status_label": "Đã hủy",
+            "note": "To be cancelled",
+            "room": {
+                "id": "<DYNAMIC>",
+                "room_number": "101",
+                "name": "Deluxe Suite",
+                "capacity": 4,
+                "property": {
+                    "id": "<DYNAMIC>",
+                    "name": "Host Villa 1",
+                    "address": "123 Nguyen Trai, Ha Noi",
+                    "phone": "0901234567"
+                }
+            },
+            "booking_services": [],
+            "created_at": "<DYNAMIC>",
+            "updated_at": "<DYNAMIC>"
+        }
+    },
+    "customer_services": {
+        "success": true,
+        "message": "Danh sách dịch vụ của đặt phòng.",
+        "data": [
+            {
+                "id": "<DYNAMIC>",
+                "booking_id": "<DYNAMIC>",
+                "service_id": "<DYNAMIC>",
+                "service_name": "An sang buffet",
+                "unit": "phan",
+                "quantity": "2.00",
+                "unit_price": "150000.00",
+                "amount": "300000.00",
+                "created_at": "<DYNAMIC>"
+            }
+        ]
+    },
+    "host_index": {
+        "success": true,
+        "message": "Danh sách đặt phòng của cơ sở lưu trú.",
+        "data": [
+            {
+                "id": "<DYNAMIC>",
+                "booking_code": "<DYNAMIC>",
+                "customer_id": "<DYNAMIC>",
+                "room_id": "<DYNAMIC>",
+                "check_in_date": "2026-12-10",
+                "check_out_date": "2026-12-12",
+                "guest_count": 2,
+                "number_of_nights": 2,
+                "price_per_night": "1000000.00",
+                "room_total": "2000000.00",
+                "status": "PENDING",
+                "status_label": "Chờ xác nhận",
+                "note": "Fixed note",
+                "customer": {
+                    "id": "<DYNAMIC>",
+                    "name": "Nguyen Van 2",
+                    "email": "customer_2@example.com",
+                    "phone": "0912345678"
+                },
+                "room": {
+                    "id": "<DYNAMIC>",
+                    "room_number": "101",
+                    "name": "Deluxe Suite",
+                    "capacity": 4,
+                    "property": {
+                        "id": "<DYNAMIC>",
+                        "name": "Host Villa 1",
+                        "address": "123 Nguyen Trai, Ha Noi"
+                    }
+                },
+                "booking_services": [],
+                "created_at": "<DYNAMIC>",
+                "updated_at": "<DYNAMIC>"
+            }
+        ],
+        "meta": {
+            "current_page": 1,
+            "last_page": 1,
+            "per_page": 15,
+            "total": 1
+        }
+    },
+    "host_show": {
+        "success": true,
+        "message": "Chi tiết đặt phòng.",
+        "data": {
+            "id": "<DYNAMIC>",
+            "booking_code": "<DYNAMIC>",
+            "customer_id": "<DYNAMIC>",
+            "room_id": "<DYNAMIC>",
+            "check_in_date": "2026-12-10",
+            "check_out_date": "2026-12-12",
+            "guest_count": 2,
+            "number_of_nights": 2,
+            "price_per_night": "1000000.00",
+            "room_total": "2000000.00",
+            "status": "PENDING",
+            "status_label": "Chờ xác nhận",
+            "note": "Fixed note",
+            "services_total": "0.00",
+            "customer": {
+                "id": "<DYNAMIC>",
+                "name": "Nguyen Van 2",
+                "email": "customer_2@example.com",
+                "phone": "0912345678"
+            },
+            "room": {
+                "id": "<DYNAMIC>",
+                "room_number": "101",
+                "name": "Deluxe Suite",
+                "capacity": 4,
+                "property": {
+                    "id": "<DYNAMIC>",
+                    "name": "Host Villa 1",
+                    "address": "123 Nguyen Trai, Ha Noi"
+                }
+            },
+            "booking_services": [],
+            "created_at": "<DYNAMIC>",
+            "updated_at": "<DYNAMIC>"
+        }
+    },
+    "host_confirm": {
+        "success": true,
+        "message": "Xác nhận đặt phòng thành công.",
+        "data": {
+            "id": "<DYNAMIC>",
+            "booking_code": "<DYNAMIC>",
+            "customer_id": "<DYNAMIC>",
+            "room_id": "<DYNAMIC>",
+            "check_in_date": "2026-12-10",
+            "check_out_date": "2026-12-12",
+            "guest_count": 2,
+            "number_of_nights": 2,
+            "price_per_night": "1000000.00",
+            "room_total": "2000000.00",
+            "status": "CONFIRMED",
+            "status_label": "Đã xác nhận",
+            "note": "Fixed note",
+            "services_total": "0.00",
+            "customer": {
+                "id": "<DYNAMIC>",
+                "name": "Nguyen Van 2",
+                "email": "customer_2@example.com",
+                "phone": "0912345678"
+            },
+            "room": {
+                "id": "<DYNAMIC>",
+                "room_number": "101",
+                "name": "Deluxe Suite",
+                "capacity": 4,
+                "property": {
+                    "id": "<DYNAMIC>",
+                    "name": "Host Villa 1",
+                    "address": "123 Nguyen Trai, Ha Noi"
+                }
+            },
+            "booking_services": [],
+            "created_at": "<DYNAMIC>",
+            "updated_at": "<DYNAMIC>"
+        }
+    },
+    "host_check_in": {
+        "success": true,
+        "message": "Xác nhận nhận phòng thành công.",
+        "data": {
+            "id": "<DYNAMIC>",
+            "booking_code": "<DYNAMIC>",
+            "customer_id": "<DYNAMIC>",
+            "room_id": "<DYNAMIC>",
+            "check_in_date": "2026-12-10",
+            "check_out_date": "2026-12-12",
+            "guest_count": 2,
+            "number_of_nights": 2,
+            "price_per_night": "1000000.00",
+            "room_total": "2000000.00",
+            "status": "CHECKED_IN",
+            "status_label": "Đã nhận phòng",
+            "note": "Fixed note",
+            "services_total": "0.00",
+            "customer": {
+                "id": "<DYNAMIC>",
+                "name": "Nguyen Van 2",
+                "email": "customer_2@example.com",
+                "phone": "0912345678"
+            },
+            "room": {
+                "id": "<DYNAMIC>",
+                "room_number": "101",
+                "name": "Deluxe Suite",
+                "capacity": 4,
+                "property": {
+                    "id": "<DYNAMIC>",
+                    "name": "Host Villa 1",
+                    "address": "123 Nguyen Trai, Ha Noi"
+                }
+            },
+            "booking_services": [],
+            "created_at": "<DYNAMIC>",
+            "updated_at": "<DYNAMIC>"
+        }
+    },
+    "host_check_out": {
+        "success": true,
+        "message": "Xác nhận trả phòng thành công.",
+        "data": {
+            "id": "<DYNAMIC>",
+            "booking_code": "<DYNAMIC>",
+            "customer_id": "<DYNAMIC>",
+            "room_id": "<DYNAMIC>",
+            "check_in_date": "2026-12-10",
+            "check_out_date": "2026-12-12",
+            "guest_count": 2,
+            "number_of_nights": 2,
+            "price_per_night": "1000000.00",
+            "room_total": "2000000.00",
+            "status": "COMPLETED",
+            "status_label": "Đã hoàn thành",
+            "note": "Fixed note",
+            "services_total": "300000.00",
+            "customer": {
+                "id": "<DYNAMIC>",
+                "name": "Nguyen Van 2",
+                "email": "customer_2@example.com",
+                "phone": "0912345678"
+            },
+            "room": {
+                "id": "<DYNAMIC>",
+                "room_number": "101",
+                "name": "Deluxe Suite",
+                "capacity": 4,
+                "property": {
+                    "id": "<DYNAMIC>",
+                    "name": "Host Villa 1",
+                    "address": "123 Nguyen Trai, Ha Noi"
+                }
+            },
+            "booking_services": [
+                {
+                    "id": "<DYNAMIC>",
+                    "booking_id": "<DYNAMIC>",
+                    "service_id": "<DYNAMIC>",
+                    "service_name": "An sang buffet",
+                    "unit": "phan",
+                    "quantity": "2.00",
+                    "unit_price": "150000.00",
+                    "amount": "300000.00",
+                    "created_at": "<DYNAMIC>"
+                }
+            ],
+            "created_at": "<DYNAMIC>",
+            "updated_at": "<DYNAMIC>"
+        }
+    },
+    "host_reject": {
+        "success": true,
+        "message": "Từ chối đặt phòng thành công.",
+        "data": {
+            "id": "<DYNAMIC>",
+            "booking_code": "<DYNAMIC>",
+            "customer_id": "<DYNAMIC>",
+            "room_id": "<DYNAMIC>",
+            "check_in_date": "2026-12-25",
+            "check_out_date": "2026-12-27",
+            "guest_count": 2,
+            "number_of_nights": 2,
+            "price_per_night": "1000000.00",
+            "room_total": "2000000.00",
+            "status": "REJECTED",
+            "status_label": "Từ chối",
+            "note": "To be rejected\nLý do từ chối: Bao tri dot xuat",
+            "services_total": "0.00",
+            "customer": {
+                "id": "<DYNAMIC>",
+                "name": "Nguyen Van 2",
+                "email": "customer_2@example.com",
+                "phone": "0912345678"
+            },
+            "room": {
+                "id": "<DYNAMIC>",
+                "room_number": "101",
+                "name": "Deluxe Suite",
+                "capacity": 4,
+                "property": {
+                    "id": "<DYNAMIC>",
+                    "name": "Host Villa 1",
+                    "address": "123 Nguyen Trai, Ha Noi"
+                }
+            },
+            "booking_services": [],
+            "created_at": "<DYNAMIC>",
+            "updated_at": "<DYNAMIC>"
+        }
+    }
+}

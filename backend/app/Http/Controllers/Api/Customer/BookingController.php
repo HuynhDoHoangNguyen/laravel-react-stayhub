@@ -3,12 +3,13 @@
 namespace App\Http\Controllers\Api\Customer;
 
 use App\Http\Controllers\Controller;
-use App\Validators\StoreBookingRequest;
 use App\Http\Resources\BookingResource;
 use App\Http\Resources\BookingServiceResource;
 use App\Models\Booking;
+use App\Services\Booking\BookingQueryService;
 use App\Services\BookingService;
 use App\Traits\ApiResponse;
+use App\Validators\StoreBookingRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -18,13 +19,13 @@ class BookingController extends Controller
     use ApiResponse;
 
     public function __construct(
-        protected BookingService $bookingService
+        protected BookingService $bookingService,
+        protected BookingQueryService $bookingQueryService
     ) {}
 
     public function store(StoreBookingRequest $request): JsonResponse
     {
         $booking = $this->bookingService->create($request->user(), $request->validated());
-        $booking->load(['room.property']);
 
         return $this->successResponse(
             new BookingResource($booking),
@@ -35,25 +36,21 @@ class BookingController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $paginator = $this->bookingService->listForCustomer($request->user(), $request->all());
+        $result = $this->bookingQueryService->listForCustomer($request->user(), $request->all());
 
         return response()->json([
             'success' => true,
             'message' => 'Lịch sử đặt phòng thành công.',
-            'data' => BookingResource::collection($paginator->items()),
-            'meta' => [
-                'current_page' => $paginator->currentPage(),
-                'last_page' => $paginator->lastPage(),
-                'per_page' => $paginator->perPage(),
-                'total' => $paginator->total(),
-            ],
+            'data' => BookingResource::collection($result['items']),
+            'meta' => $result['meta'],
         ]);
     }
 
     public function show(Request $request, Booking $booking): JsonResponse
     {
         Gate::authorize('view', $booking);
-        $booking = $this->bookingService->detailForCustomer($request->user(), $booking->id);
+
+        $booking = $this->bookingQueryService->findForCustomer($request->user(), $booking);
 
         return $this->successResponse(
             new BookingResource($booking),
@@ -64,7 +61,6 @@ class BookingController extends Controller
     public function cancel(Request $request, Booking $booking): JsonResponse
     {
         $cancelledBooking = $this->bookingService->cancel($booking, $request->user());
-        $cancelledBooking->load(['room.property', 'bookingServices']);
 
         return $this->successResponse(
             new BookingResource($cancelledBooking),
@@ -76,10 +72,10 @@ class BookingController extends Controller
     {
         Gate::authorize('view', $booking);
 
-        $booking->load('bookingServices');
+        $services = $this->bookingQueryService->listServicesForCustomer($request->user(), $booking);
 
         return $this->successResponse(
-            BookingServiceResource::collection($booking->bookingServices),
+            BookingServiceResource::collection($services),
             'Danh sách dịch vụ của đặt phòng.'
         );
     }

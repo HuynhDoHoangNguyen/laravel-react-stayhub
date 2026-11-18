@@ -60,6 +60,9 @@ class BookingWorkflowService
             $currentBooking->status = BookingStatus::CONFIRMED;
             $this->bookingRepository->save($currentBooking);
 
+            $this->bookingRepository->loadForHost($currentBooking);
+            $this->bookingRepository->attachServicesTotal($currentBooking);
+
             return $currentBooking;
         });
     }
@@ -89,6 +92,9 @@ class BookingWorkflowService
             }
             $this->bookingRepository->save($currentBooking);
 
+            $this->bookingRepository->loadForHost($currentBooking);
+            $this->bookingRepository->attachServicesTotal($currentBooking);
+
             return $currentBooking;
         });
     }
@@ -114,6 +120,9 @@ class BookingWorkflowService
 
             $currentBooking->status = BookingStatus::CHECKED_IN;
             $this->bookingRepository->save($currentBooking);
+
+            $this->bookingRepository->loadForHost($currentBooking);
+            $this->bookingRepository->attachServicesTotal($currentBooking);
 
             return $currentBooking;
         });
@@ -141,6 +150,9 @@ class BookingWorkflowService
 
             $currentBooking->status = BookingStatus::COMPLETED;
             $this->bookingRepository->save($currentBooking);
+
+            $this->bookingRepository->loadForHost($currentBooking);
+            $this->bookingRepository->attachServicesTotal($currentBooking);
 
             return $currentBooking;
         });
@@ -179,6 +191,8 @@ class BookingWorkflowService
 
             $currentBooking->status = BookingStatus::CANCELLED;
             $this->bookingRepository->save($currentBooking);
+
+            $this->bookingRepository->loadForCustomer($currentBooking);
 
             return $currentBooking;
         });

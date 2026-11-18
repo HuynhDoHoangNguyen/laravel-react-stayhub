@@ -102,7 +102,7 @@ class BookingService
                 $bookingCode = $prefix . strtoupper(Str::random(10));
             }
 
-            return $this->bookingRepository->create([
+            $created = $this->bookingRepository->create([
                 'booking_code' => $bookingCode,
                 'customer_id' => $customer->id,
                 'room_id' => $room->id,
@@ -115,28 +115,11 @@ class BookingService
                 'status' => BookingStatus::PENDING,
                 'note' => $data['note'] ?? null,
             ]);
+
+            $this->bookingRepository->loadForCustomerCreation($created);
+
+            return $created;
         });
-    }
-
-    /**
-     * List paginated booking history for a customer.
-     */
-    public function listForCustomer(User $customer, array $filters): LengthAwarePaginator
-    {
-        $perPage = min((int) ($filters['per_page'] ?? 15), 50);
-        if ($perPage < 1) {
-            $perPage = 15;
-        }
-
-        return $this->bookingRepository->listForCustomer($customer->id, $filters, $perPage);
-    }
-
-    public function detailForCustomer(User $customer, int $bookingId): Booking
-    {
-        $booking = $this->bookingRepository->findForCustomer($bookingId, $customer->id);
-        $booking->services_total = $this->bookingServiceRepository->totalForBooking($booking->id);
-
-        return $booking;
     }
 
     /**
