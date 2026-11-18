@@ -10,6 +10,8 @@ use App\DTOs\Catalog\Responses\HostPropertyDetailResponse;
 use App\DTOs\Catalog\Responses\PublicPropertyDetailResponse;
 use App\DTOs\Catalog\Responses\PublicPropertyListItemResponse;
 use App\DTOs\Catalog\Responses\PublicRoomResponse;
+use App\DTOs\Catalog\Responses\PublicRoomListItemResponse;
+use App\DTOs\Catalog\Responses\PublicRoomFilterOptionsResponse;
 use App\Mappers\EloquentObjectMapper;
 use App\Models\Amenity;
 use App\Models\Property;
@@ -25,6 +27,32 @@ use LogicException;
 final class CatalogMapper
 {
     public function __construct(private readonly EloquentObjectMapper $objectMapper) {}
+
+    public function toPublicRoomListItem(Room $room): PublicRoomListItemResponse
+    {
+        if (!$room->relationLoaded('property')) throw new LogicException('Public room list requires a loaded property.');
+        $property = $room->getRelation('property');
+
+        return $this->objectMapper->map($room, PublicRoomListItemResponse::class, [], [
+            'room' => $this->toPublicRoom($room),
+            'property' => ['id' => $property->id, 'name' => $property->name, 'type' => $property->type->value, 'address' => $property->address,
+                'rating' => $property->reviews_avg_rating === null ? null : round((float) $property->reviews_avg_rating, 1),
+                'review_count' => (int) $property->reviews_count],
+        ]);
+    }
+
+    public function toPublicRoomFilterOptions(Collection $types, Collection $amenities): PublicRoomFilterOptionsResponse
+    {
+        return new PublicRoomFilterOptionsResponse(
+            $types->map(static function (RoomType $type): array {
+                if (!$type->relationLoaded('property')) throw new LogicException('Room filter options require a loaded property.');
+                $property = $type->getRelation('property');
+
+                return ['id' => $type->id, 'name' => $type->name, 'property' => ['id' => $property->id, 'name' => $property->name]];
+            })->values()->all(),
+            $amenities->map(static fn (Amenity $amenity) => ['id' => $amenity->id, 'name' => $amenity->name])->values()->all(),
+        );
+    }
 
     public function toHostRoomDetail(Room $room): HostRoomDetailResponse
     {
