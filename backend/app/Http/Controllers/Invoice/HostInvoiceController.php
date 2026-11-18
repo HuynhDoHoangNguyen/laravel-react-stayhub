@@ -10,6 +10,8 @@ use App\Http\Controllers\Controller;
 use App\Exceptions\Invoice\DuplicateInvoiceException;
 use App\Services\Invoice\InvoiceQueryService;
 use App\Services\Invoice\InvoiceService;
+use App\Services\Invoice\InvoicePaymentService;
+use App\Validators\Invoice\InvoicePaymentValidator;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
@@ -82,5 +84,18 @@ class HostInvoiceController extends Controller
         $data = $this->queryService->getHostInvoiceDetail($id, $request->user());
 
         return ApiResponse::success($data);
+    }
+
+    public function updatePaymentStatus(
+        Request $request,
+        mixed $invoice,
+        InvoicePaymentValidator $paymentValidator,
+        InvoicePaymentService $paymentService,
+    ): JsonResponse {
+        $paymentValidator->authorize($request->user());
+        $id = $this->validator->validateInvoiceId($invoice);
+        $command = $paymentValidator->command($id, $request->getContent());
+
+        return ApiResponse::success($paymentService->update($command, $request->user()));
     }
 }

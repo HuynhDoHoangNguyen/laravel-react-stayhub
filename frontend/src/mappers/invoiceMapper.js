@@ -16,6 +16,30 @@ const isId = (value) => Number.isSafeInteger(value) && value > 0;
 const isDecimal = (value) => typeof value === 'string' && /^\d+\.\d{2}$/.test(value);
 const isNullableDate = (value) => value === null || (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value) && Number.isFinite(Date.parse(value)));
 
+/** Host options use current names; never infer options from invoice snapshot rows. */
+export function mapAdminInvoiceHostOptionsResponse(body) {
+  requireValue(isObject(body) && Array.isArray(body.data) && isObject(body.meta) && isObject(body.links));
+  const { current_page, last_page, per_page, total } = body.meta;
+  requireValue(isId(current_page) && isId(last_page) && isId(per_page) && per_page <= 50 && Number.isSafeInteger(total) && total >= 0);
+  for (const field of ['first', 'last', 'prev', 'next']) requireValue(body.links[field] === null || typeof body.links[field] === 'string');
+  const data = body.data.map((row) => {
+    requireValue(isObject(row) && isId(row.id) && typeof row.name === 'string');
+    return { id: row.id, name: row.name };
+  });
+  requireValue(new Set(data.map(({ id }) => id)).size === data.length);
+  return { data, meta: structuredClone(body.meta), links: structuredClone(body.links) };
+}
+
+export function mapAdminInvoicePropertyOptionsResponse(body, hostId = null) {
+  // The shared envelope contract is identical; property rows have an additional required owner ID.
+  const envelope = mapAdminInvoiceHostOptionsResponse(body);
+  const data = body.data.map((row) => {
+    requireValue(isId(row.host_id) && (hostId === null || row.host_id === hostId));
+    return { id: row.id, name: row.name, host_id: row.host_id };
+  });
+  return { ...envelope, data };
+}
+
 function mapItem(item) {
   requireValue(isObject(item) && isId(item.id) && isId(item.invoice_id));
   for (const field of ['item_type', 'item_name']) requireValue(typeof item[field] === 'string');
@@ -66,4 +90,29 @@ export function mapInvoiceListResponse(body) {
 export function mapInvoiceDetailResponse(body) {
   requireValue(isObject(body));
   return { ...structuredClone(body), data: mapInvoice(body.data, true) };
+}
+
+/** Admin projection is independent of the richer Host/Customer contract. */
+export function mapAdminInvoiceListResponse(body) {
+  requireValue(isObject(body) && Array.isArray(body.data) && isObject(body.meta) && isObject(body.links));
+  const { current_page, last_page, per_page, total } = body.meta;
+  requireValue(isId(current_page) && isId(last_page) && isId(per_page) && per_page <= 50 && Number.isSafeInteger(total) && total >= 0);
+  for (const field of ['first', 'last', 'prev', 'next']) requireValue(body.links[field] === null || typeof body.links[field] === 'string');
+  const data = body.data.map((row) => {
+    requireValue(isObject(row) && isId(row.id) && isId(row.booking_id) && isDecimal(row.total_amount));
+    const result = { id: row.id, booking_id: row.booking_id };
+    for (const field of ['invoice_code', 'customer_name', 'property_name', 'room_name']) {
+      requireValue(typeof row[field] === 'string');
+      result[field] = row[field];
+    }
+    requireValue(['UNPAID', 'PAID', 'REFUNDED'].includes(row.payment_status));
+    result.total_amount = row.total_amount;
+    result.payment_status = row.payment_status;
+    for (const field of ['paid_at', 'created_at']) {
+      requireValue(isNullableDate(row[field]));
+      result[field] = row[field];
+    }
+    return result;
+  });
+  return { data, meta: structuredClone(body.meta), links: structuredClone(body.links) };
 }

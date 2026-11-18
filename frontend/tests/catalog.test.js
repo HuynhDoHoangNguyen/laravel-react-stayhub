@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import axios, { AxiosError } from 'axios';
-import { adaptCatalogProperty, createCatalogService, createCatalogLoader, formatCatalogPrice, catalogParams, catalogBackLink } from '../src/services/catalog.js';
+import { createCatalogService, createCatalogLoader, formatCatalogPrice, catalogParams, catalogBackLink } from '../src/services/catalog.js';
+import { adaptCatalogProperty } from '../src/mappers/catalogMapper.js';
+import { createPublicPropertyApi } from '../src/api/publicPropertyApi.js';
 import { getAuthDestination } from '../src/utils/authNavigation.js';
 
 const dto = { id: 1, name: 'Fixture', address: 'Public address', type: 'HOTEL', description: '<script>fixture</script>',
@@ -39,7 +41,7 @@ test('zero and missing prices remain distinct and render VND without invented de
 });
 
 test('list service preserves server metadata and sends only pagination fields', async () => {
-    const { client, calls } = clientFixture(); const service = createCatalogService(client);
+    const { client, calls } = clientFixture(); const service = createCatalogService(createPublicPropertyApi(client));
     const result = await service.getProperties({ page: 2, per_page: 6, startDate: 'not-supported' });
     assert.equal(result.source, 'api'); assert.equal(result.meta.total, 20); assert.equal(result.meta.last_page, 4);
     assert.deepEqual(calls[0].params, { page: 2, per_page: 6 }); assert.equal(result.links.next, 'fixture');
@@ -49,7 +51,7 @@ test('list service preserves server metadata and sends only pagination fields', 
 test('a list error never becomes an empty success or falls back to production mocks', async () => {
     for (const status of [404, 422, 500]) {
         const { client, calls } = clientFixture({ status, body: { message: 'private SQL stack', errors: { page: ['Invalid page'] } } });
-        const service = createCatalogService(client, { dev: false, enableMocks: 'true', properties: [{ id: 900 }] });
+        const service = createCatalogService(createPublicPropertyApi(client), { dev: false, enableMocks: 'true', properties: [{ id: 900 }] });
         await assert.rejects(service.getProperties(), (error) => {
             assert.equal(error.status, status); assert.equal(error.message.includes('SQL'), false); assert.equal(error.config, undefined);
             if (status === 422) assert.deepEqual(error.fields, { page: ['Invalid page'] });
@@ -62,7 +64,7 @@ test('a list error never becomes an empty success or falls back to production mo
 test('mocks require both the DEV flag and explicit string opt-in and use mock-only pagination', async () => {
     for (const [dev, enableMocks, mocked] of [[true, 'true', true], [false, 'true', false], [true, 'false', false], [true, true, false]]) {
         const { client, calls } = clientFixture();
-        const service = createCatalogService(client, { dev, enableMocks, properties: [{ id: 1 }, { id: 2 }, { id: 3 }] });
+        const service = createCatalogService(createPublicPropertyApi(client), { dev, enableMocks, properties: [{ id: 1 }, { id: 2 }, { id: 3 }] });
         const result = await service.getProperties({ page: 2, per_page: 1 });
         assert.equal(result.source, mocked ? 'mock' : 'api'); assert.equal(calls.length, mocked ? 0 : 1);
         if (mocked) { assert.deepEqual(result.data, [{ id: 2 }]); assert.equal(result.meta.total, 3); }
@@ -70,19 +72,19 @@ test('mocks require both the DEV flag and explicit string opt-in and use mock-on
 });
 
 test('detail maps Resource wrapper, returns 404 as missing and keeps network errors distinct', async () => {
-    const { client, calls } = clientFixture(); const service = createCatalogService(client);
+    const { client, calls } = clientFixture(); const service = createCatalogService(createPublicPropertyApi(client));
     assert.equal((await service.getPropertyById(1)).data.name, 'Fixture');
     assert.equal(calls[0].url, '/api/public/properties/1');
     const missing = clientFixture({ status: 404 });
-    assert.deepEqual(await createCatalogService(missing.client).getPropertyById(1), { data: null, source: 'api', unavailable: true });
-    const failed = clientFixture({ network: true }); await assert.rejects(createCatalogService(failed.client).getPropertyById(1));
+    assert.deepEqual(await createCatalogService(createPublicPropertyApi(missing.client)).getPropertyById(1), { data: null, source: 'api', unavailable: true });
+    const failed = clientFixture({ network: true }); await assert.rejects(createCatalogService(createPublicPropertyApi(failed.client)).getPropertyById(1));
     for (const id of ['../me', 'abc', '01', '-1']) assert.equal((await service.getPropertyById(id)).data, null);
     assert.equal(calls.length, 1);
 });
 
 test('a mock detail retains mock identity so public review calls cannot be enabled by the adapter', async () => {
     const { client, calls } = clientFixture();
-    const service = createCatalogService(client, { dev: true, enableMocks: 'true', properties: [{ id: 1, name: 'DEV fixture' }] });
+    const service = createCatalogService(createPublicPropertyApi(client), { dev: true, enableMocks: 'true', properties: [{ id: 1, name: 'DEV fixture' }] });
     assert.equal((await service.getPropertyById(1)).source, 'mock'); assert.equal(calls.length, 0);
     assert.equal((await service.getPropertyById(99)).data, null);
 });
@@ -119,7 +121,7 @@ test('unmount and late errors cannot restore old detail or leak an old error; re
 });
 
 test('malformed resource responses are errors rather than arbitrary data rendered as a catalog', async () => {
-    const { client } = clientFixture({ body: { data: { id: 1 } } }); await assert.rejects(createCatalogService(client).getProperties());
+    const { client } = clientFixture({ body: { data: { id: 1 } } }); await assert.rejects(createCatalogService(createPublicPropertyApi(client)).getProperties());
     const malformedMeta = clientFixture({ body: { data: [], meta: { current_page: 1, last_page: 0, total: -1, per_page: 200 } } });
-    await assert.rejects(createCatalogService(malformedMeta.client).getProperties());
+    await assert.rejects(createCatalogService(createPublicPropertyApi(malformedMeta.client)).getProperties());
 });

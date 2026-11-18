@@ -1,31 +1,20 @@
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import axios from 'axios';
 
-const servicePath = fileURLToPath(new URL('../src/services/propertyService.js', import.meta.url));
-const mapperUrl = pathToFileURL(path.resolve(path.dirname(servicePath), '../mappers/propertyMapper.js')).href;
+// Only the Vite-configured transport is replaced; the service itself is the production module.
+const sharedClient = axios.create({ adapter: async () => { throw new Error('unexpected network call'); } });
+mock.module(new URL('../src/api/axios.js', import.meta.url).href, { defaultExport: sharedClient });
+const { createPropertyService } = await import('../src/services/propertyService.js');
+test.after(() => mock.restoreAll());
+
 const checkoutPath = fileURLToPath(new URL('../src/pages/customer/CustomerCheckoutPage.jsx', import.meta.url));
-const fixtures = { search: async () => ({ data: { data: [] } }), mockProperties: [] };
-globalThis.__propertyServiceTestFixtures = fixtures;
 
-let source = await readFile(servicePath, 'utf8');
-source = source
-  .replace("import api from '@/api/axios';", 'const api = {};')
-  .replace("import { roomSearchApi } from '@/api/roomSearchApi';", 'const roomSearchApi = { search: (...args) => globalThis.__propertyServiceTestFixtures.search(...args) };')
-  .replace("import { mapFeaturedProperty, mapPropertyFromRooms, mapPropertyRooms, mapSearchRoom } from '@/mappers/propertyMapper';", `import { mapFeaturedProperty, mapPropertyFromRooms, mapPropertyRooms, mapSearchRoom } from '${mapperUrl}';`)
-  .replace("import { MOCK_PROPERTIES } from '@/mocks/propertyMockData';", 'const MOCK_PROPERTIES = globalThis.__propertyServiceTestFixtures.mockProperties;')
-  .replace("import { createCatalogService } from './catalog';", 'const createCatalogService = () => ({ getProperties: async () => ({ data: [], source: \'api\' }) });')
-  .replaceAll('import.meta.env.DEV', 'false')
-  .replaceAll('import.meta.env.VITE_ENABLE_PROPERTY_MOCKS', "'false'");
-
-const serviceUrl = `data:text/javascript;charset=utf-8,${encodeURIComponent(source)}`;
-const { propertyService } = await import(serviceUrl);
-
-test.after(() => {
-  delete globalThis.__propertyServiceTestFixtures;
-});
+function createService({ search, catalogApi = {}, dev = false, enableMocks = 'false', properties = [] } = {}) {
+  return createPropertyService(catalogApi, { dev, enableMocks, properties, roomSearchApi: { search } });
+}
 
 test('getBookableProperty maps Room Search rooms and returns the booking source', async () => {
   const room = {
@@ -38,12 +27,14 @@ test('getBookableProperty maps Room Search rooms and returns the booking source'
     room_type: { id: 3, name: 'Phòng đôi' },
   };
   let requestedParams;
-  fixtures.search = async (params) => {
-    requestedParams = params;
-    return { data: { data: [room] } };
-  };
+  const service = createService({
+    search: async (params) => {
+      requestedParams = params;
+      return { data: { data: [room] } };
+    },
+  });
 
-  const result = await propertyService.getBookableProperty(7, {
+  const result = await service.getBookableProperty(7, {
     startDate: '2026-12-10', endDate: '2026-12-12', adults: 2, children: 1,
   });
 
@@ -59,22 +50,41 @@ test('getBookableProperty maps Room Search rooms and returns the booking source'
 });
 
 test('getBookableProperty returns null data when Room Search has no rooms', async () => {
-  fixtures.search = async () => ({ data: { data: [] } });
-  assert.deepEqual(await propertyService.getBookableProperty(7, {
+  const service = createService({ search: async () => ({ data: { data: [] } }) });
+  assert.deepEqual(await service.getBookableProperty(7, {
     startDate: '2026-12-10', endDate: '2026-12-12',
   }), { data: null, source: 'room-search' });
 });
 
-test('getPropertyById keeps its existing API source and mapped result', async () => {
-  fixtures.search = async () => ({ data: { data: [{
-    id: 23, property_id: 7, name: 'Phòng đôi', capacity: 2,
-    price_per_night: '520000.00', property: { id: 7, name: 'Chỗ nghỉ mẫu' },
-  }] } });
-  const result = await propertyService.getPropertyById(7, {
-    startDate: '2026-12-10', endDate: '2026-12-12',
+test('getBookableProperty uses mock data only when DEV mocks are explicitly enabled', async () => {
+  let searched = false;
+  const service = createService({
+    search: async () => { searched = true; return { data: { data: [] } }; },
+    dev: true,
+    enableMocks: 'true',
+    properties: [{ id: 7, name: 'Mock' }],
   });
+  const result = await service.getBookableProperty('7', { startDate: '2026-12-10', endDate: '2026-12-12' });
+  assert.deepEqual(result, { data: { id: 7, name: 'Mock' }, source: 'mock' });
+  assert.equal(searched, false);
+});
+
+test('getPropertyById stays on the Catalog API and never calls Room Search', async () => {
+  let searched = false;
+  let requestedId;
+  const service = createService({
+    search: async () => { searched = true; return { data: { data: [] } }; },
+    catalogApi: {
+      getPropertyById: async (id) => {
+        requestedId = id;
+        return { data: { id: 7, name: 'Chỗ nghỉ mẫu', rooms: [] } };
+      },
+    },
+  });
+  const result = await service.getPropertyById(7);
   assert.equal(result.source, 'api');
-  assert.equal(result.data.rooms[0].id, 23);
+  assert.equal(String(requestedId), '7');
+  assert.equal(searched, false);
 });
 
 test('checkout keeps rejecting a response marked as API data', async () => {

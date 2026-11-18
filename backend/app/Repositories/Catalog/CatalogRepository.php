@@ -4,18 +4,94 @@ namespace App\Repositories\Catalog;
 
 use App\DTOs\Catalog\Requests\CreateHostRoomRequest;
 use App\DTOs\Catalog\Requests\UpdateHostRoomRequest;
+use App\DTOs\Catalog\Requests\PublicRoomFilterQuery;
 use App\Enums\PropertyStatus;
+use App\Enums\MaintenanceStatus;
 use App\Enums\RoomStatus;
+use App\Models\Maintenance;
+use App\Models\Amenity;
 use App\Models\Property;
 use App\Models\PropertyImage;
 use App\Models\Room;
 use App\Models\RoomType;
+use App\Models\Review;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 
 class CatalogRepository
 {
+    /** Public catalog filtering; deliberately not a date-based availability query. */
+    public function paginatePublicRooms(PublicRoomFilterQuery $filters): LengthAwarePaginator
+    {
+        $query = $this->publicRoomCandidates()->with([
+            'property' => fn ($property) => $property->select(['id', 'name', 'type', 'address'])
+                ->withAvg('reviews', 'rating')->withCount('reviews'),
+            'roomType:id,property_id,name',
+            'images' => fn ($images) => $images->orderByDesc('is_primary')->orderBy('id'),
+            'amenities' => fn ($amenities) => $amenities->where('amenities.status', true)->orderBy('amenities.id'),
+        ]);
+        if ($filters->minPrice !== null) $query->where('rooms.price_per_night', '>=', $filters->minPrice);
+        if ($filters->maxPrice !== null) $query->where('rooms.price_per_night', '<=', $filters->maxPrice);
+        if ($filters->guestCount !== null) $query->where('rooms.capacity', '>=', $filters->guestCount);
+        if ($filters->minRating !== null) {
+            // Review belongs to Property. Compare the raw average, before display rounding.
+            $query->whereIn('rooms.property_id', Review::query()->select('property_id')->groupBy('property_id')
+                // Explicit numeric affinity also keeps SQLite and MySQL comparisons consistent.
+                ->havingRaw('AVG(reviews.rating) >= CAST(? AS DECIMAL(3,1))', [$filters->minRating]));
+        }
+        if ($filters->roomTypeIds !== []) $query->whereIn('rooms.room_type_id', $filters->roomTypeIds);
+        if ($filters->amenityIds !== []) {
+            $query->whereHas('amenities', fn (Builder $amenities) => $amenities
+                ->where('amenities.status', true)->whereIn('amenities.id', $filters->amenityIds), '=', count($filters->amenityIds));
+        }
+
+        return $query->orderBy('rooms.price_per_night', $filters->sort === 'price_desc' ? 'desc' : 'asc')
+            ->orderBy('rooms.id')->paginate($filters->perPage, ['rooms.*'], 'page', $filters->page);
+    }
+
+    public function getPublicRoomTypes(): Collection
+    {
+        return RoomType::query()->whereIn('id', $this->publicRoomCandidates()->select('rooms.room_type_id'))
+            ->with('property:id,name')->orderBy('property_id')->orderBy('name')->orderBy('id')
+            ->get(['id', 'property_id', 'name']);
+    }
+
+    public function getPublicRoomAmenities(): Collection
+    {
+        return Amenity::query()->where('status', true)->whereHas('rooms', function (Builder $rooms): void {
+            $this->scopePublicRoomCandidates($rooms);
+        })->orderBy('name')->orderBy('id')->get(['id', 'name']);
+    }
+
+    private function publicRoomCandidates(): Builder
+    {
+        $query = Room::query();
+        $this->scopePublicRoomCandidates($query);
+
+        return $query;
+    }
+
+    private function scopePublicRoomCandidates(Builder $query): void
+    {
+        self::publicRooms($query);
+        $query->whereHas('property', fn (Builder $property) => $property->where('status', PropertyStatus::ACTIVE->value))
+            ->whereBetween('rooms.capacity', [1, 2147483647])->where('rooms.price_per_night', '>=', '0');
+    }
+
+    public function roomExistsForMaintenanceCheck(int $roomId): bool
+    {
+        return Room::query()->whereKey($roomId)->exists();
+    }
+
+    /** Uncast facts preserve invalid legacy dates for the UC51 validator. */
+    public function getRoomMaintenanceFacts(int $roomId): \Illuminate\Support\Collection
+    {
+        return Maintenance::query()->where('room_id', $roomId)
+            ->whereIn('status', [MaintenanceStatus::SCHEDULED->value, MaintenanceStatus::IN_PROGRESS->value])
+            ->orderBy('id')->toBase()->get(['id', 'status', 'start_date', 'end_date']);
+    }
+
     public function lockRoomBookingFacts(Room $room): \Illuminate\Support\Collection
     {
         return $room->bookings()->whereIn('status', ['PENDING', 'CONFIRMED', 'CHECKED_IN'])

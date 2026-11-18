@@ -8,16 +8,60 @@ use App\DTOs\Invoice\Requests\CreateInvoiceRequest;
 use App\Models\Booking;
 use Illuminate\Database\Eloquent\Model;
 use App\DTOs\Invoice\Requests\InvoiceFilterRequest;
+use App\DTOs\Invoice\Requests\AdminInvoiceFilterRequest;
+use App\DTOs\Invoice\Requests\AdminInvoiceQueryInputRequest;
+use App\DTOs\Invoice\Responses\AdminInvoiceListItemResponse;
 use App\DTOs\Invoice\Responses\InvoiceResponse;
 use App\DTOs\Invoice\Responses\InvoiceItemResponse;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use LogicException;
+use App\DTOs\Invoice\Requests\AdminInvoiceFilterOptionsInputRequest;
+use App\DTOs\Invoice\Requests\AdminInvoiceFilterOptionsRequest;
+use App\DTOs\Invoice\Responses\AdminInvoiceHostOptionResponse;
+use App\Models\User;
+use App\Models\Property;
+use App\DTOs\Invoice\Responses\AdminInvoicePropertyOptionResponse;
 
 /** Pure projection of cast attributes and explicitly loaded relationships. */
 final class InvoiceMapper
 {
     public function __construct(private readonly EloquentObjectMapper $objectMapper) {}
+
+    public function toAdminFilterOptionsRequest(AdminInvoiceFilterOptionsInputRequest $input): AdminInvoiceFilterOptionsRequest
+    {
+        return new AdminInvoiceFilterOptionsRequest($input->type, $input->search, (int) $input->page, (int) $input->per_page,
+            $input->host_id === null ? null : (int) $input->host_id);
+    }
+
+    public function toAdminPropertyOption(Property $property): AdminInvoicePropertyOptionResponse
+    {
+        return $this->objectMapper->map($property, AdminInvoicePropertyOptionResponse::class, ['id', 'name', 'host_id']);
+    }
+
+    public function toAdminHostOption(User $user): AdminInvoiceHostOptionResponse
+    {
+        return $this->objectMapper->map($user, AdminInvoiceHostOptionResponse::class, ['id', 'name']);
+    }
+
+    /** The caller must pass input returned by AdminInvoiceValidator. */
+    public function toAdminFilterRequest(AdminInvoiceQueryInputRequest $input): AdminInvoiceFilterRequest
+    {
+        return new AdminInvoiceFilterRequest(
+            hostId: $input->host_id === null ? null : (int) $input->host_id,
+            propertyId: $input->property_id === null ? null : (int) $input->property_id,
+            status: $input->status, search: $input->search,
+            page: (int) $input->page, perPage: (int) $input->per_page,
+        );
+    }
+
+    public function toAdminListItem(Invoice $invoice): AdminInvoiceListItemResponse
+    {
+        return $this->objectMapper->map($invoice, AdminInvoiceListItemResponse::class, [
+            'id', 'invoice_code', 'booking_id', 'customer_name', 'property_name', 'room_name',
+            'total_amount', 'payment_status', 'paid_at', 'created_at',
+        ]);
+    }
 
     public function toCreateRequest(int $bookingId): CreateInvoiceRequest
     {

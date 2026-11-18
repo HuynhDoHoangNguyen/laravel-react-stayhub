@@ -1,178 +1,154 @@
-import api from '@/api/axios';
-import { roomSearchApi } from '@/api/roomSearchApi';
-import { mapFeaturedProperty, mapPropertyFromRooms, mapPropertyRooms, mapSearchRoom } from '@/mappers/propertyMapper';
-import { MOCK_PROPERTIES } from '@/mocks/propertyMockData';
-import { createCatalogService } from './catalog';
+import api from '../api/axios.js';
+import { createPublicPropertyApi } from '../api/publicPropertyApi.js';
+import { roomSearchApi as defaultRoomSearchApi } from '../api/roomSearchApi.js';
+import { mapPropertyFromRooms, mapPropertyRooms } from '../mappers/propertyMapper.js';
+import { mapPropertySearchResponse } from '../mappers/catalogMapper.js';
+import { MOCK_PROPERTIES } from '../mocks/propertyMockData.js';
+import { createCatalogService } from './catalog.js';
 
-const catalog = createCatalogService(api, { dev: import.meta.env.DEV, enableMocks: import.meta.env.VITE_ENABLE_PROPERTY_MOCKS, properties: MOCK_PROPERTIES });
+/**
+ * Service to fetch and filter property data for public catalog, landing page, and search results.
+ * Strictly enforces mock safety rules:
+ * - Mock data is ONLY used when DEV === true AND VITE_ENABLE_PROPERTY_MOCKS === 'true'.
+ * - When mock is off or in production, attempts real API call.
+ * - Does NOT silently fallback to mock if real API fails.
+ */
+export function createPropertyService(propertyApi, { dev = false, enableMocks = 'false', properties = [], roomSearchApi = defaultRoomSearchApi } = {}) {
+  const catalog = createCatalogService(propertyApi, { dev, enableMocks, properties });
+  const isMockEnabled = dev === true && enableMocks === 'true';
+  return {
+    getFeaturedProperties: catalog.getFeaturedProperties,
+    getProperties: catalog.getProperties,
 
-const MOCKS_ENABLED =
-  import.meta.env.DEV && import.meta.env.VITE_ENABLE_PROPERTY_MOCKS === 'true';
+    async searchProperties({
+      city = '',
+      minPrice,
+      maxPrice,
+      minRating,
+      sortBy = 'PRICE_ASC',
+      amenities = [],
+      propertyTypes = [],
+      keyword = '',
+    } = {}, options = {}) {
+      if (isMockEnabled) {
+        let results = [...properties];
 
-function addDays(date, days) {
-  const next = new Date(`${date}T12:00:00`);
-  next.setDate(next.getDate() + days);
-  return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`;
-}
+        // Filter by city
+        if (city && city.trim()) {
+          const cLower = city.trim().toLowerCase();
+          results = results.filter((p) => p.city.toLowerCase().includes(cLower));
+        }
 
-function defaultStay() {
-  const today = new Date();
-  const checkIn = addDays(
-    `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`,
-    1,
-  );
-  return { check_in_date: checkIn, check_out_date: addDays(checkIn, 2) };
-}
+        // Filter by keyword (q)
+        if (keyword && keyword.trim()) {
+          const kLower = keyword.trim().toLowerCase();
+          results = results.filter(
+            (p) =>
+              p.name.toLowerCase().includes(kLower) ||
+              p.city.toLowerCase().includes(kLower) ||
+              (p.description && p.description.toLowerCase().includes(kLower))
+          );
+        }
 
-function buildSearchParams({
-  city = '',
-  keyword = '',
-  startDate,
-  endDate,
-  adults = 2,
-  children = 0,
-  minPrice,
-  maxPrice,
-  amenities = [],
-  sortBy = 'PRICE_ASC',
-  page = 1,
-  perPage = 15,
-  propertyId,
-}) {
-  const stay = defaultStay();
-  const params = {
-    check_in_date: startDate || stay.check_in_date,
-    check_out_date: endDate || stay.check_out_date,
-    guest_count: Math.max(1, Number(adults) + Number(children)),
-    per_page: perPage,
-    page,
-  };
+        // Filter by min/max price
+        if (minPrice != null && !isNaN(minPrice)) {
+          results = results.filter((p) => p.price >= Number(minPrice));
+        }
+        if (maxPrice != null && !isNaN(maxPrice)) {
+          results = results.filter((p) => p.price <= Number(maxPrice));
+        }
 
-  if (city || keyword) params.keyword = [city, keyword].filter(Boolean).join(' ');
-  if (propertyId) params.property_id = propertyId;
-  if (minPrice !== undefined) params.min_price = minPrice;
-  if (maxPrice !== undefined) params.max_price = maxPrice;
-  if (amenities.length) params.amenity_ids = amenities;
+        // Filter by minRating
+        if (minRating != null && !isNaN(minRating)) {
+          results = results.filter((p) => p.averageRating >= Number(minRating));
+        }
 
-  const sort = {
-    PRICE_ASC: 'price_asc',
-    PRICE_DESC: 'price_desc',
-    NEWEST: 'newest',
-  }[sortBy] || 'price_asc';
-  params.sort = sort;
+        // Filter by amenities
+        if (amenities && amenities.length > 0) {
+          results = results.filter((p) => {
+            const propAmenities = p.amenityIds || [];
+            return amenities.every((aId) => propAmenities.includes(aId));
+          });
+        }
 
-  return params;
-}
+        // Filter by property types
+        if (propertyTypes && propertyTypes.length > 0) {
+          results = results.filter((p) => propertyTypes.includes(p.propertyType));
+        }
 
-async function searchPropertyRooms(id, params) {
-  const response = await roomSearchApi.search(buildSearchParams({
-    propertyId: id,
-    ...params,
-    perPage: 50,
-  }));
+        // Sorting
+        if (sortBy === 'PRICE_ASC') {
+          results.sort((a, b) => a.price - b.price);
+        } else if (sortBy === 'PRICE_DESC') {
+          results.sort((a, b) => b.price - a.price);
+        } else if (sortBy === 'RATING_DESC') {
+          results.sort((a, b) => b.averageRating - a.averageRating);
+        }
 
-  return mapPropertyFromRooms(mapPropertyRooms(response.data?.data || []));
-}
-
-export const propertyService = {
-  async getFeaturedProperties() {
-    if (MOCKS_ENABLED) {
-      return { data: MOCK_PROPERTIES.slice(0, 6), source: 'mock' };
-    }
-
-    // The booking API exposes date based room search, not a property catalog endpoint.
-    const stay = defaultStay();
-    const response = await roomSearchApi.search(buildSearchParams({ ...stay, adults: 2 }));
-    const featured = new Map();
-    (response.data?.data || []).forEach((room) => {
-      if (!featured.has(room.property_id)) {
-        featured.set(room.property_id, mapFeaturedProperty(room));
+        return {
+          data: results,
+          total: results.length,
+          source: 'mock',
+        };
       }
-    });
-    return {
-      data: [...featured.values()].slice(0, 6),
-      source: 'api',
-    };
-  },
-  getProperties: catalog.getProperties,
 
-  async searchProperties({
-    city = '',
-    startDate,
-    endDate,
-    adults = 2,
-    children = 0,
-    minPrice,
-    maxPrice,
-    amenities = [],
-    sortBy = 'PRICE_ASC',
-    keyword = '',
-    page = 1,
-  } = {}) {
-    if (MOCKS_ENABLED) {
-      let results = [...MOCK_PROPERTIES];
-      const term = [city, keyword].filter(Boolean).join(' ').toLowerCase();
-      if (term) {
-        results = results.filter((item) =>
-          `${item.name} ${item.city} ${item.description || ''}`.toLowerCase().includes(term),
-        );
+      try {
+        const body = await propertyApi.searchProperties({
+          city,
+          minPrice,
+          maxPrice,
+          minRating,
+          sortBy,
+          amenities: amenities.join(','),
+          propertyTypes: propertyTypes.join(','),
+          keyword,
+        }, options);
+        return { ...mapPropertySearchResponse(body), source: 'api' };
+      } catch (error) {
+        if (error?.response?.status === 404) {
+          return {
+            data: [],
+            total: 0,
+            source: 'api',
+            unavailable: true,
+          };
+        }
+        throw error;
       }
-      if (minPrice != null) results = results.filter((item) => item.price >= Number(minPrice));
-      if (maxPrice != null) results = results.filter((item) => item.price <= Number(maxPrice));
-      if (sortBy === 'PRICE_ASC') results.sort((a, b) => a.price - b.price);
-      if (sortBy === 'PRICE_DESC') results.sort((a, b) => b.price - a.price);
-      const perPage = 15;
-      const start = (page - 1) * perPage;
+    },
+
+    getPropertyById: catalog.getPropertyById,
+
+    /**
+     * TV2 checkout source: rooms that are bookable for the requested stay, from Room Search.
+     * Kept separate from getPropertyById (Catalog) so the Catalog delegate stays untouched.
+     */
+    async getBookableProperty(id, { startDate, endDate, adults = 2, children = 0 } = {}) {
+      if (isMockEnabled) {
+        const found = properties.find((item) => String(item.id) === String(id));
+        return { data: found || null, source: 'mock' };
+      }
+
+      const response = await roomSearchApi.search({
+        check_in_date: startDate,
+        check_out_date: endDate,
+        guest_count: Math.max(1, Number(adults) + Number(children)),
+        per_page: 50,
+        page: 1,
+        property_id: id,
+        sort: 'price_asc',
+      });
+
       return {
-        data: results.slice(start, start + perPage),
-        total: results.length,
-        meta: { current_page: page, last_page: Math.max(1, Math.ceil(results.length / perPage)), per_page: perPage, total: results.length },
-        source: 'mock',
+        data: mapPropertyFromRooms(mapPropertyRooms(response.data?.data || [])),
+        source: 'room-search',
       };
-    }
+    },
+  };
+}
 
-    const response = await roomSearchApi.search(buildSearchParams({
-        city,
-        keyword,
-        startDate,
-        endDate,
-        adults,
-        children,
-        minPrice,
-        maxPrice,
-        amenities,
-        sortBy,
-        page,
-      }));
-
-    return {
-      data: (response.data?.data || []).map(mapSearchRoom),
-      meta: response.data?.meta,
-      source: 'api',
-    };
-  },
-
-  async getPropertyById(id, { startDate, endDate, adults = 2, children = 0 } = {}) {
-    if (MOCKS_ENABLED) {
-      const found = MOCK_PROPERTIES.find((item) => String(item.id) === String(id));
-      return { data: found || null, source: 'mock' };
-    }
-
-    return {
-      data: await searchPropertyRooms(id, { startDate, endDate, adults, children }),
-      source: 'api',
-    };
-  },
-
-  async getBookableProperty(id, { startDate, endDate, adults = 2, children = 0 } = {}) {
-    if (MOCKS_ENABLED) {
-      const found = MOCK_PROPERTIES.find((item) => String(item.id) === String(id));
-      return { data: found || null, source: 'mock' };
-    }
-
-    return {
-      data: await searchPropertyRooms(id, { startDate, endDate, adults, children }),
-      source: 'room-search',
-    };
-  },
-};
+export const propertyService = createPropertyService(createPublicPropertyApi(api), {
+  dev: import.meta.env?.DEV,
+  enableMocks: import.meta.env?.VITE_ENABLE_PROPERTY_MOCKS,
+  properties: MOCK_PROPERTIES,
+});

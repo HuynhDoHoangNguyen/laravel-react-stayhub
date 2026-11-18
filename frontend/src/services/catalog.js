@@ -1,3 +1,5 @@
+import { mapCatalogListResponse, mapCatalogDetailResponse } from '../mappers/catalogMapper.js';
+
 const currency = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 });
 
 export function formatCatalogPrice(value) {
@@ -22,24 +24,6 @@ export function catalogBackLink(search) {
         ? '/properties' + search : '/properties';
 }
 
-export function adaptCatalogProperty(dto) {
-    if (!dto || !dto.id || typeof dto.name !== 'string') throw new Error('Invalid catalog response');
-    const names = (items) => (items || []).map((item) => item.name);
-    return {
-        id: dto.id, name: dto.name, address: dto.address, description: dto.description,
-        propertyType: dto.type, price: dto.starting_price ?? null,
-        averageRating: dto.rating ?? null, reviewCount: dto.review_count ?? 0,
-        photos: dto.images || (dto.primary_image ? [dto.primary_image] : []),
-        checkInTime: dto.check_in_time, checkOutTime: dto.check_out_time,
-        amenities: names(dto.amenities), amenityIds: (dto.amenities || []).map((item) => item.id),
-        rooms: (dto.rooms || []).map((room) => ({
-            id: room.id, name: room.name, roomNumber: room.room_number, description: room.description,
-            capacity: room.capacity, price: room.price_per_night ?? null,
-            roomTypeName: room.room_type?.name, photos: room.images || [], amenities: names(room.amenities),
-        })),
-    };
-}
-
 export function catalogError(error) {
     const failure = new Error('Không thể tải thông tin cơ sở lưu trú. Vui lòng thử lại.');
     failure.status = error?.response?.status || error?.status || 0;
@@ -49,27 +33,22 @@ export function catalogError(error) {
     return failure;
 }
 
-export function createCatalogService(client, { dev = false, enableMocks = 'false', properties = [] } = {}) {
+export function createCatalogService(propertyApi, { dev = false, enableMocks = 'false', properties = [] } = {}) {
     const mocked = dev === true && enableMocks === 'true';
     async function getProperties({ page = 1, per_page = 12 } = {}, options = {}) {
         if (mocked) return { data: properties.slice((page - 1) * per_page, page * per_page), source: 'mock',
             meta: { current_page: page, per_page, total: properties.length, last_page: Math.max(1, Math.ceil(properties.length / per_page)) }, links: {} };
         try {
-            const { data: body } = await client.get('/api/public/properties', { timeout: 10000, ...options, params: { page, per_page } });
-            if (!Array.isArray(body?.data) || !body.meta
-                || !['current_page', 'last_page', 'per_page', 'total'].every((key) => Number.isSafeInteger(body.meta[key]))
-                || body.meta.current_page < 1 || body.meta.last_page < 1 || body.meta.per_page < 1 || body.meta.per_page > 24 || body.meta.total < 0) {
-                throw new Error('Invalid list response');
-            }
-            return { data: body.data.map(adaptCatalogProperty), meta: body.meta, links: body.links || {}, source: 'api' };
+            const body = await propertyApi.getProperties({ page, per_page }, options);
+            return { ...mapCatalogListResponse(body), source: 'api' };
         } catch (error) { throw catalogError(error); }
     }
     async function getPropertyById(id, options = {}) {
         if (mocked) return { data: properties.find((item) => String(item.id) === String(id)) || null, source: 'mock' };
         if (!/^[1-9]\d*$/.test(String(id))) return { data: null, source: 'api', unavailable: true };
         try {
-            const response = await client.get(`/api/public/properties/${encodeURIComponent(id)}`, { timeout: 10000, ...options });
-            return { data: adaptCatalogProperty(response.data?.data), source: 'api' };
+            const body = await propertyApi.getPropertyById(id, options);
+            return { ...mapCatalogDetailResponse(body), source: 'api' };
         } catch (error) {
             if (error?.response?.status === 404) return { data: null, source: 'api', unavailable: true };
             throw catalogError(error);

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mapInvoiceListResponse, mapInvoiceDetailResponse } from '../src/mappers/invoiceMapper.js';
+import { mapInvoiceListResponse, mapInvoiceDetailResponse, mapAdminInvoiceListResponse, mapAdminInvoiceHostOptionsResponse, mapAdminInvoicePropertyOptionsResponse } from '../src/mappers/invoiceMapper.js';
 import { normalizeApiError } from '../src/api/apiError.js';
 
 function invoice() {
@@ -25,6 +25,82 @@ function freeze(value) {
   }
   return value;
 }
+
+test('Property options project three fields and preserve immutable pagination with optional host scope', () => {
+  const body = freeze(list([{ id: 21, name: 'Cơ sở hiện tại', host_id: 17, address: 'Private' }]));
+  const output = mapAdminInvoicePropertyOptionsResponse(body, 17);
+  assert.deepEqual(output.data, [{ id: 21, name: 'Cơ sở hiện tại', host_id: 17 }]);
+  assert.notEqual(output.data[0], body.data[0]);
+  assert.notEqual(output.meta, body.meta);
+  assert.notEqual(output.links, body.links);
+  assert.deepEqual(mapAdminInvoicePropertyOptionsResponse(body).data, output.data);
+  assert.deepEqual(mapAdminInvoicePropertyOptionsResponse(list([]), 17).data, []);
+  assert.deepEqual(mapAdminInvoicePropertyOptionsResponse(list([{ id: 21, name: '0', host_id: Number.MAX_SAFE_INTEGER }])).data,
+    [{ id: 21, name: '0', host_id: Number.MAX_SAFE_INTEGER }]);
+});
+
+test('Property options reject missing or unsafe owners, duplicates, malformed success and wrong-host rows', () => {
+  for (const row of [{ id: 21, name: 'Cơ sở' }, { id: 21, name: 'Cơ sở', host_id: '17' },
+    { id: 21, name: 'Cơ sở', host_id: 0 }, { id: 21, name: 'Cơ sở', host_id: Number.MAX_SAFE_INTEGER + 1 },
+    { id: 21, name: 'Cơ sở', host_id: 18 }, { id: '21', name: 'Cơ sở', host_id: 17 }]) {
+    assert.throws(() => mapAdminInvoicePropertyOptionsResponse(list([row]), 17), (error) => error.kind === 'contract');
+  }
+  for (const body of [null, {}, { ...list(), links: {} }, { ...list(), meta: {} },
+    list([{ id: 21, name: 'A', host_id: 17 }, { id: 21, name: 'B', host_id: 17 }])]) {
+    assert.throws(() => mapAdminInvoicePropertyOptionsResponse(body), (error) => error.code === 'INVALID_INVOICE_RESPONSE');
+  }
+});
+
+test('Host options project current names and safe IDs with immutable pagination and no private fields', () => {
+  const body = freeze(list([{ id: 17, name: 'Tên hiện tại', email: 'private@example.test', status: 'BLOCKED' }]));
+  const output = mapAdminInvoiceHostOptionsResponse(body);
+  assert.deepEqual(output.data, [{ id: 17, name: 'Tên hiện tại' }]);
+  assert.notEqual(output.data[0], body.data[0]);
+  assert.deepEqual(output.meta, body.meta);
+  assert.notEqual(output.meta, body.meta);
+  assert.notEqual(output.links, body.links);
+  assert.deepEqual(mapAdminInvoiceHostOptionsResponse(list([])).data, []);
+  assert.deepEqual(mapAdminInvoiceHostOptionsResponse(list([{ id: Number.MAX_SAFE_INTEGER, name: '0' }])).data, [{ id: Number.MAX_SAFE_INTEGER, name: '0' }]);
+});
+
+test('Host options reject bad envelopes, IDs, names, duplicate rows and pagination', () => {
+  const cases = [null, {}, { ...list(), data: {} }, { ...list(), links: {} },
+    { ...list(), meta: { ...list().meta, total: '2' } }, { ...list(), meta: { ...list().meta, per_page: 51 } },
+    ...[{}, { id: '17', name: 'Host' }, { id: 0, name: 'Host' }, { id: Number.MAX_SAFE_INTEGER + 1, name: 'Host' },
+      { id: 17, name: null }, { id: 17 }].map((row) => list([row])),
+    list([{ id: 17, name: 'A' }, { id: 17, name: 'B' }])];
+  for (const body of cases) assert.throws(() => mapAdminInvoiceHostOptionsResponse(body), (error) => error.kind === 'contract');
+});
+
+test('Admin maps exactly ten fields with decimal/date/null snapshots and cloned pagination', () => {
+  const source = invoice();
+  const body = freeze(list([{ ...source, items: [{ private: true }] }]));
+  const output = mapAdminInvoiceListResponse(body);
+  assert.equal(Object.keys(output.data[0]).length, 10);
+  for (const field of ['customer_email', 'customer_phone', 'items', 'subtotal', 'discount_amount', 'extra_fee']) {
+    assert.equal(field in output.data[0], false);
+  }
+  assert.equal(output.data[0].total_amount, '1234567.89');
+  assert.equal(output.data[0].paid_at, null);
+  assert.notEqual(output.meta, body.meta);
+  assert.notEqual(output.links, body.links);
+  const minimal = Object.fromEntries(Object.keys(output.data[0]).map((field) => [field, source[field]]));
+  assert.deepEqual(mapAdminInvoiceListResponse(list([minimal])).data[0], minimal);
+  assert.deepEqual(mapAdminInvoiceListResponse(list([])).data, []);
+  for (const payment_status of ['UNPAID', 'PAID', 'REFUNDED']) {
+    assert.equal(mapAdminInvoiceListResponse(list([{ ...minimal, payment_status, paid_at: null, created_at: null }])).data[0].payment_status, payment_status);
+  }
+});
+
+test('Admin rejects malformed success instead of disguising it as empty data', () => {
+  const changes = [{ id: '7' }, { booking_id: 0 }, { customer_name: null }, { total_amount: 123 },
+    { total_amount: '1.2' }, { total_amount: '1e2' }, { payment_status: 'FUTURE' },
+    { paid_at: undefined }, { created_at: 'invalid' }];
+  const cases = [null, {}, { ...list(), data: null }, { ...list(), meta: {} },
+    { ...list(), links: {} }, { ...list(), meta: { ...list().meta, per_page: 51 } },
+    ...changes.map((change) => list([{ ...invoice(), ...change }]))];
+  for (const body of cases) assert.throws(() => mapAdminInvoiceListResponse(body), (error) => error.kind === 'contract');
+});
 
 test('list preserves exact Page-facing values, decimal snapshots and metadata without mutation', () => {
   const body = freeze(list([invoice(), { ...invoice(), id: 8, payment_status: 'FUTURE_STATUS', paid_at: '2026-11-14T02:00:00.000000Z' }]));
