@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\DTOs\Booking\Requests\PreviewBookingRequest;
+use App\DTOs\Booking\Requests\StoreBookingRequest;
 use App\Enums\BookingStatus;
 use App\Exceptions\RoomNotAvailableException;
 use App\Models\Booking;
@@ -27,26 +29,26 @@ class BookingService
      *
      * @return array<string, mixed>
      */
-    public function preview(array $data): array
+    public function preview(PreviewBookingRequest $input): array
     {
-        $room = $this->bookingRepository->findRoomOrFail((int) $data['room_id']);
+        $room = $this->bookingRepository->findRoomOrFail($input->roomId);
         $quote = $this->pricingService->quote(
             $room,
-            $data['check_in_date'],
-            $data['check_out_date']
+            $input->checkInDate,
+            $input->checkOutDate
         );
         $availability = $this->availabilityService->check(
             $room,
-            $data['check_in_date'],
-            $data['check_out_date'],
-            (int) $data['guest_count']
+            $input->checkInDate,
+            $input->checkOutDate,
+            $input->guestCount
         );
 
         return [
             'room_id' => $room->id,
-            'check_in_date' => $data['check_in_date'],
-            'check_out_date' => $data['check_out_date'],
-            'guest_count' => (int) $data['guest_count'],
+            'check_in_date' => $input->checkInDate,
+            'check_out_date' => $input->checkOutDate,
+            'guest_count' => $input->guestCount,
             'number_of_nights' => $quote['number_of_nights'],
             'price_per_night' => $quote['price_per_night'],
             'room_total' => $quote['room_total'],
@@ -59,18 +61,18 @@ class BookingService
      *
      * @throws RoomNotAvailableException
      */
-    public function create(User $customer, array $data): Booking
+    public function create(User $customer, StoreBookingRequest $input): Booking
     {
-        return DB::transaction(function () use ($customer, $data) {
+        return DB::transaction(function () use ($customer, $input) {
             // Lock room row for update
-            $room = $this->bookingRepository->lockRoomForUpdate((int) $data['room_id']);
+            $room = $this->bookingRepository->lockRoomForUpdate($input->roomId);
 
             // Re-check availability under lock
             $checkResult = $this->availabilityService->check(
                 $room,
-                $data['check_in_date'],
-                $data['check_out_date'],
-                (int) $data['guest_count']
+                $input->checkInDate,
+                $input->checkOutDate,
+                $input->guestCount
             );
 
             if (! $checkResult['available']) {
@@ -83,8 +85,8 @@ class BookingService
             // Snapshot price from DB
             $quote = $this->pricingService->quote(
                 $room,
-                $data['check_in_date'],
-                $data['check_out_date']
+                $input->checkInDate,
+                $input->checkOutDate
             );
 
             // Generate unique booking code
@@ -106,14 +108,14 @@ class BookingService
                 'booking_code' => $bookingCode,
                 'customer_id' => $customer->id,
                 'room_id' => $room->id,
-                'check_in_date' => $data['check_in_date'],
-                'check_out_date' => $data['check_out_date'],
-                'guest_count' => (int) $data['guest_count'],
+                'check_in_date' => $input->checkInDate,
+                'check_out_date' => $input->checkOutDate,
+                'guest_count' => $input->guestCount,
                 'number_of_nights' => $quote['number_of_nights'],
                 'price_per_night' => $quote['price_per_night'],
                 'room_total' => $quote['room_total'],
                 'status' => BookingStatus::PENDING,
-                'note' => $data['note'] ?? null,
+                'note' => $input->note,
             ]);
 
             $this->bookingRepository->loadForCustomerCreation($created);

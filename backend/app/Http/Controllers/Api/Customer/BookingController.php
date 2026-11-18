@@ -9,7 +9,7 @@ use App\Models\Booking;
 use App\Services\Booking\BookingQueryService;
 use App\Services\BookingService;
 use App\Traits\ApiResponse;
-use App\Validators\StoreBookingRequest;
+use App\Validators\Booking\BookingValidator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -20,12 +20,14 @@ class BookingController extends Controller
 
     public function __construct(
         protected BookingService $bookingService,
-        protected BookingQueryService $bookingQueryService
+        protected BookingQueryService $bookingQueryService,
+        protected BookingValidator $bookingValidator
     ) {}
 
-    public function store(StoreBookingRequest $request): JsonResponse
+    public function store(Request $request): JsonResponse
     {
-        $booking = $this->bookingService->create($request->user(), $request->validated());
+        $input = $this->bookingValidator->validateStore($request->all());
+        $booking = $this->bookingService->create($request->user(), $input);
 
         return $this->successResponse(
             new BookingResource($booking),
