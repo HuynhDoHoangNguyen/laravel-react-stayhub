@@ -5,7 +5,9 @@ namespace App\Repositories\Catalog;
 use App\DTOs\Catalog\Requests\CreateHostRoomRequest;
 use App\DTOs\Catalog\Requests\UpdateHostRoomRequest;
 use App\Enums\PropertyStatus;
+use App\Enums\MaintenanceStatus;
 use App\Enums\RoomStatus;
+use App\Models\Maintenance;
 use App\Models\Property;
 use App\Models\PropertyImage;
 use App\Models\Room;
@@ -16,6 +18,19 @@ use Illuminate\Database\Eloquent\Collection;
 
 class CatalogRepository
 {
+    public function roomExistsForMaintenanceCheck(int $roomId): bool
+    {
+        return Room::query()->whereKey($roomId)->exists();
+    }
+
+    /** Uncast facts preserve invalid legacy dates for the UC51 validator. */
+    public function getRoomMaintenanceFacts(int $roomId): \Illuminate\Support\Collection
+    {
+        return Maintenance::query()->where('room_id', $roomId)
+            ->whereIn('status', [MaintenanceStatus::SCHEDULED->value, MaintenanceStatus::IN_PROGRESS->value])
+            ->orderBy('id')->toBase()->get(['id', 'status', 'start_date', 'end_date']);
+    }
+
     public function lockRoomBookingFacts(Room $room): \Illuminate\Support\Collection
     {
         return $room->bookings()->whereIn('status', ['PENDING', 'CONFIRMED', 'CHECKED_IN'])
