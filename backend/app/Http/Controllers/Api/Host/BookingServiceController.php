@@ -3,14 +3,12 @@
 namespace App\Http\Controllers\Api\Host;
 
 use App\Http\Controllers\Controller;
-use App\Validators\AddBookingServiceRequest;
-use App\Validators\UpdateBookingServiceRequest;
 use App\Http\Resources\BookingServiceResource;
 use App\Models\Booking;
 use App\Models\BookingService as BookingServiceModel;
 use App\Services\BookingServiceManagementService;
-use App\Support\DecimalMoney;
 use App\Traits\ApiResponse;
+use App\Validators\Booking\ServiceValidator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -21,7 +19,8 @@ class BookingServiceController extends Controller
     use ApiResponse;
 
     public function __construct(
-        protected BookingServiceManagementService $bookingServiceManagement
+        protected BookingServiceManagementService $bookingServiceManagement,
+        protected ServiceValidator $validator
     ) {}
 
     public function index(Request $request, Booking $booking): JsonResponse
@@ -36,15 +35,13 @@ class BookingServiceController extends Controller
         );
     }
 
-    public function store(AddBookingServiceRequest $request, Booking $booking): JsonResponse
+    public function store(Request $request, Booking $booking): JsonResponse
     {
+        $input = $this->validator->validateAddBookingService($request->all());
+
         Gate::authorize('manageHost', $booking);
 
-        $added = $this->bookingServiceManagement->add(
-            $booking,
-            (int) $request->input('service_id'),
-            DecimalMoney::normalizeQuantity($request->validated('quantity'))
-        );
+        $added = $this->bookingServiceManagement->add($booking, $input);
 
         return $this->successResponse(
             new BookingServiceResource($added),
@@ -54,10 +51,12 @@ class BookingServiceController extends Controller
     }
 
     public function update(
-        UpdateBookingServiceRequest $request,
+        Request $request,
         Booking $booking,
         BookingServiceModel $bookingService
     ): JsonResponse {
+        $input = $this->validator->validateUpdateBookingService($request->all());
+
         Gate::authorize('manageHost', $booking);
 
         if ($bookingService->booking_id !== $booking->id) {
@@ -67,7 +66,7 @@ class BookingServiceController extends Controller
         $updated = $this->bookingServiceManagement->updateQuantity(
             $booking,
             $bookingService,
-            DecimalMoney::normalizeQuantity($request->validated('quantity'))
+            $input
         );
 
         return $this->successResponse(

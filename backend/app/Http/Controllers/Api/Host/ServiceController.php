@@ -3,14 +3,11 @@
 namespace App\Http\Controllers\Api\Host;
 
 use App\Http\Controllers\Controller;
-use App\Validators\SetServiceStatusRequest;
-use App\Validators\StoreServiceRequest;
-use App\Validators\UpdateServiceRequest;
 use App\Http\Resources\ServiceResource;
 use App\Models\Service;
 use App\Services\PropertyServiceManagementService;
-use App\Support\DecimalMoney;
 use App\Traits\ApiResponse;
+use App\Validators\Booking\ServiceValidator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -19,7 +16,8 @@ class ServiceController extends Controller
     use ApiResponse;
 
     public function __construct(
-        protected PropertyServiceManagementService $serviceManagement
+        protected PropertyServiceManagementService $serviceManagement,
+        protected ServiceValidator $validator
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -39,11 +37,10 @@ class ServiceController extends Controller
         ]);
     }
 
-    public function store(StoreServiceRequest $request): JsonResponse
+    public function store(Request $request): JsonResponse
     {
-        $data = $request->validated();
-        $data['price'] = DecimalMoney::normalizeMoney($data['price'], 'price');
-        $service = $this->serviceManagement->create($request->user(), $data);
+        $input = $this->validator->validateStoreService($request->all());
+        $service = $this->serviceManagement->create($request->user(), $input);
 
         return $this->successResponse(
             new ServiceResource($service),
@@ -52,11 +49,10 @@ class ServiceController extends Controller
         );
     }
 
-    public function update(UpdateServiceRequest $request, Service $service): JsonResponse
+    public function update(Request $request, Service $service): JsonResponse
     {
-        $data = $request->validated();
-        $data['price'] = DecimalMoney::normalizeMoney($data['price'], 'price');
-        $updated = $this->serviceManagement->update($request->user(), $service, $data);
+        $input = $this->validator->validateUpdateService($request->all());
+        $updated = $this->serviceManagement->update($request->user(), $service, $input);
 
         return $this->successResponse(
             new ServiceResource($updated),
@@ -64,12 +60,13 @@ class ServiceController extends Controller
         );
     }
 
-    public function status(SetServiceStatusRequest $request, Service $service): JsonResponse
+    public function status(Request $request, Service $service): JsonResponse
     {
+        $input = $this->validator->validateSetStatus($request->all());
         $updated = $this->serviceManagement->setStatus(
             $request->user(),
             $service,
-            (bool) $request->input('status')
+            $input
         );
 
         return $this->successResponse(

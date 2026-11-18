@@ -2,6 +2,9 @@
 
 namespace App\Services;
 
+use App\DTOs\Booking\Requests\SetServiceStatusRequest;
+use App\DTOs\Booking\Requests\StoreServiceRequest;
+use App\DTOs\Booking\Requests\UpdateServiceRequest;
 use App\Models\Service;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -27,25 +30,25 @@ class PropertyServiceManagementService
     /**
      * Create a new service for a property owned by the host.
      */
-    public function create(User $host, array $data): Service
+    public function create(User $host, StoreServiceRequest $input): Service
     {
         // Verify property ownership
-        $this->serviceRepository->findPropertyForHostOrFail((int) $data['property_id'], $host->id);
+        $this->serviceRepository->findPropertyForHostOrFail($input->propertyId, $host->id);
 
         return $this->serviceRepository->create([
-            'property_id' => $data['property_id'],
-            'name' => $data['name'],
-            'description' => $data['description'] ?? null,
-            'unit' => $data['unit'],
-            'price' => $data['price'],
-            'status' => $data['status'] ?? true,
+            'property_id' => $input->propertyId,
+            'name' => $input->name,
+            'description' => $input->description,
+            'unit' => $input->unit,
+            'price' => $input->price,
+            'status' => $input->status,
         ]);
     }
 
     /**
      * Update an existing service.
      */
-    public function update(User $host, Service $service, array $data): Service
+    public function update(User $host, Service $service, UpdateServiceRequest $input): Service
     {
         // Verify ownership
         if (! $this->serviceRepository->belongsToHost($service, $host->id)) {
@@ -53,24 +56,23 @@ class PropertyServiceManagementService
         }
 
         return $this->serviceRepository->update($service, [
-            'name' => $data['name'],
-            'description' => $data['description'] ?? null,
-            'unit' => $data['unit'],
-            'price' => $data['price'],
+            'name' => $input->name,
+            'description' => $input->description,
+            'unit' => $input->unit,
+            'price' => $input->price,
         ]);
-
     }
 
     /**
      * Set active/inactive status of a service.
      */
-    public function setStatus(User $host, Service $service, bool $status): Service
+    public function setStatus(User $host, Service $service, SetServiceStatusRequest $input): Service
     {
         // Verify ownership
         if (! $this->serviceRepository->belongsToHost($service, $host->id)) {
             abort(404, 'Dịch vụ không tồn tại.');
         }
 
-        return $this->serviceRepository->setStatus($service, $status);
+        return $this->serviceRepository->setStatus($service, $input->status);
     }
 }
