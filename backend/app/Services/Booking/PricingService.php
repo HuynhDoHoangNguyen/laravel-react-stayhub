@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Booking;
 
 use App\Exceptions\BookingDomainException;
 use App\Models\Room;

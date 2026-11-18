@@ -7,7 +7,7 @@ use App\Http\Resources\BookingResource;
 use App\Http\Resources\BookingServiceResource;
 use App\Models\Booking;
 use App\Services\Booking\BookingQueryService;
-use App\Services\BookingService;
+use App\Services\Booking\BookingService;
 use App\Traits\ApiResponse;
 use App\Validators\Booking\BookingValidator;
 use Illuminate\Http\JsonResponse;

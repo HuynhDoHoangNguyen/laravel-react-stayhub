@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api\Host;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ServiceResource;
 use App\Models\Service;
-use App\Services\PropertyServiceManagementService;
+use App\Services\Booking\PropertyServiceManagementService;
 use App\Traits\ApiResponse;
 use App\Validators\Booking\ServiceValidator;
 use Illuminate\Http\JsonResponse;

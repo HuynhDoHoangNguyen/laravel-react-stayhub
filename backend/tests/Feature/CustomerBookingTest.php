@@ -458,7 +458,7 @@ class CustomerBookingTest extends TestCase
         $owner = User::factory()->customer()->create();
         $other = User::factory()->customer()->create();
         $booking = Booking::factory()->pending()->create(['customer_id' => $owner->id]);
-        $service = app(\App\Services\BookingService::class);
+        $service = app(\App\Services\Booking\BookingService::class);
 
         try {
             $service->cancel($booking, $other);

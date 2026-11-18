@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api\Public;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\RoomSearchResource;
-use App\Services\SearchService;
+use App\Services\Booking\SearchService;
 use App\Traits\ApiResponse;
 use App\Validators\Booking\RoomSearchValidator;
 use Illuminate\Http\JsonResponse;

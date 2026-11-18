@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\BookingServiceResource;
 use App\Models\Booking;
 use App\Models\BookingService as BookingServiceModel;
-use App\Services\BookingServiceManagementService;
+use App\Services\Booking\BookingServiceManagementService;
 use App\Traits\ApiResponse;
 use App\Validators\Booking\ServiceValidator;
 use Illuminate\Http\JsonResponse;

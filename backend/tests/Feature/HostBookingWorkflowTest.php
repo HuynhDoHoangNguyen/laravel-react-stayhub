@@ -10,7 +10,7 @@ use App\Models\Maintenance;
 use App\Models\Property;
 use App\Models\Room;
 use App\Models\User;
-use App\Services\AvailabilityService;
+use App\Services\Booking\AvailabilityService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Database\Events\QueryExecuted;
@@ -43,7 +43,7 @@ class HostBookingWorkflowTest extends TestCase
 
         $this->actingAs($customer);
         try {
-            app(\App\Services\BookingWorkflowService::class)->confirm($booking, $customer);
+            app(\App\Services\Booking\BookingWorkflowService::class)->confirm($booking, $customer);
             $this->fail('A customer must not invoke a Host workflow directly.');
         } catch (\Illuminate\Auth\Access\AuthorizationException $exception) {
             $this->assertSame(403, $exception->status());
@@ -80,7 +80,7 @@ class HostBookingWorkflowTest extends TestCase
             'checkIn' => Booking::factory()->confirmed()->create(['room_id' => $room->id]),
             'checkOut' => Booking::factory()->checkedIn()->create(['room_id' => $room->id]),
         ];
-        $workflow = app(\App\Services\BookingWorkflowService::class);
+        $workflow = app(\App\Services\Booking\BookingWorkflowService::class);
 
         foreach ($bookings as $method => $booking) {
             $status = $booking->status;
@@ -107,7 +107,7 @@ class HostBookingWorkflowTest extends TestCase
 
             return Booking::factory()->create(['room_id' => $room->id, 'status' => $status]);
         };
-        $workflow = app(\App\Services\BookingWorkflowService::class);
+        $workflow = app(\App\Services\Booking\BookingWorkflowService::class);
 
         $this->assertSame(BookingStatus::CONFIRMED, $workflow->confirm($makeBooking(BookingStatus::PENDING->value), $host)->status);
         $this->assertSame(BookingStatus::REJECTED, $workflow->reject($makeBooking(BookingStatus::PENDING->value), $host)->status);
@@ -123,7 +123,7 @@ class HostBookingWorkflowTest extends TestCase
         $property = Property::factory()->create(['host_id' => $owner->id, 'status' => PropertyStatus::ACTIVE]);
         $room = Room::factory()->create(['property_id' => $property->id, 'capacity' => 4, 'status' => RoomStatus::ACTIVE]);
         $booking = Booking::factory()->pending()->create(['room_id' => $room->id]);
-        $workflow = app(\App\Services\BookingWorkflowService::class);
+        $workflow = app(\App\Services\Booking\BookingWorkflowService::class);
 
         foreach ([[$customer, 403], [$otherHost, 404]] as [$actor, $expectedStatus]) {
             try {

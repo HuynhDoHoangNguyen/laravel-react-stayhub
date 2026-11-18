@@ -3,7 +3,7 @@
 namespace Tests\Unit;
 
 use App\Models\Room;
-use App\Services\PricingService;
+use App\Services\Booking\PricingService;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 

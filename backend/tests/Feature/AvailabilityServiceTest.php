@@ -10,7 +10,7 @@ use App\Models\Booking;
 use App\Models\Maintenance;
 use App\Models\Property;
 use App\Models\Room;
-use App\Services\AvailabilityService;
+use App\Services\Booking\AvailabilityService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 

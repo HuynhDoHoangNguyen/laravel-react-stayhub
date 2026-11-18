@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api\Public;
 
 use App\Http\Controllers\Controller;
-use App\Services\BookingService;
+use App\Services\Booking\BookingService;
 use App\Traits\ApiResponse;
 use App\Validators\Booking\BookingValidator;
 use Illuminate\Http\JsonResponse;

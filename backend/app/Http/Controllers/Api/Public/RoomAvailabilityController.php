@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api\Public;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AvailabilityResource;
 use App\Models\Room;
-use App\Services\AvailabilityService;
+use App\Services\Booking\AvailabilityService;
 use App\Traits\ApiResponse;
 use App\Validators\Booking\RoomSearchValidator;
 use Illuminate\Http\JsonResponse;

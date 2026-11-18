@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Booking;
 
 use App\DTOs\Booking\Requests\SearchRoomsQuery;
 use App\Repositories\Booking\RoomAvailabilityRepository;

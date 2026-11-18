@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Booking;
 
 use App\DTOs\Booking\Requests\PreviewBookingRequest;
 use App\DTOs\Booking\Requests\StoreBookingRequest;

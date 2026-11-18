@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Booking;
 
 use App\Enums\BookingStatus;
 use App\Exceptions\BookingCancellationNotAllowedException;

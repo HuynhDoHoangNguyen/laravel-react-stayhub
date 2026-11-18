@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\HostBookingResource;
 use App\Models\Booking;
 use App\Services\Booking\BookingQueryService;
-use App\Services\BookingWorkflowService;
+use App\Services\Booking\BookingWorkflowService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
