@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\DTOs\Booking\Requests\CheckAvailabilityQuery;
 use App\Enums\PropertyStatus;
 use App\Enums\RoomStatus;
 use App\Models\Room;
@@ -11,6 +12,21 @@ use Carbon\Carbon;
 class AvailabilityService
 {
     public function __construct(private readonly RoomAvailabilityRepository $repository) {}
+
+    /**
+     * Check availability of a specific room using CheckAvailabilityQuery DTO.
+     *
+     * @return array{available: bool, reasons: string[]}
+     */
+    public function checkRoom(Room $room, CheckAvailabilityQuery $input): array
+    {
+        return $this->check(
+            $room,
+            $input->checkInDate,
+            $input->checkOutDate,
+            $input->guestCount
+        );
+    }
 
     /**
      * Check availability of a specific room for given dates and guest count.

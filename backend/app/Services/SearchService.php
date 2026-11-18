@@ -2,8 +2,9 @@
 
 namespace App\Services;
 
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use App\DTOs\Booking\Requests\SearchRoomsQuery;
 use App\Repositories\Booking\RoomAvailabilityRepository;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class SearchService
 {
@@ -14,10 +15,11 @@ class SearchService
     /**
      * Search available rooms matching filters.
      */
-    public function searchRooms(array $filters): LengthAwarePaginator
+    public function searchRooms(SearchRoomsQuery $input): LengthAwarePaginator
     {
-        $sort = $filters['sort'] ?? 'price_asc';
-        $perPage = min((int) ($filters['per_page'] ?? 15), 50);
+        $filters = $input->toArray();
+        $sort = $input->sort ?? 'price_asc';
+        $perPage = min((int) ($input->perPage ?? 15), 50);
         if ($perPage < 1) {
             $perPage = 15;
         }

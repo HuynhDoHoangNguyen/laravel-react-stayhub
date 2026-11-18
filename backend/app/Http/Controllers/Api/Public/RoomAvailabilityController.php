@@ -3,36 +3,33 @@
 namespace App\Http\Controllers\Api\Public;
 
 use App\Http\Controllers\Controller;
-use App\Validators\CheckAvailabilityRequest;
 use App\Http\Resources\AvailabilityResource;
 use App\Models\Room;
 use App\Services\AvailabilityService;
 use App\Traits\ApiResponse;
+use App\Validators\Booking\RoomSearchValidator;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class RoomAvailabilityController extends Controller
 {
     use ApiResponse;
 
     public function __construct(
-        protected AvailabilityService $availabilityService
+        protected AvailabilityService $availabilityService,
+        protected RoomSearchValidator $validator
     ) {}
 
-    public function show(CheckAvailabilityRequest $request, Room $room): JsonResponse
+    public function show(Request $request, Room $room): JsonResponse
     {
-        $validated = $request->validated();
+        $query = $this->validator->validateCheckAvailability($request->all());
 
-        $availability = $this->availabilityService->check(
-            $room,
-            $validated['check_in_date'],
-            $validated['check_out_date'],
-            (int) $validated['guest_count']
-        );
+        $availability = $this->availabilityService->checkRoom($room, $query);
 
         $blockedRanges = $this->availabilityService->blockedRanges(
             $room,
-            $validated['check_in_date'],
-            $validated['check_out_date']
+            $query->checkInDate,
+            $query->checkOutDate
         );
 
         $availability['blocked_ranges'] = $blockedRanges;
