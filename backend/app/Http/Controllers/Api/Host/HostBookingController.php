@@ -65,9 +65,7 @@ class HostBookingController extends Controller
 
     public function confirm(Request $request, Booking $booking): JsonResponse
     {
-        Gate::authorize('manageHost', $booking);
-
-        $confirmed = $this->workflowService->confirm($booking);
+        $confirmed = $this->workflowService->confirm($booking, $request->user());
         $confirmed->load(['customer', 'room.property', 'bookingServices']);
         $confirmed->services_total = DecimalMoney::sum($confirmed->bookingServices->pluck('amount'));
 
@@ -79,9 +77,7 @@ class HostBookingController extends Controller
 
     public function reject(Request $request, Booking $booking): JsonResponse
     {
-        Gate::authorize('manageHost', $booking);
-
-        $rejected = $this->workflowService->reject($booking, $request->input('reason'));
+        $rejected = $this->workflowService->reject($booking, $request->user(), $request->input('reason'));
         $rejected->load(['customer', 'room.property', 'bookingServices']);
         $rejected->services_total = DecimalMoney::sum($rejected->bookingServices->pluck('amount'));
 
@@ -93,9 +89,7 @@ class HostBookingController extends Controller
 
     public function checkIn(Request $request, Booking $booking): JsonResponse
     {
-        Gate::authorize('manageHost', $booking);
-
-        $checkedIn = $this->workflowService->checkIn($booking);
+        $checkedIn = $this->workflowService->checkIn($booking, $request->user());
         $checkedIn->load(['customer', 'room.property', 'bookingServices']);
         $checkedIn->services_total = DecimalMoney::sum($checkedIn->bookingServices->pluck('amount'));
 
@@ -107,9 +101,7 @@ class HostBookingController extends Controller
 
     public function checkOut(Request $request, Booking $booking): JsonResponse
     {
-        Gate::authorize('manageHost', $booking);
-
-        $completed = $this->workflowService->checkOut($booking);
+        $completed = $this->workflowService->checkOut($booking, $request->user());
         $completed->load(['customer', 'room.property', 'bookingServices']);
         $completed->services_total = DecimalMoney::sum($completed->bookingServices->pluck('amount'));
 

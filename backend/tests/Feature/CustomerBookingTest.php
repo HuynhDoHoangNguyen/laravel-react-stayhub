@@ -453,6 +453,25 @@ class CustomerBookingTest extends TestCase
             ->assertJsonPath('data.status', 'CANCELLED');
     }
 
+    public function test_booking_service_cancel_uses_the_supplied_customer_actor(): void
+    {
+        $owner = User::factory()->customer()->create();
+        $other = User::factory()->customer()->create();
+        $booking = Booking::factory()->pending()->create(['customer_id' => $owner->id]);
+        $service = app(\App\Services\BookingService::class);
+
+        try {
+            $service->cancel($booking, $other);
+            $this->fail('A customer cannot cancel another customer booking through the service.');
+        } catch (\Illuminate\Auth\Access\AuthorizationException $exception) {
+            $this->assertSame(404, $exception->status());
+        }
+        $this->assertSame(BookingStatus::PENDING, Booking::findOrFail($booking->id)->status);
+
+        $cancelled = $service->cancel($booking, $owner);
+        $this->assertSame(BookingStatus::CANCELLED, $cancelled->status);
+    }
+
     public function test_cancel_failure_after_update_rolls_back_and_repeat_cancel_keeps_valid_state(): void
     {
         $customer = User::factory()->customer()->create();

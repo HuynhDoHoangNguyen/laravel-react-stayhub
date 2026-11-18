@@ -63,8 +63,6 @@ class BookingController extends Controller
 
     public function cancel(Request $request, Booking $booking): JsonResponse
     {
-        Gate::authorize('cancel', $booking);
-
         $cancelledBooking = $this->bookingService->cancel($booking, $request->user());
         $cancelledBooking->load(['room.property', 'bookingServices']);
 

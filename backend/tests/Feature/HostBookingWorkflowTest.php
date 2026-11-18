@@ -33,6 +33,109 @@ class HostBookingWorkflowTest extends TestCase
         $this->actingAs($customer)->getJson('/api/host/bookings')->assertStatus(403);
     }
 
+    public function test_direct_workflow_rejects_a_customer_actor(): void
+    {
+        $host = User::factory()->host()->create();
+        $customer = User::factory()->customer()->create();
+        $property = Property::factory()->create(['host_id' => $host->id, 'status' => PropertyStatus::ACTIVE]);
+        $room = Room::factory()->create(['property_id' => $property->id, 'capacity' => 4, 'status' => RoomStatus::ACTIVE]);
+        $booking = Booking::factory()->pending()->create(['room_id' => $room->id]);
+
+        $this->actingAs($customer);
+        try {
+            app(\App\Services\BookingWorkflowService::class)->confirm($booking, $customer);
+            $this->fail('A customer must not invoke a Host workflow directly.');
+        } catch (\Illuminate\Auth\Access\AuthorizationException $exception) {
+            $this->assertSame(403, $exception->status());
+        }
+        $this->assertSame(BookingStatus::PENDING, Booking::findOrFail($booking->id)->status);
+    }
+
+    public function test_host_booking_policy_keeps_role_before_ownership_results(): void
+    {
+        $owner = User::factory()->host()->create();
+        $otherHost = User::factory()->host()->create();
+        $customer = User::factory()->customer()->create();
+        $admin = User::factory()->admin()->create();
+        $property = Property::factory()->create(['host_id' => $owner->id, 'status' => PropertyStatus::ACTIVE]);
+        $room = Room::factory()->create(['property_id' => $property->id, 'capacity' => 4, 'status' => RoomStatus::ACTIVE]);
+        $booking = Booking::factory()->pending()->create(['customer_id' => $customer->id, 'room_id' => $room->id]);
+        $policy = new \App\Policies\BookingPolicy();
+
+        $this->assertTrue($policy->manageHost($owner, $booking)->allowed());
+        $this->assertSame(404, $policy->manageHost($otherHost, $booking)->status());
+        $this->assertSame(403, $policy->manageHost($customer, $booking)->status());
+        $this->assertSame(403, $policy->manageHost($admin, $booking)->status());
+    }
+
+    public function test_host_of_another_property_cannot_invoke_any_workflow_service_method(): void
+    {
+        $owner = User::factory()->host()->create();
+        $otherHost = User::factory()->host()->create();
+        $property = Property::factory()->create(['host_id' => $owner->id, 'status' => PropertyStatus::ACTIVE]);
+        $room = Room::factory()->create(['property_id' => $property->id, 'capacity' => 4, 'status' => RoomStatus::ACTIVE]);
+        $bookings = [
+            'confirm' => Booking::factory()->pending()->create(['room_id' => $room->id]),
+            'reject' => Booking::factory()->pending()->create(['room_id' => $room->id]),
+            'checkIn' => Booking::factory()->confirmed()->create(['room_id' => $room->id]),
+            'checkOut' => Booking::factory()->checkedIn()->create(['room_id' => $room->id]),
+        ];
+        $workflow = app(\App\Services\BookingWorkflowService::class);
+
+        foreach ($bookings as $method => $booking) {
+            $status = $booking->status;
+            try {
+                if ($method === 'reject') {
+                    $workflow->reject($booking, $otherHost, 'reason');
+                } else {
+                    $workflow->{$method}($booking, $otherHost);
+                }
+                $this->fail("Expected {$method} to deny a Host from another property.");
+            } catch (\Illuminate\Auth\Access\AuthorizationException $exception) {
+                $this->assertSame(404, $exception->status());
+            }
+            $this->assertSame($status, Booking::findOrFail($booking->id)->status);
+        }
+    }
+
+    public function test_valid_host_actor_can_call_each_workflow_service_method(): void
+    {
+        $host = User::factory()->host()->create();
+        $makeBooking = function (string $status) use ($host): Booking {
+            $property = Property::factory()->create(['host_id' => $host->id, 'status' => PropertyStatus::ACTIVE]);
+            $room = Room::factory()->create(['property_id' => $property->id, 'capacity' => 4, 'status' => RoomStatus::ACTIVE]);
+
+            return Booking::factory()->create(['room_id' => $room->id, 'status' => $status]);
+        };
+        $workflow = app(\App\Services\BookingWorkflowService::class);
+
+        $this->assertSame(BookingStatus::CONFIRMED, $workflow->confirm($makeBooking(BookingStatus::PENDING->value), $host)->status);
+        $this->assertSame(BookingStatus::REJECTED, $workflow->reject($makeBooking(BookingStatus::PENDING->value), $host)->status);
+        $this->assertSame(BookingStatus::CHECKED_IN, $workflow->checkIn($makeBooking(BookingStatus::CONFIRMED->value), $host)->status);
+        $this->assertSame(BookingStatus::COMPLETED, $workflow->checkOut($makeBooking(BookingStatus::CHECKED_IN->value), $host)->status);
+    }
+
+    public function test_workflow_authorization_precedes_transition_validation(): void
+    {
+        $owner = User::factory()->host()->create();
+        $otherHost = User::factory()->host()->create();
+        $customer = User::factory()->customer()->create();
+        $property = Property::factory()->create(['host_id' => $owner->id, 'status' => PropertyStatus::ACTIVE]);
+        $room = Room::factory()->create(['property_id' => $property->id, 'capacity' => 4, 'status' => RoomStatus::ACTIVE]);
+        $booking = Booking::factory()->pending()->create(['room_id' => $room->id]);
+        $workflow = app(\App\Services\BookingWorkflowService::class);
+
+        foreach ([[$customer, 403], [$otherHost, 404]] as [$actor, $expectedStatus]) {
+            try {
+                $workflow->checkOut($booking, $actor);
+                $this->fail('Authorization must fail before the invalid PENDING -> COMPLETED transition.');
+            } catch (\Illuminate\Auth\Access\AuthorizationException $exception) {
+                $this->assertSame($expectedStatus, $exception->status());
+            }
+        }
+        $this->assertSame(BookingStatus::PENDING, Booking::findOrFail($booking->id)->status);
+    }
+
     public function test_host_index_only_returns_own_properties_bookings(): void
     {
         $host1 = User::factory()->host()->create();

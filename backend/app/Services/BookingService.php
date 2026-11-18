@@ -3,13 +3,11 @@
 namespace App\Services;
 
 use App\Enums\BookingStatus;
-use App\Exceptions\BookingCancellationNotAllowedException;
 use App\Exceptions\RoomNotAvailableException;
 use App\Models\Booking;
 use App\Models\User;
 use App\Repositories\Booking\BookingRepository;
 use App\Repositories\Booking\BookingServiceRepository;
-use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -20,7 +18,8 @@ class BookingService
         protected AvailabilityService $availabilityService,
         protected PricingService $pricingService,
         protected BookingRepository $bookingRepository,
-        protected BookingServiceRepository $bookingServiceRepository
+        protected BookingServiceRepository $bookingServiceRepository,
+        protected BookingWorkflowService $bookingWorkflowService
     ) {}
 
     /**
@@ -141,40 +140,12 @@ class BookingService
     }
 
     /**
-     * Check if a booking is allowed to be cancelled.
-     *
-     * @return array{allowed: bool, reason: string|null}
-     */
-    public function cancellationCheck(Booking $booking): array
-    {
-        $status = $booking->status instanceof BookingStatus ? $booking->status : BookingStatus::from($booking->status);
-
-        if ($status === BookingStatus::PENDING) {
-            return ['allowed' => true, 'reason' => null];
-        }
-
-        if ($status === BookingStatus::CONFIRMED) {
-            $cancelBeforeDays = (int) config('booking.cancel_before_days', 1);
-            $checkInDate = Carbon::parse($booking->check_in_date)->startOfDay();
-            $cancelDeadline = (clone $checkInDate)->subDays($cancelBeforeDays)->startOfDay();
-
-            if (now()->startOfDay()->lessThanOrEqualTo($cancelDeadline)) {
-                return ['allowed' => true, 'reason' => null];
-            }
-
-            return ['allowed' => false, 'reason' => 'Đã qua thời hạn hủy phòng cho phép.'];
-        }
-
-        return ['allowed' => false, 'reason' => 'Trạng thái đặt phòng không được phép hủy.'];
-    }
-
-    /**
      * Cancel a booking for a customer.
      *
      * @throws BookingCancellationNotAllowedException
      */
     public function cancel(Booking $booking, User $user): Booking
     {
-        return app(BookingWorkflowService::class)->cancel($booking, $user, $this);
+        return $this->bookingWorkflowService->cancel($booking, $user);
     }
 }
