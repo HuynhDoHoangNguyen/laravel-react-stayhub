@@ -12,6 +12,7 @@ Thư mục này lưu kết quả khảo sát và báo cáo triển khai của **
 | [UC03-REPORT.md](UC03-REPORT.md) | UC3: hồ sơ cá nhân, cập nhật contact, đổi mật khẩu và đồng bộ auth state | Backend/frontend và automated tests hoàn thành; còn nghiệm thu trình duyệt |
 | [UC04-REPORT.md](UC04-REPORT.md) | UC4: danh sách cơ sở public, phân trang server và card dữ liệu thật | Code/tests hoàn thành cùng UC5; còn nghiệm thu browser/MySQL |
 | [UC05-REPORT.md](UC05-REPORT.md) | UC5: chi tiết public, phòng/ảnh/tiện nghi và review integration | Code/tests hoàn thành cùng UC4; còn nghiệm thu browser/MySQL và dependency Review TV3 |
+| [UC07-REPORT.md](UC07-REPORT.md) | UC7: lọc phòng theo giá, sức chứa, loại phòng/tiện nghi và đánh giá cơ sở; search bar, sidebar cuộn riêng, API thật | UC7/frontend/browser đạt; full backend còn 3 lỗi nền tái hiện ở HEAD trước UC7 |
 | [UC51-REPORT.md](UC51-REPORT.md) | UC51: query kiểm tra lịch bảo trì theo khoảng lưu trú, contract bàn giao TV2 | Lõi query và automated tests PASS; chưa tích hợp Availability/Booking TV2 |
 | [UC52-REPORT.md](UC52-REPORT.md) | UC52: validator kiểm tra sức chứa một phòng, contract bàn giao TV2 và unit tests | Lõi validator và automated tests PASS; chưa tích hợp Availability/Booking TV2 |
 

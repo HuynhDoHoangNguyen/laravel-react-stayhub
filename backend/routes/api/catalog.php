@@ -1,11 +1,15 @@
 <?php
 
 use App\Http\Controllers\Catalog\PublicPropertyController;
+use App\Http\Controllers\Catalog\PublicRoomController;
 use App\Http\Controllers\Catalog\HostPropertyController;
 use App\Http\Controllers\Catalog\HostPropertyImageController;
 use App\Http\Controllers\Catalog\HostRoomTypeController;
 use App\Http\Controllers\Catalog\HostRoomController;
 use Illuminate\Support\Facades\Route;
+
+Route::get('/public/rooms', [PublicRoomController::class, 'index']);
+Route::get('/public/rooms/filter-options', [PublicRoomController::class, 'filterOptions']);
 
 Route::get('/public/properties', [PublicPropertyController::class, 'index']);
 Route::get('/public/properties/{property}', [PublicPropertyController::class, 'show'])->whereNumber('property');
