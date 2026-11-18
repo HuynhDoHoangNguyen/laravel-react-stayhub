@@ -49,9 +49,14 @@ function InvoiceDetail({ invoice }) {
                     </span>
                 </div>
                 <div className="invoice-date-meta">
-                    <span style={{ fontSize: '13px', color: '#718096' }}>
-                        Ngày lập: {formatDate(invoice.created_at)}
-                    </span>
+                    <span>Ngày lập: {formatDate(invoice.created_at)}</span>
+                    {status === 'PAID' && (
+                        <span>
+                            Thời điểm xác nhận thanh toán: {invoice.paid_at
+                                ? <time dateTime={invoice.paid_at}>{formatDate(invoice.paid_at)}</time>
+                                : '—'}
+                        </span>
+                    )}
                 </div>
             </div>
 

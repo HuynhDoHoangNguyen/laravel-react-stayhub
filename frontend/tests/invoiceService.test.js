@@ -21,10 +21,230 @@ const row = {
 const page = { data: [row], meta: { current_page: 1, last_page: 1, per_page: 10, total: 1 }, links: { first: '?page=1', last: '?page=1', prev: null, next: null } };
 const detail = { data: { ...row, items: [] } };
 
+test('payment PATCH uses the real API/service, fixed body and signal; maps paid detail for factory and public export', async () => {
+  const calls = [];
+  const paid = { data: { ...row, payment_status: 'PAID', paid_at: '2026-11-17T01:00:00.000000Z', items: [] } };
+  const adapter = async (config) => {
+    calls.push(config);
+    return { status: 200, data: paid, config, headers: {} };
+  };
+  const { service } = setup(adapter);
+  const signal = new AbortController().signal;
+  for (let i = 0; i < 2; i++) {
+    assert.deepEqual(await service.updateHostInvoicePaymentStatus('7', { signal }), paid);
+  }
+  publicAdapter = adapter;
+  assert.deepEqual(await invoiceServiceModule.updateHostInvoicePaymentStatus(7, { signal }), paid);
+  assert.equal(calls.length, 3);
+  for (const config of calls) {
+    assert.equal(config.method, 'patch');
+    assert.equal(config.url, '/api/host/invoices/7/payment-status');
+    assert.deepEqual(JSON.parse(config.data), { payment_status: 'PAID' });
+    assert.equal(config.signal, signal);
+  }
+});
+
+test('payment HTTP/network/timeout failures retain identity and are never replayed', async () => {
+  for (const status of [401, 403, 404, 409, 419, 422, 500, 0]) {
+    let calls = 0;
+    const error = new AxiosError('Fixture', status ? undefined : 'ECONNABORTED', undefined, undefined,
+      status ? { status, data: { message: 'Fixture error', errors: { payment_status: ['Invalid'] } }, headers: {} } : undefined);
+    const { service } = setup(async () => { ++calls; throw error; });
+    await assert.rejects(service.updateHostInvoicePaymentStatus(7), (actual) => actual === error);
+    assert.equal(calls, 1);
+  }
+});
+
+test('payment rejects malformed or wrong-state success so callers can recover by GET', async () => {
+  for (const body of [{}, detail, { data: { ...detail.data, payment_status: 'PAID' } },
+    { data: { ...detail.data, id: 8, payment_status: 'PAID', paid_at: '2026-11-17T01:00:00Z' } }]) {
+    let calls = 0;
+    const { service } = setup(async (config) => { ++calls; return { status: 200, data: body, config, headers: {} }; });
+    await assert.rejects(service.updateHostInvoicePaymentStatus(7), (error) => error.kind === 'contract' && error.code === 'INVALID_INVOICE_RESPONSE');
+    assert.equal(calls, 1);
+  }
+});
+
+test('cancelled payment does not send or retry a mutation', async () => {
+  let calls = 0;
+  const { service } = setup(async () => { ++calls; throw new Error('Must not reach transport'); });
+  const controller = new AbortController(); controller.abort();
+  await assert.rejects(service.updateHostInvoicePaymentStatus(7, { signal: controller.signal }), CanceledError);
+  assert.equal(calls, 0);
+});
+
 function setup(adapter) {
   const client = axios.create({ adapter });
   return { client, service: createInvoiceService(createInvoiceApi(client)) };
 }
+
+test('Property options factory and public export normalize owner/query, preserve signal and map three fields', async () => {
+  const body = { ...page, data: [{ id: 21, name: 'Cơ sở hiện tại', host_id: 17, address: 'Private' }] };
+  const calls = [];
+  const adapter = async (config) => { calls.push(config); return { status: 200, data: body, config, headers: {} }; };
+  const { service } = setup(adapter); publicAdapter = adapter;
+  const signal = new AbortController().signal;
+  for (const invoke of [service.getAdminInvoicePropertyOptions, invoiceServiceModule.getAdminInvoicePropertyOptions]) {
+    const result = await invoke({ hostId: '17', page: 2, perPage: 20, search: ' 0 ', type: 'hosts', status: 'PAID', propertyId: 21 }, { signal });
+    assert.deepEqual(result.data, [{ id: 21, name: 'Cơ sở hiện tại', host_id: 17 }]);
+    assert.equal(calls.at(-1).url, '/api/admin/invoices/filter-options');
+    assert.equal(calls.at(-1).method, 'get'); assert.equal(calls.at(-1).signal, signal);
+    assert.deepEqual(calls.at(-1).params, { type: 'properties', page: 2, per_page: 20, search: '0', host_id: 17 });
+  }
+  for (const hostId of [undefined, null, '']) {
+    await service.getAdminInvoicePropertyOptions({ hostId, search: ' ' });
+    assert.deepEqual(calls.at(-1).params, { type: 'properties', page: 1, per_page: 10 });
+  }
+});
+
+test('Property options reject malformed successes or wrong-owner data and invalid IDs before transport', async () => {
+  let body = {}, calls = 0;
+  const adapter = async (config) => { ++calls; return { status: 200, data: body, config, headers: {} }; };
+  const { service } = setup(adapter); publicAdapter = adapter;
+  for (const invoke of [service.getAdminInvoicePropertyOptions, invoiceServiceModule.getAdminInvoicePropertyOptions]) {
+    await assert.rejects(invoke(), (error) => error.kind === 'contract');
+    body = { ...page, data: [{ id: 21, name: 'Wrong owner', host_id: 18 }] };
+    await assert.rejects(invoke({ hostId: 17 }), (error) => error.kind === 'contract');
+    body = {};
+  }
+  assert.equal(calls, 4);
+  for (const hostId of [0, '01', '1e2', true, [], {}, Number.MAX_SAFE_INTEGER + 1]) {
+    await assert.rejects(service.getAdminInvoicePropertyOptions({ hostId }), (error) => error.isLocalValidation === true);
+  }
+  assert.equal(calls, 4);
+});
+
+test('Property options preserve HTTP/Auth/validation and cancellation identity without retries', async () => {
+  let original, calls = 0;
+  const { client, service } = setup(async (config) => { ++calls; original.config = config; throw original; });
+  const failures = [];
+  const cleanup = subscribeToAuthFailures(client, (error, version) => failures.push({ error, version }), () => 81);
+  try {
+    for (const [status, code] of [[401], [403, 'ACCOUNT_BLOCKED'], [403, 'ACCOUNT_INACTIVE'], [403, 'INVOICE_READ_FORBIDDEN'], [422], [500]]) {
+      original = new AxiosError('Fixture', '', {}, null, { status, data: { code, errors: { host_id: ['Invalid'] } }, headers: {} });
+      await assert.rejects(service.getAdminInvoicePropertyOptions(), (error) => {
+        assert.equal(error, original);
+        if (status === 422) assert.deepEqual(normalizeApiError(error).fields, { host_id: ['Invalid'] });
+        return true;
+      });
+    }
+    assert.deepEqual(failures.map(({ version }) => version), [81, 81, 81]);
+    for (const error of [new CanceledError('Abort'), new AxiosError('Timeout', 'ECONNABORTED'), new AxiosError('Offline', 'ERR_NETWORK')]) {
+      original = error; await assert.rejects(service.getAdminInvoicePropertyOptions(), (received) => received === error);
+    }
+    const controller = new AbortController(); controller.abort();
+    await assert.rejects(service.getAdminInvoicePropertyOptions({}, { signal: controller.signal }), CanceledError);
+    assert.equal(calls, 9);
+  } finally { cleanup(); }
+});
+
+test('Host options factory and public export normalize only options queries and preserve signals', async () => {
+  const body = { ...page, data: [{ id: 17, name: 'Host hiện tại', email: 'private@example.test' }] };
+  const calls = [];
+  const adapter = async (config) => { calls.push(config); return { status: 200, data: body, config, headers: {} }; };
+  const { service } = setup(adapter);
+  publicAdapter = adapter;
+  const signal = new AbortController().signal;
+  for (const invoke of [service.getAdminInvoiceHostOptions, invoiceServiceModule.getAdminInvoiceHostOptions]) {
+    const result = await invoke({ page: 2, perPage: 20, search: ' 0 ', hostId: 55, status: 'PAID', type: 'properties' }, { signal });
+    assert.deepEqual(result.data, [{ id: 17, name: 'Host hiện tại' }]);
+    assert.equal(calls.at(-1).url, '/api/admin/invoices/filter-options');
+    assert.equal(calls.at(-1).method, 'get');
+    assert.equal(calls.at(-1).signal, signal);
+    assert.deepEqual(calls.at(-1).params, { type: 'hosts', page: 2, per_page: 20, search: '0' });
+  }
+  await service.getAdminInvoiceHostOptions({ search: ' ' });
+  assert.deepEqual(calls.at(-1).params, { type: 'hosts', page: 1, per_page: 10 });
+});
+
+test('Host options HTTP/Auth/422 errors and transport cancellation retain identity without retry', async () => {
+  let original, calls = 0;
+  const { client, service } = setup(async (config) => { ++calls; original.config = config; throw original; });
+  const failures = [];
+  const cleanup = subscribeToAuthFailures(client, (error, version) => failures.push({ error, version }), () => 71);
+  try {
+    for (const [status, code] of [[401], [403, 'ACCOUNT_BLOCKED'], [403, 'ACCOUNT_INACTIVE'], [403, 'INVOICE_READ_FORBIDDEN'], [422], [500]]) {
+      original = new AxiosError('Fixture', '', {}, null, { status, data: { code, errors: { search: ['Invalid'] } }, headers: {} });
+      await assert.rejects(service.getAdminInvoiceHostOptions(), (error) => {
+        assert.equal(error, original);
+        if (status === 422) assert.deepEqual(normalizeApiError(error).fields, { search: ['Invalid'] });
+        return true;
+      });
+    }
+    assert.deepEqual(failures.map(({ version }) => version), [71, 71, 71]);
+    for (const error of [new CanceledError('Abort'), new AxiosError('Timeout', 'ECONNABORTED'), new AxiosError('Offline', 'ERR_NETWORK')]) {
+      original = error;
+      await assert.rejects(service.getAdminInvoiceHostOptions(), (received) => received === error);
+    }
+    const controller = new AbortController(); controller.abort();
+    await assert.rejects(service.getAdminInvoiceHostOptions({}, { signal: controller.signal }), CanceledError);
+    assert.equal(calls, 9);
+  } finally { cleanup(); }
+});
+
+test('Host options reject malformed HTTP successes for factory and public export', async () => {
+  const adapter = async (config) => ({ status: 200, data: {}, config, headers: {} });
+  const { service } = setup(adapter);
+  publicAdapter = adapter;
+  for (const invoke of [service.getAdminInvoiceHostOptions, invoiceServiceModule.getAdminInvoiceHostOptions]) {
+    await assert.rejects(invoke(), (error) => error.kind === 'contract' && error.code === 'INVALID_INVOICE_RESPONSE');
+  }
+});
+
+test('Admin factory and public operation use the real API, normalized params, ten-field mapper and signal', async () => {
+  const calls = [];
+  const adapter = async (config) => { calls.push(config); return { status: 200, data: page, config, headers: {} }; };
+  const { service } = setup(adapter);
+  const signal = new AbortController().signal;
+  publicAdapter = adapter;
+  for (const invoke of [service.getAdminInvoices, invoiceServiceModule.getAdminInvoices]) {
+    const result = await invoke({ page: 2, perPage: 20, status: 'ALL', search: ' 0 ', hostId: 17, propertyId: '19' }, { signal });
+    assert.equal(Object.keys(result.data[0]).length, 10);
+    assert.equal(result.data[0].total_amount, '100.00');
+    assert.equal('customer_email' in result.data[0], false);
+    assert.equal(calls.at(-1).url, '/api/admin/invoices');
+    assert.equal(calls.at(-1).method, 'get');
+    assert.equal(calls.at(-1).signal, signal);
+    assert.deepEqual(calls.at(-1).params, { page: 2, per_page: 20, search: '0', host_id: 17, property_id: '19' });
+  }
+  await service.getAdminInvoices({ status: 'PAID', search: ' ', hostId: '', propertyId: null });
+  assert.deepEqual(calls.at(-1).params, { page: 1, per_page: 10, status: 'PAID' });
+});
+
+test('Admin preserves HTTP/Auth error identity, fields and cancellation without replay', async () => {
+  let original, calls = 0;
+  const { client, service } = setup(async (config) => { ++calls; original.config = config; throw original; });
+  const failures = [];
+  const cleanup = subscribeToAuthFailures(client, (error, version) => failures.push({ error, version }), () => 55);
+  try {
+    for (const [status, code] of [[401], [403, 'ACCOUNT_BLOCKED'], [403, 'ACCOUNT_INACTIVE'], [403, 'INVOICE_READ_FORBIDDEN'], [422], [500]]) {
+      original = new AxiosError('Fixture', '', {}, null, { status, data: { code, errors: { search: ['Invalid'] } }, headers: {} });
+      await assert.rejects(service.getAdminInvoices(), (error) => {
+        assert.equal(error, original);
+        if (status === 422) assert.deepEqual(normalizeApiError(error).fields, { search: ['Invalid'] });
+        return true;
+      });
+    }
+    assert.equal(calls, 6);
+    assert.deepEqual(failures.map(({ version }) => version), [55, 55, 55]);
+    for (const error of [new CanceledError('Abort'), new AxiosError('Timeout', 'ECONNABORTED'), new AxiosError('Offline', 'ERR_NETWORK')]) {
+      original = error;
+      await assert.rejects(service.getAdminInvoices(), (actual) => actual === error);
+    }
+    const controller = new AbortController(); controller.abort();
+    await assert.rejects(service.getAdminInvoices({}, { signal: controller.signal }), CanceledError);
+    assert.equal(calls, 9);
+  } finally { cleanup(); }
+});
+
+test('Admin rejects malformed HTTP success through factory and public export', async () => {
+  const adapter = async (config) => ({ status: 200, data: {}, config, headers: {} });
+  const { service } = setup(adapter);
+  publicAdapter = adapter;
+  for (const invoke of [service.getAdminInvoices, invoiceServiceModule.getAdminInvoices]) {
+    await assert.rejects(invoke(), (error) => error.code === 'INVALID_INVOICE_RESPONSE' && error.kind === 'contract');
+  }
+});
 
 test('all four production read operations map data and preserve Page-facing envelope/options', async () => {
   const calls = [];
