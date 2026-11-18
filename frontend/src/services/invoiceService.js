@@ -1,7 +1,8 @@
 import api from '../api/axios.js';
 import { createInvoiceApi } from '../api/invoiceApi.js';
 import { normalizeApiError } from '../api/apiError.js';
-import { mapInvoiceListResponse, mapInvoiceDetailResponse } from '../mappers/invoiceMapper.js';
+import { mapInvoiceListResponse, mapInvoiceDetailResponse, mapAdminInvoiceListResponse, mapAdminInvoiceHostOptionsResponse, mapAdminInvoicePropertyOptionsResponse } from '../mappers/invoiceMapper.js';
+import { requireApiId } from '../api/apiId.js';
 
 /** Invoice domain boundary; injected API preserves the production Axios/Auth pipeline. */
 export function createInvoiceService(invoiceApi) {
@@ -13,6 +14,33 @@ export function createInvoiceService(invoiceApi) {
   }
 
   return {
+    async getAdminInvoicePropertyOptions({ page = 1, perPage = 10, search = '', hostId = null } = {}, options = {}) {
+      const query = { type: 'properties', page, per_page: perPage };
+      if (search.trim() !== '') query.search = search.trim();
+      const owner = hostId === null || hostId === '' ? null : Number(requireApiId(hostId, 'Mã Host'));
+      if (owner !== null) query.host_id = owner;
+      return mapAdminInvoicePropertyOptionsResponse(await invoiceApi.getAdminInvoicePropertyOptions(query, options), owner);
+    },
+    async getAdminInvoiceHostOptions({ page = 1, perPage = 10, search = '' } = {}, options = {}) {
+      const query = { type: 'hosts', page, per_page: perPage };
+      if (search.trim() !== '') query.search = search.trim();
+      return mapAdminInvoiceHostOptionsResponse(await invoiceApi.getAdminInvoiceHostOptions(query, options));
+    },
+    async getAdminInvoices(params = {}, options = {}) {
+      const query = listParams(params);
+      if (params.hostId !== undefined && params.hostId !== null && params.hostId !== '') query.host_id = params.hostId;
+      if (params.propertyId !== undefined && params.propertyId !== null && params.propertyId !== '') query.property_id = params.propertyId;
+      return mapAdminInvoiceListResponse(await invoiceApi.getAdminInvoices(query, options));
+    },
+    async updateHostInvoicePaymentStatus(id, options = {}) {
+      const result = mapInvoiceDetailResponse(await invoiceApi.updateHostInvoicePaymentStatus(id, options));
+      if (result.data.id !== Number(id) || result.data.payment_status !== 'PAID' || result.data.paid_at === null) {
+        throw Object.assign(new Error('Dữ liệu hóa đơn từ máy chủ không hợp lệ.'), {
+          isApiError: true, status: 0, kind: 'contract', code: 'INVALID_INVOICE_RESPONSE', fields: {},
+        });
+      }
+      return result;
+    },
     async createHostInvoice(id, options = {}) {
       return mapInvoiceDetailResponse(await invoiceApi.createHostInvoice(id, options));
     },
@@ -32,6 +60,22 @@ export function createInvoiceService(invoiceApi) {
 }
 
 const invoiceService = createInvoiceService(createInvoiceApi(api));
+
+export async function getAdminInvoicePropertyOptions(params = {}, options = {}) {
+    return invoiceService.getAdminInvoicePropertyOptions(params, options);
+}
+
+export async function getAdminInvoiceHostOptions(params = {}, options = {}) {
+    return invoiceService.getAdminInvoiceHostOptions(params, options);
+}
+
+export async function getAdminInvoices(params = {}, options = {}) {
+    return invoiceService.getAdminInvoices(params, options);
+}
+
+export async function updateHostInvoicePaymentStatus(invoiceId, options = {}) {
+    return invoiceService.updateHostInvoicePaymentStatus(invoiceId, options);
+}
 
 /**
  * Service quản lý các yêu cầu API liên quan đến Hóa đơn (Invoice / Billing)

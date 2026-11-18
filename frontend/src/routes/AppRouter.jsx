@@ -35,6 +35,7 @@ import HostInvoiceCreationPage from '../pages/host/HostInvoiceCreationPage';
 import HostReviewsPage from '../pages/host/HostReviewsPage';
 
 import AdminDashboardPage from '../pages/admin/AdminDashboardPage';
+import AdminInvoiceListPage from '../pages/admin/AdminInvoiceListPage';
 import ProfilePage from '../components/profile/ProfilePage';
 
 function AppRouter() {
@@ -90,6 +91,7 @@ function AppRouter() {
             <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
                 <Route path="/admin" element={<AdminLayout />}>
                     <Route index element={<AdminDashboardPage />} />
+                    <Route path="invoices" element={<AdminInvoiceListPage />} />
                     <Route path="profile" element={<ProfilePage />} />
                 </Route>
             </Route>

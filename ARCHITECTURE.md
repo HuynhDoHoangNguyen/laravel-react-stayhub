@@ -70,6 +70,17 @@ stayhub/
 ~~~
 
 Hai ứng dụng có dependency, lệnh chạy và quy trình build riêng.
+
+### Cấu hình môi trường local
+
+Laravel, Vite và Docker Compose dùng chung `.env` tại repository root; `.env.example` tại root là template duy nhất. Không tạo `.env` trong backend/frontend. Laravel giữ base path tại `backend/` và chuyển environment path về root; Vite giữ root tại `frontend/` và dùng envDir tại root.
+
+Biến môi trường của tiến trình được ưu tiên hơn file, giúp runner QA sử dụng database, session và cấu hình riêng. Không thay đổi guard hoặc bỏ qua giới hạn database QA để chạy test. Configuration cache của Laravel bỏ qua việc đọc `.env`; chỉ xóa/dựng lại cache có chủ đích trong đúng môi trường.
+
+Chỉ các biến `VITE_*` được công khai cho mã frontend; không dùng tiền tố này cho secrets. Compose chỉ nhận các biến được khai báo rõ trong YAML. Giữ nguyên `APP_KEY` và credentials của môi trường hiện có; thay đổi `MYSQL_*` không cập nhật credentials trong volume Docker đã khởi tạo.
+
+Khởi động lại Laravel và Vite sau khi sửa root `.env`; `artisan serve` hiện tại không theo dõi thay đổi file này ở root. Hướng dẫn thiết lập và mapping kết nối host PHP → MySQL Docker nằm trong README. Backup env local nằm tại `.local-env-backups/` được Git ignore; không đưa secrets vào evidence hoặc tài liệu.
+
 Contract tích hợp xác định URL, method, input, output, lỗi, quyền và hướng tương thích.
 Khi tài liệu hoặc template mô tả một endpoint, kiểm tra route và consumer thực tế trước khi dựa vào endpoint đó.
 
