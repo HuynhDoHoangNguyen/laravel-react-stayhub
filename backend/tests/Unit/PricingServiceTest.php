@@ -46,7 +46,7 @@ class PricingServiceTest extends TestCase
         $total = $this->pricingService->roomTotal(500000, 3);
         $this->assertEquals('1500000.00', $total);
 
-        $serviceTotal = $this->pricingService->serviceAmount(2.5, 50000);
+        $serviceTotal = $this->pricingService->serviceAmount('2.50', 50000);
         $this->assertEquals('125000.00', $serviceTotal);
     }
 
@@ -58,5 +58,21 @@ class PricingServiceTest extends TestCase
         $this->assertEquals(3, $quote['number_of_nights']);
         $this->assertEquals('850000.00', $quote['price_per_night']);
         $this->assertEquals('2550000.00', $quote['room_total']);
+    }
+
+    /**
+     * Characterizes the float implementation before the decimal refactor.
+     * The expected values here document existing rounding behavior, not arithmetic policy.
+     */
+    public function test_legacy_float_money_results_for_precision_boundary_inputs(): void
+    {
+        $this->assertSame('0.30', $this->pricingService->roomTotal('0.10', 3));
+        $this->assertSame('8641975.23', $this->pricingService->roomTotal('1234567.89', 7));
+        $this->assertSame('99999999.99', $this->pricingService->roomTotal('99999999.99', 1));
+        $this->assertSame('0.00', $this->pricingService->serviceAmount('0.01', '0.01'));
+
+        // Existing code rounds quantity/price to two decimal places via float formatting.
+        $this->assertSame('1.24', $this->pricingService->serviceAmount('1', '1.235'));
+        $this->assertSame('1.24', $this->pricingService->serviceAmount('1.235', '1'));
     }
 }

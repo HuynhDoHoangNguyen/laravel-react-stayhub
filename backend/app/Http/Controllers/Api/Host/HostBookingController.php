@@ -8,6 +8,7 @@ use App\Models\Booking;
 use App\Repositories\Booking\BookingRepository;
 use App\Services\BookingWorkflowService;
 use App\Traits\ApiResponse;
+use App\Support\DecimalMoney;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -54,7 +55,7 @@ class HostBookingController extends Controller
         Gate::authorize('view', $booking);
 
         $booking = $this->bookingRepository->findForHost($booking->id, $request->user()->id);
-        $booking->services_total = $booking->bookingServices->sum('amount');
+        $booking->services_total = DecimalMoney::sum($booking->bookingServices->pluck('amount'));
 
         return $this->successResponse(
             new HostBookingResource($booking),
@@ -68,7 +69,7 @@ class HostBookingController extends Controller
 
         $confirmed = $this->workflowService->confirm($booking);
         $confirmed->load(['customer', 'room.property', 'bookingServices']);
-        $confirmed->services_total = $confirmed->bookingServices->sum('amount');
+        $confirmed->services_total = DecimalMoney::sum($confirmed->bookingServices->pluck('amount'));
 
         return $this->successResponse(
             new HostBookingResource($confirmed),
@@ -82,7 +83,7 @@ class HostBookingController extends Controller
 
         $rejected = $this->workflowService->reject($booking, $request->input('reason'));
         $rejected->load(['customer', 'room.property', 'bookingServices']);
-        $rejected->services_total = $rejected->bookingServices->sum('amount');
+        $rejected->services_total = DecimalMoney::sum($rejected->bookingServices->pluck('amount'));
 
         return $this->successResponse(
             new HostBookingResource($rejected),
@@ -96,7 +97,7 @@ class HostBookingController extends Controller
 
         $checkedIn = $this->workflowService->checkIn($booking);
         $checkedIn->load(['customer', 'room.property', 'bookingServices']);
-        $checkedIn->services_total = $checkedIn->bookingServices->sum('amount');
+        $checkedIn->services_total = DecimalMoney::sum($checkedIn->bookingServices->pluck('amount'));
 
         return $this->successResponse(
             new HostBookingResource($checkedIn),
@@ -110,7 +111,7 @@ class HostBookingController extends Controller
 
         $completed = $this->workflowService->checkOut($booking);
         $completed->load(['customer', 'room.property', 'bookingServices']);
-        $completed->services_total = $completed->bookingServices->sum('amount');
+        $completed->services_total = DecimalMoney::sum($completed->bookingServices->pluck('amount'));
 
         return $this->successResponse(
             new HostBookingResource($completed),

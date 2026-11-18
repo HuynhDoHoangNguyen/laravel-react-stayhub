@@ -37,7 +37,7 @@ class PropertyServiceManagementService
             'name' => $data['name'],
             'description' => $data['description'] ?? null,
             'unit' => $data['unit'],
-            'price' => (float) $data['price'],
+            'price' => $data['price'],
             'status' => $data['status'] ?? true,
         ]);
     }
@@ -56,7 +56,7 @@ class PropertyServiceManagementService
             'name' => $data['name'],
             'description' => $data['description'] ?? null,
             'unit' => $data['unit'],
-            'price' => (float) $data['price'],
+            'price' => $data['price'],
         ]);
 
     }

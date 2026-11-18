@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Exceptions\BookingDomainException;
 use App\Models\Room;
+use App\Support\DecimalMoney;
 use Carbon\Carbon;
 use InvalidArgumentException;
 
@@ -34,24 +35,20 @@ class PricingService
     /**
      * Calculate total room price as a 2-decimal string.
      */
-    public function roomTotal(string|float|int $pricePerNight, int $nights): string
+    public function roomTotal(string|int $pricePerNight, int $nights): string
     {
-        $price = (float) $pricePerNight;
-        $total = $price * $nights;
-
-        return number_format($total, 2, '.', '');
+        return DecimalMoney::multiply((string) $pricePerNight, $nights);
     }
 
     /**
      * Calculate service amount as a 2-decimal string.
      */
-    public function serviceAmount(string|float|int $quantity, string|float|int $unitPrice): string
+    public function serviceAmount(string|int $quantity, string|int $unitPrice): string
     {
-        $qty = (float) $quantity;
-        $price = (float) $unitPrice;
-        $amount = $qty * $price;
+        $qty = DecimalMoney::normalizeStoredQuantity($quantity);
+        $price = DecimalMoney::normalizeMoney($unitPrice, 'unit_price');
 
-        return number_format($amount, 2, '.', '');
+        return DecimalMoney::multiply($qty, $price);
     }
 
     /**
@@ -62,7 +59,7 @@ class PricingService
     public function quote(Room $room, mixed $checkInDate, mixed $checkOutDate): array
     {
         $nights = $this->nights($checkInDate, $checkOutDate);
-        $pricePerNightStr = number_format((float) $room->price_per_night, 2, '.', '');
+        $pricePerNightStr = DecimalMoney::format($room->price_per_night);
         $roomTotalStr = $this->roomTotal($pricePerNightStr, $nights);
 
         return [

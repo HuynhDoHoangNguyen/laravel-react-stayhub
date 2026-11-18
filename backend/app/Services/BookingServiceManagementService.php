@@ -9,6 +9,7 @@ use App\Models\BookingService as BookingServiceModel;
 use App\Repositories\Booking\BookingRepository;
 use App\Repositories\Booking\BookingServiceRepository;
 use App\Repositories\Booking\ServiceRepository;
+use App\Support\DecimalMoney;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -27,7 +28,7 @@ class BookingServiceManagementService
         return $this->bookingServiceRepository->listForBooking($booking->id);
     }
 
-    public function add(Booking $booking, int $serviceId, float $quantity): BookingServiceModel
+    public function add(Booking $booking, int $serviceId, string $quantity): BookingServiceModel
     {
         return DB::transaction(function () use ($booking, $serviceId, $quantity) {
             $currentBooking = $this->bookingRepository->lockForUpdate($booking->id);
@@ -42,15 +43,15 @@ class BookingServiceManagementService
                 throw new ServiceNotAllowedException('Dịch vụ này hiện đang tạm ngưng cung cấp.');
             }
 
-            $qty = round(max(0.01, $quantity), 2);
+            $qty = DecimalMoney::normalizeQuantity($quantity);
             $existing = $this->bookingServiceRepository->findForBookingAndService($currentBooking->id, $service->id);
             if ($existing) {
-                $newQty = round($existing->quantity + $qty, 2);
+                $newQty = DecimalMoney::addQuantity((string) $existing->quantity, $qty);
                 $newAmount = $this->pricingService->serviceAmount($newQty, $existing->unit_price);
                 return $this->bookingServiceRepository->update($existing, ['quantity' => $newQty, 'amount' => $newAmount]);
             }
 
-            $unitPriceStr = number_format((float) $service->price, 2, '.', '');
+            $unitPriceStr = DecimalMoney::format($service->price);
             $amountStr = $this->pricingService->serviceAmount($qty, $unitPriceStr);
             return $this->bookingServiceRepository->create([
                 'booking_id' => $currentBooking->id,
@@ -64,14 +65,14 @@ class BookingServiceManagementService
         });
     }
 
-    public function updateQuantity(Booking $booking, BookingServiceModel $bookingService, float $quantity): BookingServiceModel
+    public function updateQuantity(Booking $booking, BookingServiceModel $bookingService, string $quantity): BookingServiceModel
     {
         return DB::transaction(function () use ($booking, $bookingService, $quantity) {
             $currentBooking = $this->bookingRepository->lockForUpdate($booking->id);
             $currentLine = $this->bookingServiceRepository->findForBookingOrFail($bookingService->id, $currentBooking->id);
             $this->assertServiceChangeAllowed($currentBooking, 'Chỉ được thay đổi dịch vụ khi đặt phòng ở trạng thái đang lưu trú (CHECKED_IN).');
 
-            $qty = round(max(0.01, $quantity), 2);
+            $qty = DecimalMoney::normalizeQuantity($quantity);
             $newAmount = $this->pricingService->serviceAmount($qty, $currentLine->unit_price);
             return $this->bookingServiceRepository->update($currentLine, ['quantity' => $qty, 'amount' => $newAmount]);
         });
@@ -89,7 +90,7 @@ class BookingServiceManagementService
 
     public function total(Booking $booking): string
     {
-        return number_format((float) $this->bookingServiceRepository->totalForBooking($booking->id), 2, '.', '');
+        return $this->bookingServiceRepository->totalForBooking($booking->id);
     }
 
     private function assertServiceChangeAllowed(Booking $booking, string $message): void

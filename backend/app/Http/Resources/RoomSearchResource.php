@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Support\DecimalMoney;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -17,7 +18,7 @@ class RoomSearchResource extends JsonResource
             'name' => $this->name,
             'description' => $this->description,
             'capacity' => $this->capacity,
-            'price_per_night' => number_format((float) $this->price_per_night, 2, '.', ''),
+            'price_per_night' => DecimalMoney::formatNullable($this->price_per_night),
             'status' => $this->status,
             'property' => $this->whenLoaded('property', fn () => [
                 'id' => $this->property->id,

@@ -117,6 +117,22 @@ class ServiceManagementTest extends TestCase
         $this->postJson('/api/host/services', $valid)->assertCreated()->assertJsonPath('data.price', '0.00');
     }
 
+    public function test_service_price_with_extra_decimal_places_keeps_existing_half_up_rounding(): void
+    {
+        $host = User::factory()->host()->create();
+        $property = Property::factory()->create(['host_id' => $host->id, 'status' => PropertyStatus::ACTIVE]);
+
+        $response = $this->actingAs($host)->postJson('/api/host/services', [
+            'property_id' => $property->id,
+            'name' => 'Giá thử nghiệm',
+            'unit' => 'lần',
+            'price' => 1.235,
+            'status' => true,
+        ])->assertCreated()->assertJsonPath('data.price', '1.24');
+
+        $this->assertSame('1.24', (string) $response->json('data.price'));
+    }
+
     public function test_catalog_service_referenced_by_booking_service_cannot_be_hard_deleted(): void
     {
         $service = Service::factory()->create();
@@ -169,6 +185,9 @@ class ServiceManagementTest extends TestCase
                     'amount' => '175000.00', // 3.5 * 50000
                 ],
             ]);
+        $this->assertIsString($res->json('data.quantity'));
+        $this->assertIsString($res->json('data.unit_price'));
+        $this->assertIsString($res->json('data.amount'));
 
         // Price change on Service model in DB later does NOT affect existing booking_service snapshot
         $service->update(['name' => 'Laundry Plus', 'unit' => 'bag', 'price' => 999999]);
@@ -179,6 +198,30 @@ class ServiceManagementTest extends TestCase
         $this->assertEquals('175000.00', $bsModel->amount);
         $this->assertSame('Giặt ủi', $bsModel->service_name);
         $this->assertSame('kg', $bsModel->unit);
+    }
+
+    public function test_decimal_quantity_accumulates_exactly_across_two_additions(): void
+    {
+        $host = User::factory()->host()->create();
+        $property = Property::factory()->create(['host_id' => $host->id, 'status' => PropertyStatus::ACTIVE]);
+        $room = Room::factory()->create(['property_id' => $property->id, 'capacity' => 4, 'status' => RoomStatus::ACTIVE]);
+        $booking = Booking::factory()->checkedIn()->create(['room_id' => $room->id]);
+        $service = Service::factory()->create(['property_id' => $property->id, 'price' => '100000.00', 'status' => true]);
+
+        $first = $this->actingAs($host)->postJson("/api/host/bookings/{$booking->id}/services", [
+            'service_id' => $service->id,
+            'quantity' => 0.1,
+        ])->assertCreated();
+        $first->assertJsonPath('data.quantity', '0.10')->assertJsonPath('data.amount', '10000.00');
+
+        $second = $this->postJson("/api/host/bookings/{$booking->id}/services", [
+            'service_id' => $service->id,
+            'quantity' => 0.2,
+        ])->assertCreated();
+        $second->assertJsonPath('data.quantity', '0.30')->assertJsonPath('data.amount', '30000.00');
+        $this->assertIsString($second->json('data.quantity'));
+        $this->assertIsString($second->json('data.amount'));
+        $this->assertSame(1, BookingService::query()->where('booking_id', $booking->id)->count());
     }
 
     public function test_booking_service_routes_keep_auth_and_role_responses(): void
@@ -376,6 +419,7 @@ class ServiceManagementTest extends TestCase
         $resShow = $this->actingAs($customer1)->getJson("/api/customer/bookings/{$booking->id}");
         $resShow->assertStatus(200)
             ->assertJsonPath('data.services_total', '286001.25');
+        $this->assertIsString($resShow->json('data.services_total'));
 
         // Customer 2 views Customer 1's services -> 404
         $this->actingAs($customer2)->getJson("/api/customer/bookings/{$booking->id}/services")

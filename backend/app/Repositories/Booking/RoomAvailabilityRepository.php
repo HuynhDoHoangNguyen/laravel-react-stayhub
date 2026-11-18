@@ -101,11 +101,11 @@ class RoomAvailabilityRepository
         }
 
         if (isset($filters['min_price']) && $filters['min_price'] !== '') {
-            $query->where('price_per_night', '>=', (float) $filters['min_price']);
+            $query->where('price_per_night', '>=', $filters['min_price']);
         }
 
         if (isset($filters['max_price']) && $filters['max_price'] !== '') {
-            $query->where('price_per_night', '<=', (float) $filters['max_price']);
+            $query->where('price_per_night', '<=', $filters['max_price']);
         }
 
         if (! empty($filters['amenity_ids']) && is_array($filters['amenity_ids'])) {

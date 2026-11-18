@@ -2,6 +2,7 @@
 
 namespace App\Validators;
 
+use App\Support\DecimalMoney;
 use Illuminate\Foundation\Http\FormRequest;
 
 class SearchRoomsRequest extends FormRequest
@@ -27,7 +28,7 @@ class SearchRoomsRequest extends FormRequest
                 'min:0',
                 function ($attribute, $value, $fail) {
                     $minPrice = $this->input('min_price');
-                    if ($minPrice !== null && $minPrice !== '' && (float) $value < (float) $minPrice) {
+                    if ($minPrice !== null && $minPrice !== '' && DecimalMoney::compare($value, $minPrice) < 0) {
                         $fail('The max price field must be greater than or equal to min price.');
                     }
                 },

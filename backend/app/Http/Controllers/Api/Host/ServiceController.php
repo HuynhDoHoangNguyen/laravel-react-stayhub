@@ -9,6 +9,7 @@ use App\Validators\UpdateServiceRequest;
 use App\Http\Resources\ServiceResource;
 use App\Models\Service;
 use App\Services\PropertyServiceManagementService;
+use App\Support\DecimalMoney;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -40,7 +41,9 @@ class ServiceController extends Controller
 
     public function store(StoreServiceRequest $request): JsonResponse
     {
-        $service = $this->serviceManagement->create($request->user(), $request->validated());
+        $data = $request->validated();
+        $data['price'] = DecimalMoney::normalizeMoney($data['price'], 'price');
+        $service = $this->serviceManagement->create($request->user(), $data);
 
         return $this->successResponse(
             new ServiceResource($service),
@@ -51,7 +54,9 @@ class ServiceController extends Controller
 
     public function update(UpdateServiceRequest $request, Service $service): JsonResponse
     {
-        $updated = $this->serviceManagement->update($request->user(), $service, $request->validated());
+        $data = $request->validated();
+        $data['price'] = DecimalMoney::normalizeMoney($data['price'], 'price');
+        $updated = $this->serviceManagement->update($request->user(), $service, $data);
 
         return $this->successResponse(
             new ServiceResource($updated),

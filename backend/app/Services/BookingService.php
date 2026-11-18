@@ -8,6 +8,7 @@ use App\Exceptions\RoomNotAvailableException;
 use App\Models\Booking;
 use App\Models\User;
 use App\Repositories\Booking\BookingRepository;
+use App\Repositories\Booking\BookingServiceRepository;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -18,7 +19,8 @@ class BookingService
     public function __construct(
         protected AvailabilityService $availabilityService,
         protected PricingService $pricingService,
-        protected BookingRepository $bookingRepository
+        protected BookingRepository $bookingRepository,
+        protected BookingServiceRepository $bookingServiceRepository
     ) {}
 
     /**
@@ -133,7 +135,7 @@ class BookingService
     public function detailForCustomer(User $customer, int $bookingId): Booking
     {
         $booking = $this->bookingRepository->findForCustomer($bookingId, $customer->id);
-        $booking->services_total = $booking->bookingServices->sum('amount');
+        $booking->services_total = $this->bookingServiceRepository->totalForBooking($booking->id);
 
         return $booking;
     }

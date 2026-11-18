@@ -9,6 +9,7 @@ use App\Http\Resources\BookingServiceResource;
 use App\Models\Booking;
 use App\Models\BookingService as BookingServiceModel;
 use App\Services\BookingServiceManagementService;
+use App\Support\DecimalMoney;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -42,7 +43,7 @@ class BookingServiceController extends Controller
         $added = $this->bookingServiceManagement->add(
             $booking,
             (int) $request->input('service_id'),
-            (float) $request->input('quantity')
+            DecimalMoney::normalizeQuantity($request->validated('quantity'))
         );
 
         return $this->successResponse(
@@ -66,7 +67,7 @@ class BookingServiceController extends Controller
         $updated = $this->bookingServiceManagement->updateQuantity(
             $booking,
             $bookingService,
-            (float) $request->input('quantity')
+            DecimalMoney::normalizeQuantity($request->validated('quantity'))
         );
 
         return $this->successResponse(

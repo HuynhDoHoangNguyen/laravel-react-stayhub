@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Enums\BookingStatus;
+use App\Support\DecimalMoney;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -21,12 +22,12 @@ class HostBookingResource extends JsonResource
             'check_out_date' => $this->check_out_date instanceof \DateTimeInterface ? $this->check_out_date->format('Y-m-d') : (string) $this->check_out_date,
             'guest_count' => (int) $this->guest_count,
             'number_of_nights' => (int) $this->number_of_nights,
-            'price_per_night' => number_format((float) $this->price_per_night, 2, '.', ''),
-            'room_total' => number_format((float) $this->room_total, 2, '.', ''),
+            'price_per_night' => DecimalMoney::formatNullable($this->price_per_night),
+            'room_total' => DecimalMoney::formatNullable($this->room_total),
             'status' => $statusEnum?->value ?? (string) $this->status,
             'status_label' => $statusEnum?->label() ?? (string) $this->status,
             'note' => $this->note,
-            'services_total' => $this->when(isset($this->services_total), fn () => number_format((float) $this->services_total, 2, '.', '')),
+            'services_total' => $this->when(isset($this->services_total), fn () => DecimalMoney::formatNullable($this->services_total)),
             'customer' => $this->whenLoaded('customer', fn () => [
                 'id' => $this->customer->id,
                 'name' => $this->customer->name,

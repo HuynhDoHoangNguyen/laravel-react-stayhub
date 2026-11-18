@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Support\DecimalMoney;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -15,7 +16,7 @@ class ServiceResource extends JsonResource
             'name' => $this->name,
             'description' => $this->description,
             'unit' => $this->unit,
-            'price' => number_format((float) $this->price, 2, '.', ''),
+            'price' => DecimalMoney::formatNullable($this->price),
             'status' => (bool) $this->status,
             'property' => $this->whenLoaded('property', fn () => [
                 'id' => $this->property->id,

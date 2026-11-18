@@ -3,6 +3,7 @@
 namespace App\Repositories\Booking;
 
 use App\Models\BookingService;
+use App\Support\DecimalMoney;
 use Illuminate\Database\Eloquent\Collection;
 
 class BookingServiceRepository
@@ -42,8 +43,10 @@ class BookingServiceRepository
         $bookingService->delete();
     }
 
-    public function totalForBooking(int $bookingId): string|int|float|null
+    public function totalForBooking(int $bookingId): string
     {
-        return BookingService::query()->where('booking_id', $bookingId)->sum('amount');
+        $amounts = BookingService::query()->where('booking_id', $bookingId)->pluck('amount');
+
+        return DecimalMoney::sum($amounts);
     }
 }

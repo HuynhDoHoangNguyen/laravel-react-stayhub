@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Support\DecimalMoney;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -15,9 +16,9 @@ class BookingServiceResource extends JsonResource
             'service_id' => $this->service_id,
             'service_name' => $this->service_name,
             'unit' => $this->unit,
-            'quantity' => number_format((float) $this->quantity, 2, '.', ''),
-            'unit_price' => number_format((float) $this->unit_price, 2, '.', ''),
-            'amount' => number_format((float) $this->amount, 2, '.', ''),
+            'quantity' => DecimalMoney::formatNullable($this->quantity),
+            'unit_price' => DecimalMoney::formatNullable($this->unit_price),
+            'amount' => DecimalMoney::formatNullable($this->amount),
             'created_at' => $this->created_at?->toISOString(),
         ];
     }
