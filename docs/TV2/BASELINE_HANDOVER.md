@@ -4,7 +4,7 @@ Ngày đối chiếu: 2026-11-17 (Asia/Saigon). Nhánh: `feature/member-2-bookin
 
 Trước khi tạo tài liệu, `git status` ghi nhận `docs/handover-member2.md` và `frontend/.env` đang thay đổi. Hai thay đổi này nằm ngoài nội dung baseline TV2; không chép nội dung `.env`. Ba file mới trong thư mục này cần được đưa vào diff riêng khi người dùng chuẩn bị PR.
 
-Đối chiếu [ARCHITECTURE.md](../../ARCHITECTURE.md), [booking API](../api/booking-module.md), [handover TV2 hiện có](../handover-member2.md) và khung [TV3 handover](../TV3/BASELINE_HANDOVER.md), [PR checklist](../TV3/BASELINE_PR_CHECKLIST.md), [checklist](../TV3/TV3_CHECKLIST.md).
+Đối chiếu [ARCHITECTURE.md](../../ARCHITECTURE.md), [booking API](../api/booking-module.md), [handover TV2 hiện có](handover-member2.md) và khung [TV3 handover](../TV3/BASELINE_HANDOVER.md), [PR checklist](../TV3/BASELINE_PR_CHECKLIST.md), [checklist](../TV3/TV3_CHECKLIST.md).
 
 ## Phạm vi đã bàn giao
 
@@ -115,4 +115,4 @@ Lint/build không chạy lại trong lượt tạo tài liệu này. Kiểm tra 
 
 ## Nguồn đối chiếu
 
-[Handover TV2 cũ](../handover-member2.md), [API booking](../api/booking-module.md), [kiến trúc](../../ARCHITECTURE.md), [handover TV3](../TV3/BASELINE_HANDOVER.md), [routes booking](../../backend/routes/api/booking.php), [Member1DataSeeder](../../backend/database/seeders/Member1DataSeeder.php), [Member2DataSeeder](../../backend/database/seeders/Member2DataSeeder.php), [BookingStatus](../../backend/app/Enums/BookingStatus.php), [propertyService](../../frontend/src/services/propertyService.js), [hostBookingService](../../frontend/src/services/hostBookingService.js).
+[Handover TV2](handover-member2.md), [API booking](../api/booking-module.md), [kiến trúc](../../ARCHITECTURE.md), [handover TV3](../TV3/BASELINE_HANDOVER.md), [routes booking](../../backend/routes/api/booking.php), [Member1DataSeeder](../../backend/database/seeders/Member1DataSeeder.php), [Member2DataSeeder](../../backend/database/seeders/Member2DataSeeder.php), [BookingStatus](../../backend/app/Enums/BookingStatus.php), [propertyService](../../frontend/src/services/propertyService.js), [hostBookingService](../../frontend/src/services/hostBookingService.js).

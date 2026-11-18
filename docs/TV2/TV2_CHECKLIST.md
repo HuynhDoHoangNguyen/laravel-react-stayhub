@@ -70,4 +70,4 @@ Test full-suite hiện tại không thay thế việc đối chiếu response c�
 
 ## Nguồn tiến độ
 
-[Handover baseline](BASELINE_HANDOVER.md), [PR checklist](BASELINE_PR_CHECKLIST.md), [handover TV2 hiện có](../handover-member2.md), [booking API](../api/booking-module.md), [ARCHITECTURE.md](../../ARCHITECTURE.md).
+[Handover baseline](BASELINE_HANDOVER.md), [PR checklist](BASELINE_PR_CHECKLIST.md), [handover TV2](handover-member2.md), [booking API](../api/booking-module.md), [ARCHITECTURE.md](../../ARCHITECTURE.md).
