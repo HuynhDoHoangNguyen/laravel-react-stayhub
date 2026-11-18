@@ -48,6 +48,8 @@ const SidebarProvider = React.forwardRef(
     ref
   ) => {
     const isMobile = useIsMobile();
+    const triggerRef = React.useRef(null);
+    const returnFocusRef = React.useRef(null);
     const [openMobile, setOpenMobile] = React.useState(false);
     const [_open, _setOpen] = React.useState(defaultOpen);
     const open = openProp ?? _open;
@@ -65,9 +67,14 @@ const SidebarProvider = React.forwardRef(
       [setOpenProp, open]
     );
 
-    const toggleSidebar = React.useCallback(() => {
-      return isMobile ? setOpenMobile((prev) => !prev) : setOpen((prev) => !prev);
-    }, [isMobile, setOpen, setOpenMobile]);
+    const toggleSidebar = React.useCallback((event) => {
+      if (isMobile) {
+        if (!openMobile) returnFocusRef.current = event?.currentTarget ?? document.activeElement;
+        setOpenMobile((prev) => !prev);
+      } else {
+        setOpen((prev) => !prev);
+      }
+    }, [isMobile, openMobile, setOpen]);
 
     React.useEffect(() => {
       const handleKeyDown = (event) => {
@@ -91,6 +98,8 @@ const SidebarProvider = React.forwardRef(
         openMobile,
         setOpenMobile,
         toggleSidebar,
+        triggerRef,
+        returnFocusRef,
       }),
       [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar]
     );
@@ -122,7 +131,7 @@ SidebarProvider.displayName = "SidebarProvider";
 
 const Sidebar = React.forwardRef(
   ({ side = "left", variant = "sidebar", collapsible = "offcanvas", className, children, ...props }, ref) => {
-    const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
+    const { isMobile, state, openMobile, setOpenMobile, triggerRef, returnFocusRef } = useSidebar();
 
     if (collapsible === "none") {
       return (
@@ -147,10 +156,22 @@ const Sidebar = React.forwardRef(
               "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
             }}
             side={side}
+            onCloseAutoFocus={(event) => {
+              const target = [returnFocusRef.current, triggerRef.current].find((node) =>
+                node?.isConnected && node !== document.body && node !== document.documentElement &&
+                typeof node.focus === "function" && !node.disabled &&
+                node.getClientRects().length > 0 && getComputedStyle(node).visibility !== "hidden"
+              );
+              if (target) {
+                event.preventDefault();
+                target.focus();
+              }
+              returnFocusRef.current = null;
+            }}
           >
             <SheetHeader className="sr-only">
-              <SheetTitle>Sidebar</SheetTitle>
-              <SheetDescription>Displays the mobile sidebar.</SheetDescription>
+              <SheetTitle>Điều hướng chính</SheetTitle>
+              <SheetDescription>Các mục điều hướng và thao tác tài khoản.</SheetDescription>
             </SheetHeader>
             <div className="flex h-full w-full flex-col">{children}</div>
           </SheetContent>
@@ -204,22 +225,27 @@ const Sidebar = React.forwardRef(
 Sidebar.displayName = "Sidebar";
 
 const SidebarTrigger = React.forwardRef(({ className, onClick, ...props }, ref) => {
-  const { toggleSidebar } = useSidebar();
+  const { toggleSidebar, triggerRef } = useSidebar();
+  const setTriggerRef = React.useCallback((node) => {
+    triggerRef.current = node;
+    if (typeof ref === "function") return ref(node);
+    if (ref) ref.current = node;
+  }, [ref, triggerRef]);
   return (
     <Button
-      ref={ref}
+      ref={setTriggerRef}
       data-sidebar="trigger"
       variant="ghost"
       size="icon"
       className={cn("h-7 w-7", className)}
       onClick={(event) => {
         onClick?.(event);
-        toggleSidebar();
+        toggleSidebar(event);
       }}
       {...props}
     >
       <PanelToggle className="h-4 w-4" />
-      <span className="sr-only">Toggle Sidebar</span>
+      <span className="sr-only">Đóng/mở thanh điều hướng</span>
     </Button>
   );
 });
@@ -231,10 +257,10 @@ const SidebarRail = React.forwardRef(({ className, ...props }, ref) => {
     <button
       ref={ref}
       data-sidebar="rail"
-      aria-label="Toggle Sidebar"
+      aria-label="Đóng/mở thanh điều hướng"
       tabIndex={-1}
       onClick={toggleSidebar}
-      title="Toggle Sidebar"
+      title="Đóng/mở thanh điều hướng"
       className={cn(
         "absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 transition-all ease-linear after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] hover:after:bg-sidebar-border group-data-[side=left]:-right-4 group-data-[side=right]:left-0 sm:flex",
         "[[data-side=left]_&]:cursor-w-resize [[data-side=right]_&]:cursor-e-resize",

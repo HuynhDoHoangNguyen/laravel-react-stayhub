@@ -14,6 +14,7 @@ use Throwable;
 final class GlobalExceptionHandler
 {
     private const ROUTES = [
+        'admin.dashboard.show',
         'admin.invoices.index',
         'admin.invoices.filter-options',
         'host.invoices.index', 'host.invoices.show', 'host.bookings.invoice.store',

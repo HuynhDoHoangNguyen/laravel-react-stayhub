@@ -520,6 +520,7 @@ class AuthenticationTest extends TestCase
                 $this->assertNotContains('account.active', $middleware);
             }
         }
-        $this->assertSame(32, $protected);
+        // Baseline 32 + UC36 payment confirmation + two UC45 invoice routes + UC47 dashboard.
+        $this->assertSame(36, $protected);
     }
 }
