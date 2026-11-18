@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api\Host;
 
 use App\Http\Controllers\Controller;
-use App\Http\Resources\BookingServiceResource;
+use App\Mappers\Booking\BookingMapper;
 use App\Models\Booking;
 use App\Models\BookingService as BookingServiceModel;
 use App\Services\Booking\BookingServiceManagementService;
@@ -20,7 +20,8 @@ class BookingServiceController extends Controller
 
     public function __construct(
         protected BookingServiceManagementService $bookingServiceManagement,
-        protected ServiceValidator $validator
+        protected ServiceValidator $validator,
+        protected BookingMapper $bookingMapper
     ) {}
 
     public function index(Request $request, Booking $booking): JsonResponse
@@ -30,7 +31,7 @@ class BookingServiceController extends Controller
         $services = $this->bookingServiceManagement->list($booking);
 
         return $this->successResponse(
-            BookingServiceResource::collection($services),
+            $this->bookingMapper->toBookingServiceCollection($services),
             'Danh sách dịch vụ trong đặt phòng.'
         );
     }
@@ -44,7 +45,7 @@ class BookingServiceController extends Controller
         $added = $this->bookingServiceManagement->add($booking, $input);
 
         return $this->successResponse(
-            new BookingServiceResource($added),
+            $this->bookingMapper->toBookingService($added),
             'Thêm dịch vụ vào đặt phòng thành công.',
             201
         );
@@ -70,7 +71,7 @@ class BookingServiceController extends Controller
         );
 
         return $this->successResponse(
-            new BookingServiceResource($updated),
+            $this->bookingMapper->toBookingService($updated),
             'Cập nhật số lượng dịch vụ thành công.'
         );
     }

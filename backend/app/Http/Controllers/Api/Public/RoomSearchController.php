@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api\Public;
 
 use App\Http\Controllers\Controller;
-use App\Http\Resources\RoomSearchResource;
+use App\Mappers\Booking\BookingMapper;
 use App\Services\Booking\SearchService;
 use App\Traits\ApiResponse;
 use App\Validators\Booking\RoomSearchValidator;
@@ -16,7 +16,8 @@ class RoomSearchController extends Controller
 
     public function __construct(
         protected SearchService $searchService,
-        protected RoomSearchValidator $validator
+        protected RoomSearchValidator $validator,
+        protected BookingMapper $bookingMapper
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -28,7 +29,7 @@ class RoomSearchController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Tìm kiếm phòng thành công.',
-            'data' => RoomSearchResource::collection($paginator->items()),
+            'data' => $this->bookingMapper->toRoomSearchCollection($paginator->items()),
             'meta' => [
                 'current_page' => $paginator->currentPage(),
                 'last_page' => $paginator->lastPage(),

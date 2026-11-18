@@ -3,8 +3,7 @@
 namespace App\Http\Controllers\Api\Customer;
 
 use App\Http\Controllers\Controller;
-use App\Http\Resources\BookingResource;
-use App\Http\Resources\BookingServiceResource;
+use App\Mappers\Booking\BookingMapper;
 use App\Models\Booking;
 use App\Services\Booking\BookingQueryService;
 use App\Services\Booking\BookingService;
@@ -21,7 +20,8 @@ class BookingController extends Controller
     public function __construct(
         protected BookingService $bookingService,
         protected BookingQueryService $bookingQueryService,
-        protected BookingValidator $bookingValidator
+        protected BookingValidator $bookingValidator,
+        protected BookingMapper $bookingMapper
     ) {}
 
     public function store(Request $request): JsonResponse
@@ -30,7 +30,7 @@ class BookingController extends Controller
         $booking = $this->bookingService->create($request->user(), $input);
 
         return $this->successResponse(
-            new BookingResource($booking),
+            $this->bookingMapper->toCustomerBooking($booking),
             'Đặt phòng thành công.',
             201
         );
@@ -43,7 +43,7 @@ class BookingController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Lịch sử đặt phòng thành công.',
-            'data' => BookingResource::collection($result['items']),
+            'data' => $this->bookingMapper->toCustomerBookingCollection($result['items']),
             'meta' => $result['meta'],
         ]);
     }
@@ -55,7 +55,7 @@ class BookingController extends Controller
         $booking = $this->bookingQueryService->findForCustomer($request->user(), $booking);
 
         return $this->successResponse(
-            new BookingResource($booking),
+            $this->bookingMapper->toCustomerBooking($booking),
             'Chi tiết đặt phòng.'
         );
     }
@@ -65,7 +65,7 @@ class BookingController extends Controller
         $cancelledBooking = $this->bookingService->cancel($booking, $request->user());
 
         return $this->successResponse(
-            new BookingResource($cancelledBooking),
+            $this->bookingMapper->toCustomerBooking($cancelledBooking),
             'Hủy đặt phòng thành công.'
         );
     }
@@ -77,7 +77,7 @@ class BookingController extends Controller
         $services = $this->bookingQueryService->listServicesForCustomer($request->user(), $booking);
 
         return $this->successResponse(
-            BookingServiceResource::collection($services),
+            $this->bookingMapper->toBookingServiceCollection($services),
             'Danh sách dịch vụ của đặt phòng.'
         );
     }

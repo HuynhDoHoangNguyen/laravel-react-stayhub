@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api\Host;
 
 use App\Http\Controllers\Controller;
-use App\Http\Resources\ServiceResource;
+use App\Mappers\Booking\ServiceMapper;
 use App\Models\Service;
 use App\Services\Booking\PropertyServiceManagementService;
 use App\Traits\ApiResponse;
@@ -17,7 +17,8 @@ class ServiceController extends Controller
 
     public function __construct(
         protected PropertyServiceManagementService $serviceManagement,
-        protected ServiceValidator $validator
+        protected ServiceValidator $validator,
+        protected ServiceMapper $serviceMapper
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -27,7 +28,7 @@ class ServiceController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Danh sách dịch vụ của cơ sở lưu trú.',
-            'data' => ServiceResource::collection($paginator->items()),
+            'data' => $this->serviceMapper->toPropertyServiceCollection($paginator->items()),
             'meta' => [
                 'current_page' => $paginator->currentPage(),
                 'last_page' => $paginator->lastPage(),
@@ -43,7 +44,7 @@ class ServiceController extends Controller
         $service = $this->serviceManagement->create($request->user(), $input);
 
         return $this->successResponse(
-            new ServiceResource($service),
+            $this->serviceMapper->toPropertyService($service),
             'Tạo dịch vụ thành công.',
             201
         );
@@ -55,7 +56,7 @@ class ServiceController extends Controller
         $updated = $this->serviceManagement->update($request->user(), $service, $input);
 
         return $this->successResponse(
-            new ServiceResource($updated),
+            $this->serviceMapper->toPropertyService($updated),
             'Cập nhật dịch vụ thành công.'
         );
     }
@@ -70,7 +71,7 @@ class ServiceController extends Controller
         );
 
         return $this->successResponse(
-            new ServiceResource($updated),
+            $this->serviceMapper->toPropertyService($updated),
             'Cập nhật trạng thái dịch vụ thành công.'
         );
     }

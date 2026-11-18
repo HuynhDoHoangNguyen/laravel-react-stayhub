@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api\Host;
 
 use App\Http\Controllers\Controller;
-use App\Http\Resources\HostBookingResource;
+use App\Mappers\Booking\BookingMapper;
 use App\Models\Booking;
 use App\Services\Booking\BookingQueryService;
 use App\Services\Booking\BookingWorkflowService;
@@ -18,7 +18,8 @@ class HostBookingController extends Controller
 
     public function __construct(
         protected BookingWorkflowService $workflowService,
-        protected BookingQueryService $bookingQueryService
+        protected BookingQueryService $bookingQueryService,
+        protected BookingMapper $bookingMapper
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -28,7 +29,7 @@ class HostBookingController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Danh sách đặt phòng của cơ sở lưu trú.',
-            'data' => HostBookingResource::collection($result['items']),
+            'data' => $this->bookingMapper->toHostBookingCollection($result['items']),
             'meta' => $result['meta'],
         ]);
     }
@@ -40,7 +41,7 @@ class HostBookingController extends Controller
         $booking = $this->bookingQueryService->findForHost($request->user(), $booking);
 
         return $this->successResponse(
-            new HostBookingResource($booking),
+            $this->bookingMapper->toHostBooking($booking),
             'Chi tiết đặt phòng.'
         );
     }
@@ -50,7 +51,7 @@ class HostBookingController extends Controller
         $confirmed = $this->workflowService->confirm($booking, $request->user());
 
         return $this->successResponse(
-            new HostBookingResource($confirmed),
+            $this->bookingMapper->toHostBooking($confirmed),
             'Xác nhận đặt phòng thành công.'
         );
     }
@@ -60,7 +61,7 @@ class HostBookingController extends Controller
         $rejected = $this->workflowService->reject($booking, $request->user(), $request->input('reason'));
 
         return $this->successResponse(
-            new HostBookingResource($rejected),
+            $this->bookingMapper->toHostBooking($rejected),
             'Từ chối đặt phòng thành công.'
         );
     }
@@ -70,7 +71,7 @@ class HostBookingController extends Controller
         $checkedIn = $this->workflowService->checkIn($booking, $request->user());
 
         return $this->successResponse(
-            new HostBookingResource($checkedIn),
+            $this->bookingMapper->toHostBooking($checkedIn),
             'Xác nhận nhận phòng thành công.'
         );
     }
@@ -80,7 +81,7 @@ class HostBookingController extends Controller
         $completed = $this->workflowService->checkOut($booking, $request->user());
 
         return $this->successResponse(
-            new HostBookingResource($completed),
+            $this->bookingMapper->toHostBooking($completed),
             'Xác nhận trả phòng thành công.'
         );
     }
