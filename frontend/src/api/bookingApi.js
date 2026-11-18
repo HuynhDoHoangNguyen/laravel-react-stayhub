@@ -2,11 +2,14 @@ import api from './axios.js';
 
 export function createBookingApi(client) {
   return {
-    async getCustomerBookings(params) {
-      return (await client.get('/api/customer/bookings', { params })).data;
+    async getCustomerBookings(params, options = {}) {
+      return (await client.get('/api/customer/bookings', { params, signal: options.signal })).data;
     },
-    async getCustomerBookingDetail(id) {
-      return (await client.get(`/api/customer/bookings/${id}`)).data;
+    async getCustomerBookingDetail(id, options = {}) {
+      return (await client.get(`/api/customer/bookings/${id}`, { signal: options.signal })).data;
+    },
+    async getCustomerBookingServices(id, options = {}) {
+      return (await client.get(`/api/customer/bookings/${id}/services`, { signal: options.signal })).data;
     },
     async cancelCustomerBooking(id) {
       return (await client.post(`/api/customer/bookings/${id}/cancel`)).data;

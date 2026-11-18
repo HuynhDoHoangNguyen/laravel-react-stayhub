@@ -4,6 +4,7 @@ import {
   mapBookingCommandResponse,
   mapCustomerBookingDetailResponse,
   mapCustomerBookingListResponse,
+  mapCustomerBookingServicesResponse,
 } from '../src/mappers/bookingMapper.js';
 
 test('booking command mapper unwraps the existing success envelope without changing values', () => {
@@ -40,4 +41,17 @@ test('customer detail mapper preserves decimal strings, nulls, and omitted field
   assert.deepEqual(mapCustomerBookingDetailResponse({ success: true, data: booking }), {
     data: booking, source: 'api', isMock: false,
   });
+});
+
+test('customer booking services mapper preserves list and empty arrays', () => {
+  const serviceLine = { id: 1, service_name: 'Laundry', quantity: '2.00', unit_price: '50000.00', amount: '100000.00' };
+  assert.deepEqual(mapCustomerBookingServicesResponse({ success: true, data: [serviceLine] }), [serviceLine]);
+  assert.deepEqual(mapCustomerBookingServicesResponse({ success: true, data: [] }), []);
+});
+
+test('booking mappers reject malformed envelopes with mapper errors', () => {
+  assert.throws(() => mapCustomerBookingListResponse(null), /không hợp lệ/);
+  assert.throws(() => mapCustomerBookingListResponse({ data: 'not-an-array' }), /không đúng định dạng mảng/);
+  assert.throws(() => mapCustomerBookingDetailResponse('bad-payload'), /không hợp lệ/);
+  assert.throws(() => mapCustomerBookingServicesResponse({ data: null }), /không đúng định dạng mảng/);
 });

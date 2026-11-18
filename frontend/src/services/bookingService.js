@@ -1,10 +1,10 @@
-import api from '@/api/axios';
 import { MOCK_BOOKINGS } from '@/mocks/bookingMockData';
 import { bookingApi } from '@/api/bookingApi';
 import {
   mapBookingCommandResponse,
   mapCustomerBookingDetailResponse,
   mapCustomerBookingListResponse,
+  mapCustomerBookingServicesResponse,
 } from '@/mappers/bookingMapper';
 
 /**
@@ -38,7 +38,7 @@ export const BOOKING_STATUS_CONFIG = {
     dot: 'bg-sky-600',
     text: 'text-sky-800',
     bg: 'bg-sky-50 border border-sky-200/80',
-    hint: 'Kỳ nghỉ đã hoàn tất thanh toán',
+    hint: 'Kỳ nghỉ đã hoàn tất lưu trú',
   },
   CANCELLED: {
     label: 'Đã hủy',
@@ -154,12 +154,6 @@ function sortBookings(list, sort) {
   }
 }
 
-/**
- * Tách biệt Adapter gọi API để dễ dàng thay đổi endpoint khi TV2 bàn giao.
- */
-const ENDPOINTS = {
-  customerBookingServices: (id) => `/api/customer/bookings/${id}/services`,
-};
 
 function bookingApiError(error, fallback) {
   const status = error.response?.status;
@@ -203,7 +197,7 @@ export const bookingService = {
    * - Trong Dev Mock: tính stats từ toàn bộ tập mock.
    * - Với Real API: chỉ dùng aggregate stats từ API nếu có, tuyệt đối KHÔNG tính từ dữ liệu 1 trang.
    */
-  async getMyBookings({ tab = 'ALL', sort = 'NEW', page = 1, perPage = 5 } = {}) {
+  async getMyBookings({ tab = 'ALL', sort = 'NEW', page = 1, perPage = 5 } = {}, options = {}) {
     const isMockEnabled =
       import.meta.env.DEV === true &&
       import.meta.env.VITE_ENABLE_BOOKING_MOCKS === 'true';
@@ -251,14 +245,18 @@ export const bookingService = {
     const params = { page, per_page: perPage };
     if (statusByTab[tab]) params.status = statusByTab[tab];
 
-    const response = await bookingApi.getCustomerBookings(params);
+    const response = await bookingApi.getCustomerBookings(params, options);
     return mapCustomerBookingListResponse(response, { page, perPage });
+  },
+
+  async getBookings(filters = {}, options = {}) {
+    return this.getMyBookings(filters, options);
   },
 
   /**
    * Lấy chi tiết một đơn đặt phòng theo ID.
    */
-  async getBookingDetail(bookingId) {
+  async getBookingDetail(bookingId, options = {}) {
     if (!bookingId || isNaN(Number(bookingId)) || Number(bookingId) <= 0) {
       const invalidErr = new Error('Mã đơn đặt phòng không hợp lệ.');
       invalidErr.status = 400;
@@ -284,14 +282,21 @@ export const bookingService = {
       };
     }
 
-    const response = await bookingApi.getCustomerBookingDetail(numericId);
+    const response = await bookingApi.getCustomerBookingDetail(numericId, options);
     return mapCustomerBookingDetailResponse(response);
   },
 
-  async getBookingServices(bookingId) {
+  async getBookingServices(bookingId, options = {}) {
+    if (!bookingId || isNaN(Number(bookingId)) || Number(bookingId) <= 0) {
+      const invalidErr = new Error('Mã đơn đặt phòng không hợp lệ.');
+      invalidErr.status = 400;
+      throw invalidErr;
+    }
+
+    const numericId = parseInt(bookingId, 10);
     try {
-      const response = await api.get(ENDPOINTS.customerBookingServices(bookingId));
-      return response.data?.data || [];
+      const response = await bookingApi.getCustomerBookingServices(numericId, options);
+      return mapCustomerBookingServicesResponse(response);
     } catch (error) {
       throw bookingApiError(error, 'Không thể tải danh sách dịch vụ của đơn đặt phòng.');
     }

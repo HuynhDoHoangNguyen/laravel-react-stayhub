@@ -31,3 +31,11 @@ test('booking-service mappers preserve snapshot decimals, nulls, omitted fields,
   assert.deepEqual(mapHostBookingServiceResponse({ success: true, data: line }), line);
   assert.deepEqual(mapHostBookingServiceResponse({ id: 21, amount: null }), { id: 21, amount: null });
 });
+
+test('host booking mappers reject malformed envelopes with mapper errors', () => {
+  assert.throws(() => mapHostBookingListResponse(null), /không hợp lệ/);
+  assert.throws(() => mapHostBookingListResponse({ data: 'not-array' }), /không đúng định dạng mảng/);
+  assert.throws(() => mapHostBookingResponse('bad-data'), /không hợp lệ/);
+  assert.throws(() => mapHostBookingServicesListResponse({ data: 'invalid' }), /không đúng định dạng mảng/);
+  assert.throws(() => mapHostBookingServiceResponse(123), /không hợp lệ/);
+});

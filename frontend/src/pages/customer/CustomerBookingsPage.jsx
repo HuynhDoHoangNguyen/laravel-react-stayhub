@@ -57,6 +57,7 @@ export default function CustomerBookingsPage() {
   const [isMockData, setIsMockData] = useState(false);
 
   useEffect(() => {
+    const controller = new AbortController();
     let ignore = false;
 
     async function load() {
@@ -66,7 +67,7 @@ export default function CustomerBookingsPage() {
           sort,
           page,
           perPage: PAGE_SIZE,
-        });
+        }, { signal: controller.signal });
 
         if (!ignore) {
           setBookings(res.data || []);
@@ -79,7 +80,7 @@ export default function CustomerBookingsPage() {
           setIsLoading(false);
         }
       } catch (err) {
-        if (!ignore) {
+        if (!ignore && !controller.signal.aborted) {
           setBookings([]);
           setAllBookings([]);
           setStats(null);
@@ -95,6 +96,7 @@ export default function CustomerBookingsPage() {
 
     return () => {
       ignore = true;
+      controller.abort();
     };
   }, [tab, sort, page, reloadTrigger]);
 

@@ -178,11 +178,12 @@ export default function CustomerBookingDetailPage() {
   };
 
   useEffect(() => {
+    const controller = new AbortController();
     let ignore = false;
 
     async function load() {
       try {
-        const res = await bookingService.getBookingDetail(bookingId);
+        const res = await bookingService.getBookingDetail(bookingId, { signal: controller.signal });
         if (!ignore) {
           setBooking(res.data);
           setIsMockData(Boolean(res.isMock));
@@ -190,7 +191,7 @@ export default function CustomerBookingDetailPage() {
           setIsLoading(false);
         }
       } catch (err) {
-        if (!ignore) {
+        if (!ignore && !controller.signal.aborted) {
           setBooking(null);
           setErrorMessage(bookingDisplayError(err, 'Không thể tải chi tiết đơn đặt phòng.', {
             notFoundMessage: 'Không tìm thấy thông tin đơn đặt phòng này.',
@@ -207,6 +208,7 @@ export default function CustomerBookingDetailPage() {
 
     return () => {
       ignore = true;
+      controller.abort();
     };
   }, [bookingId]);
 

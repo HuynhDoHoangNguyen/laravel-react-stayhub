@@ -31,16 +31,21 @@ test('preview and create adapters preserve endpoint, method, and payload', async
   ]);
 });
 
-test('customer list, detail, and cancel adapters use the existing paths and query shape', async () => {
+test('customer list, detail, services, and cancel adapters use the existing paths and query shape', async () => {
   const params = { page: 2, per_page: 5, status: 'CONFIRMED' };
+  const controller = new AbortController();
 
-  await bookingApi.getCustomerBookings(params);
-  await bookingApi.getCustomerBookingDetail(17);
+  await bookingApi.getCustomerBookings(params, { signal: controller.signal });
+  await bookingApi.getCustomerBookingDetail(17, { signal: controller.signal });
+  await bookingApi.getCustomerBookingServices(17, { signal: controller.signal });
   await bookingApi.cancelCustomerBooking(17);
 
-  assert.deepEqual(requests.slice(-3).map(({ method, url, params: query, data }) => ({ method, url, params: query, data })), [
-    { method: 'get', url: '/api/customer/bookings', params, data: undefined },
-    { method: 'get', url: '/api/customer/bookings/17', params: undefined, data: undefined },
-    { method: 'post', url: '/api/customer/bookings/17/cancel', params: undefined, data: undefined },
+  assert.deepEqual(requests.slice(-4).map(({ method, url, params: query, data, signal }) => ({
+    method, url, params: query, data, hasSignal: Boolean(signal),
+  })), [
+    { method: 'get', url: '/api/customer/bookings', params, data: undefined, hasSignal: true },
+    { method: 'get', url: '/api/customer/bookings/17', params: undefined, data: undefined, hasSignal: true },
+    { method: 'get', url: '/api/customer/bookings/17/services', params: undefined, data: undefined, hasSignal: true },
+    { method: 'post', url: '/api/customer/bookings/17/cancel', params: undefined, data: undefined, hasSignal: false },
   ]);
 });
