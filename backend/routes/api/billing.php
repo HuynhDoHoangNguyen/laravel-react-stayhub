@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Invoice\CustomerInvoiceController;
+use App\Http\Controllers\Invoice\AdminInvoiceController;
 use App\Http\Controllers\Invoice\HostInvoiceController;
 use Illuminate\Support\Facades\Route;
 
@@ -11,6 +12,11 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
+    Route::get('/admin/invoices/filter-options', [AdminInvoiceController::class, 'filterOptions'])
+        ->name('admin.invoices.filter-options');
+    Route::get('/admin/invoices', [AdminInvoiceController::class, 'index'])
+        ->name('admin.invoices.index');
+
     // Host Invoices
     Route::get('/host/invoices', [HostInvoiceController::class, 'index'])
         ->name('host.invoices.index');

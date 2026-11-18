@@ -3,6 +3,8 @@
 namespace App\Services\Invoice;
 
 use App\DTOs\Invoice\Requests\InvoiceFilterRequest;
+use App\DTOs\Invoice\Requests\AdminInvoiceFilterRequest;
+use App\DTOs\Invoice\Responses\AdminInvoiceListItemResponse;
 use App\DTOs\Invoice\Responses\InvoiceResponse;
 use App\Enums\UserRole;
 use App\Exceptions\AppException;
@@ -12,13 +14,49 @@ use App\Models\Invoice;
 use App\Models\User;
 use App\Repositories\Invoice\InvoiceRepository;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use App\DTOs\Invoice\Requests\AdminInvoiceFilterOptionsRequest;
+use App\Models\Property;
 
 class InvoiceQueryService
 {
+    public function getAdminInvoiceFilterOptions(User $actor, AdminInvoiceFilterOptionsRequest $filters): LengthAwarePaginator
+    {
+        $this->authorizeRole($actor, UserRole::ADMIN);
+        return $filters->type === 'hosts' ? $this->getAdminInvoiceHostOptions($actor, $filters)
+            : $this->getAdminInvoicePropertyOptions($actor, $filters);
+    }
+
+    public function getAdminInvoicePropertyOptions(User $actor, AdminInvoiceFilterOptionsRequest $filters): LengthAwarePaginator
+    {
+        $this->authorizeRole($actor, UserRole::ADMIN);
+        if ($filters->type !== 'properties') throw new \InvalidArgumentException('Loại bộ lọc cơ sở không hợp lệ.');
+        $page = $this->repository->paginateAdminPropertyOptions($filters);
+        $page->setCollection($page->getCollection()->map(fn (Property $property) => $this->mapper->toAdminPropertyOption($property)));
+        return $page;
+    }
+
+    public function getAdminInvoiceHostOptions(User $actor, AdminInvoiceFilterOptionsRequest $filters): LengthAwarePaginator
+    {
+        $this->authorizeRole($actor, UserRole::ADMIN);
+        if ($filters->type !== 'hosts') throw new \InvalidArgumentException('Loại bộ lọc Host không hợp lệ.');
+        $page = $this->repository->paginateAdminHostOptions($filters);
+        $page->setCollection($page->getCollection()->map(fn (User $user) => $this->mapper->toAdminHostOption($user)));
+        return $page;
+    }
+
     public function __construct(
         private readonly InvoiceRepository $repository,
         private readonly InvoiceMapper $mapper,
     ) {}
+
+    /** @return LengthAwarePaginator<int, AdminInvoiceListItemResponse> */
+    public function getAdminInvoices(User $actor, AdminInvoiceFilterRequest $filters): LengthAwarePaginator
+    {
+        $this->authorizeRole($actor, UserRole::ADMIN);
+        $page = $this->repository->paginateForAdmin($filters);
+        $page->setCollection($page->getCollection()->map(fn (Invoice $invoice) => $this->mapper->toAdminListItem($invoice)));
+        return $page;
+    }
 
     /** @return LengthAwarePaginator<int, InvoiceResponse> */
     public function getHostInvoices(User $host, InvoiceFilterRequest $filters): LengthAwarePaginator

@@ -8,6 +8,7 @@ Tiến độ theo UC nằm trong checklist; contract, nghiệm thu và bàn giao
 | [BASELINE_HANDOVER.md](BASELINE_HANDOVER.md) | Baseline kiến trúc đã nghiệm thu, bàn giao TV1/TV2 và evidence refactor |
 | [INVOICE_PAYMENT_WORKFLOW.md](INVOICE_PAYMENT_WORKFLOW.md) | Quy tắc và contract UC36 đang được triển khai trong source |
 | [UC36_TV2_HANDOVER.md](UC36_TV2_HANDOVER.md) | Nghiệm thu UC36 phạm vi TV3, evidence và dependency TV2 đang hoãn |
+| [UC45_ACCEPTANCE_HANDOVER.md](UC45_ACCEPTANCE_HANDOVER.md) | UC45 đã nghiệm thu phạm vi TV3; contract Admin invoice, kết quả API/UI, baseline, giới hạn và cách tái kiểm |
 
 ## Cách sử dụng
 

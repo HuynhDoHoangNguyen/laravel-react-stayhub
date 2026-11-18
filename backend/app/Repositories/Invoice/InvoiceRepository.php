@@ -3,14 +3,72 @@
 namespace App\Repositories\Invoice;
 
 use App\DTOs\Invoice\Requests\InvoiceFilterRequest;
+use App\DTOs\Invoice\Requests\AdminInvoiceFilterRequest;
 use App\Models\Invoice;
 use App\Models\Booking;
 use App\Models\InvoiceItem;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use App\Models\User;
+use App\Models\Property;
+use App\DTOs\Invoice\Requests\AdminInvoiceFilterOptionsRequest;
 
 final class InvoiceRepository
 {
+    public function paginateAdminPropertyOptions(AdminInvoiceFilterOptionsRequest $filters): LengthAwarePaginator
+    {
+        $query = Property::query()->whereHas('rooms.bookings.invoice');
+        if ($filters->hostId !== null) $query->where('properties.host_id', $filters->hostId);
+        if ($filters->search !== null) {
+            $needle = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $filters->search).'%';
+            $query->whereRaw("properties.name LIKE ? ESCAPE '!'", [$needle]);
+        }
+        return $query->orderBy('properties.name')->orderBy('properties.id')
+            ->paginate($filters->perPage, ['properties.id', 'properties.name', 'properties.host_id'], 'page', $filters->page)
+            ->appends($filters->toQuery());
+    }
+
+    public function paginateAdminHostOptions(AdminInvoiceFilterOptionsRequest $filters): LengthAwarePaginator
+    {
+        // EXISTS avoids duplicate users without depending on current account role/status.
+        $query = User::query()->whereHas('properties.rooms.bookings.invoice');
+        if ($filters->search !== null) {
+            $needle = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $filters->search).'%';
+            $query->whereRaw("users.name LIKE ? ESCAPE '!'", [$needle]);
+        }
+        return $query->orderBy('users.name')->orderBy('users.id')
+            ->paginate($filters->perPage, ['users.id', 'users.name'], 'page', $filters->page)
+            ->appends($filters->toQuery());
+    }
+
+    public function paginateForAdmin(AdminInvoiceFilterRequest $filters): LengthAwarePaginator
+    {
+        $query = Invoice::query();
+        if ($filters->hostId !== null) {
+            $query->whereHas('booking.room.property', fn (Builder $property) => $property->where('host_id', $filters->hostId));
+        }
+        if ($filters->propertyId !== null) {
+            $query->whereHas('booking.room', fn (Builder $room) => $room->where('property_id', $filters->propertyId));
+        }
+        if ($filters->status !== null) {
+            $query->where('payment_status', $filters->status);
+        }
+        if ($filters->search !== null) {
+            // Use ! as an explicit escape character; behavior does not depend on SQL backslash mode.
+            $search = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $filters->search).'%';
+            $query->where(function (Builder $group) use ($search): void {
+                $group->whereRaw("invoice_code LIKE ? ESCAPE '!'", [$search])
+                    ->orWhereRaw("customer_name LIKE ? ESCAPE '!'", [$search])
+                    ->orWhereRaw("property_name LIKE ? ESCAPE '!'", [$search]);
+            });
+        }
+        return $query->orderByDesc('created_at')->orderByDesc('id')
+            ->paginate($filters->perPage, [
+                'id', 'invoice_code', 'booking_id', 'customer_name', 'property_name', 'room_name',
+                'total_amount', 'payment_status', 'paid_at', 'created_at',
+            ], 'page', $filters->page)->appends($filters->toQuery());
+    }
+
     public function paginateForHost(int $hostId, InvoiceFilterRequest $filters): LengthAwarePaginator
     {
         return $this->paginate($this->forHost($hostId), $filters, 'customer_name');

@@ -1,7 +1,7 @@
 # StayHub TV3 — Checklist
 
-Cập nhật: 2026-11-17 (Asia/Bangkok). Phạm vi theo [phân công TV3](../stayhub-team-work-assignment.md): 18 UC, FAQ Management và Chat History.
-Baseline hiện hành: `feature/tv3-uc36-payment-status`, HEAD `6bd6838` cộng working tree đã nghiệm thu; không dùng HEAD riêng thay code hiện hữu. [Kiến trúc](../../ARCHITECTURE.md) quy định cách triển khai.
+Cập nhật: 2026-11-18 (Asia/Bangkok). Phạm vi theo [phân công TV3](../stayhub-team-work-assignment.md): 18 UC, FAQ Management và Chat History.
+Baseline hiện hành: `feature/tv3-uc45-admin-invoices`, HEAD `482db46` cộng working tree hiện hữu; không dùng HEAD riêng thay code hiện hữu. [Kiến trúc](../../ARCHITECTURE.md) quy định cách triển khai.
 
 ## 1. Quy ước trạng thái
 
@@ -24,7 +24,7 @@ Baseline hiện hành: `feature/tv3-uc36-payment-status`, HEAD `6bd6838` cộng 
 | UC38 — Host xem Review | [x] | [ ] | API list/summary và UI có evidence browser/XAMPP; refactor ACCEPTED. Còn nghiệm thu chức năng. |
 | UC39 — Dashboard Host | [ ] | [ ] | Có khung UI; còn chốt KPI/kỳ/timezone/refund và triển khai query/API/UI. |
 | UC44 — Admin xem toàn bộ Booking | [ ] | [ ] | Còn contract Booking TV2, query/API/UI, lọc/phân trang và kiểm quyền. |
-| UC45 — Admin xem toàn bộ Invoice | [ ] | [ ] | Còn Admin query/API/UI, lọc/phân trang và kiểm quyền. |
+| UC45 — Admin xem toàn bộ Invoice | [x] | [x] TV3 | Owner đã nghiệm thu UC45-CLOSE-01 và đóng UC45 phạm vi TV3 ngày 2026-11-18; contract, evidence và giới hạn tại [hồ sơ UC45](UC45_ACCEPTANCE_HANDOVER.md). |
 | UC47 — Dashboard Admin | [ ] | [ ] | Có khung UI; còn KPI, query/API/UI và kiểm thử. |
 | UC48 — Thống kê hệ thống | [ ] | [ ] | Còn kỳ/chỉ tiêu/dimension, query/API/UI và đối chiếu số liệu độc lập. |
 | UC56 — Tạo InvoiceItem | [x] | [ ] | ROOM/SERVICE cùng transaction tạo Invoice; refactor ACCEPTED. Còn nghiệm thu cùng UC34. |
@@ -33,7 +33,7 @@ Baseline hiện hành: `feature/tv3-uc36-payment-status`, HEAD `6bd6838` cộng 
 | UC60 — Kiểm tra điều kiện Review | [x] | [ ] | COMPLETED/ownership/one-review đã có; refactor ACCEPTED. Còn race MySQL và workflow Booking thật. |
 | UC61 — Ngữ cảnh nội bộ chatbot | [ ] | [ ] | Còn allowlist, quyền truy cập và context service. |
 
-**Tổng:** 11/18 UC có luồng chính; 1/18 UC được nghiệm thu chức năng phạm vi TV3 (UC36); 10 UC còn gate chức năng dù refactor đã nghiệm thu; 7 UC chưa có luồng hoàn chỉnh.
+**Tổng:** 12/18 UC có luồng chính; 2/18 UC được nghiệm thu chức năng phạm vi TV3 (UC36, UC45); 10 UC còn gate chức năng; 6 UC chưa có luồng hoàn chỉnh.
 UC56/57/58/60 nằm trong workflow cha, không cần API/UI riêng chỉ để đủ số lớp.
 
 ### UC36 — phần TV3 đã hoàn thành
@@ -48,6 +48,18 @@ UC56/57/58/60 nằm trong workflow cha, không cần API/UI riêng chỉ để �
 - [x] UC36 hoàn thành trong phạm vi TV3 theo quyết định owner; Booking production TV2 chưa kiểm chứng và được hoãn riêng.
 
 Contract tại [workflow](INVOICE_PAYMENT_WORKFLOW.md); 12 gate, evidence/giới hạn và dependency tại [hồ sơ UC36](UC36_TV2_HANDOVER.md).
+
+### UC45 — checkpoint QA browser
+
+- [x] UC45-QA-BROWSER-01B: owner xác nhận kiểm tra thủ công B01–B13 và cleanup đều PASS; đã nghiệm thu UI danh sách, phân trang, tìm kiếm/trạng thái, Host/cơ sở, reset và responsive. Không đồng nghĩa đóng toàn UC45.
+- Kiểm tra bổ trợ ngày 2026-11-18: 16 đối chiếu HTTP thật PASS trên schema QA riêng (60 hóa đơn, 12 Host, 24 cơ sở); kết quả này không thay thế bằng chứng UI.
+- Nguồn bằng chứng UI: owner kiểm tra thủ công; agent không quan sát tự động do connector browser không khả dụng và native Brave từ chối input khi có người dùng thao tác. Lần chạy đầu gate fingerprint FAIL vì checklist được cập nhật trong lúc chạy; lần chạy lại với file ổn định và cleanup đều PASS.
+- ENV-ROOT-01 đã được owner nghiệm thu riêng; cấu hình root và các runner hiện có được giữ nguyên trong task này.
+- Hướng dẫn thủ công và trạng thái từng case nằm trong evidence local ignored `.agent-workspace/tv3/uc45-qa-browser-01b/`; báo cáo trên chat phải ghi riêng nguồn quan sát UI.
+- [x] UC45-QA-BROWSER-01C: owner xác nhận thủ công C01–C10 PASS, đã thấy Pending trước C07–C10, bỏ blocking/throttling và cleanup PASS; task đã nghiệm thu. Nguồn UI là owner, không phải agent quan sát tự động.
+- Kiểm tra bổ trợ 01C ngày 2026-11-18: 30 test Node về lỗi/Auth/invoice service PASS; runner HTTP session/CSRF và cleanup trên schema riêng PASS. Không dùng kết quả này thay thế các case UI hoặc kết luận về response cũ ghi đè.
+- Giới hạn 01C: IAB đã khả dụng nhưng API điều khiển được cung cấp không có Request blocking/throttling cho fault injection. Lần đầu runner dừng trước provision vì Docker daemon chưa chạy; sau khởi động Docker Desktop, chạy lại trên container MySQL hiện có và cleanup PASS. Checklist chỉ cập nhật sau khi runner đã kết thúc.
+- [x] UC45-CLOSE-01: owner đã nghiệm thu task và đóng UC45 phạm vi TV3 ngày 2026-11-18. Ma trận 11 AC, contract, giới hạn và hướng dẫn tái kiểm nằm trong [hồ sơ nghiệm thu/bàn giao](UC45_ACCEPTANCE_HANDOVER.md). Đối chiếu 331 file core khớp QA-API; baseline sau ENV và browser C khớp ngoại trừ checklist tiến độ. Các kết quả test trong hồ sơ là lịch sử, không phải vừa chạy lại tại CLOSE-01.
 
 ## 3. Công việc ngoài số đếm UC
 

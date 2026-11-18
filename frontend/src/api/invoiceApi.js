@@ -3,6 +3,15 @@ import { requireApiId } from './apiId.js';
 /** Transport only; client must be the shared Axios instance in production. */
 export function createInvoiceApi(client) {
   return {
+    async getAdminInvoicePropertyOptions(params, { signal } = {}) {
+      return (await client.get('/api/admin/invoices/filter-options', { params, signal })).data;
+    },
+    async getAdminInvoiceHostOptions(params, { signal } = {}) {
+      return (await client.get('/api/admin/invoices/filter-options', { params, signal })).data;
+    },
+    async getAdminInvoices(params, { signal } = {}) {
+      return (await client.get('/api/admin/invoices', { params, signal })).data;
+    },
     async updateHostInvoicePaymentStatus(id, { signal } = {}) {
       return (await client.patch(`/api/host/invoices/${requireApiId(id, 'Mã hóa đơn')}/payment-status`, { payment_status: 'PAID' }, { signal })).data;
     },
