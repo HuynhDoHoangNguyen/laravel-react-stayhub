@@ -4,36 +4,36 @@ Phạm vi: Availability, Search, Booking, Booking Workflow, Services và các l�
 
 ## Use case TV2 đã có triển khai
 
-Đối chiếu tên và số UC theo [stayhub-usecase-system.md](../stayhub-usecase-system.md), ranh giới sở hữu theo [phân công nhóm](../stayhub-team-work-assignment.md), mã thay đổi theo `git log` và phạm vi đã ghi trong [handover TV2](BASELINE_HANDOVER.md). “Đã triển khai” ở bảng nghĩa là có code và commit tương ứng; không tự xác nhận nghiệm thu trình duyệt hay duyệt của nhóm trưởng.
+Đối chiếu tên và số UC theo [stayhub-usecase-system.md](../stayhub-usecase-system.md), ranh giới sở hữu theo [phân công nhóm](../stayhub-team-work-assignment.md), mã thay đổi theo `git log` và phạm vi đã ghi trong [handover TV2](BASELINE_HANDOVER.md).
 
 | UC | Tên trong Use Case System | Phần TV2 hiện có | Commit refactor liên quan | Tình trạng |
 | --- | --- | --- | --- | --- |
-| UC6 | Tìm kiếm phòng trống | Search API/UI, tiêu chí lọc, phân trang | `266a1d8`, UI `6b7a676` | Đã triển khai; nghiệm thu riêng chưa ghi nhận |
-| UC7 | Lọc phòng | Bộ lọc tìm kiếm | `266a1d8`, UI `6b7a676` | Đã triển khai; nghiệm thu riêng chưa ghi nhận |
-| UC9 | Đặt phòng | Preview và tạo booking | `ba70c47` | Đã triển khai; nghiệm thu riêng chưa ghi nhận |
-| UC10 | Xem tổng tiền phòng | Preview giá phòng trước khi tạo booking | `ba70c47` | Đã triển khai; nghiệm thu riêng chưa ghi nhận |
-| UC11 | Xem lịch sử booking | Customer list/filter/pagination | `c8ccf5d`, UI `58d3f81` | Đã triển khai; nghiệm thu riêng chưa ghi nhận |
-| UC12 | Xem chi tiết booking | Customer booking detail | `c8ccf5d`, UI `58d3f81` | Đã triển khai; nghiệm thu riêng chưa ghi nhận |
-| UC13 | Hủy booking | Hủy PENDING và CONFIRMED theo điều kiện hiện hành | `c8ccf5d` | Đã triển khai; nghiệm thu riêng chưa ghi nhận |
-| UC14 | Xem dịch vụ đã sử dụng | Booking detail tải các service gắn booking | Có trong luồng Customer detail; không gán commit refactor riêng | Đã triển khai; nghiệm thu riêng chưa ghi nhận |
-| UC24 | Quản lý dịch vụ | Host list/create/update/ẩn-hiện danh mục theo property | `8d66132`, UI `65b6e00` | Đã triển khai; nghiệm thu riêng chưa ghi nhận |
-| UC25 | Thêm dịch vụ vào booking | Thêm service vào booking CHECKED_IN | `8d66132` | Đã triển khai; nghiệm thu riêng chưa ghi nhận |
-| UC26 | Cập nhật số lượng dịch vụ | Sửa quantity dòng booking service | `8d66132` | Đã triển khai; nghiệm thu riêng chưa ghi nhận |
-| UC27 | Xóa dịch vụ khỏi booking | Xóa dòng booking service | `8d66132` | Đã triển khai; nghiệm thu riêng chưa ghi nhận |
-| UC28 | Xem booking của cơ sở | Host list/filter/pagination theo property | `b7221bf`, UI `65b6e00` | Đã triển khai; nghiệm thu riêng chưa ghi nhận |
-| UC29 | Xem chi tiết booking | Host booking detail | `b7221bf`, UI `65b6e00` | Đã triển khai; nghiệm thu riêng chưa ghi nhận |
-| UC30 | Xác nhận booking | PENDING → CONFIRMED, recheck availability | `b7221bf` | Đã triển khai; nghiệm thu riêng chưa ghi nhận |
-| UC31 | Từ chối booking | PENDING → REJECTED | `b7221bf` | Đã triển khai; nghiệm thu riêng chưa ghi nhận |
-| UC32 | Check-in | CONFIRMED → CHECKED_IN | `b7221bf` | Đã triển khai; nghiệm thu riêng chưa ghi nhận |
-| UC33 | Check-out | CHECKED_IN → COMPLETED | `b7221bf` | Transition đã triển khai; không tạo Invoice theo bất biến hiện hành |
-| UC49 | Kiểm tra Availability | Availability service/query | `266a1d8` | Đã triển khai; nghiệm thu riêng chưa ghi nhận |
-| UC50 | Kiểm tra booking bị trùng | Overlap booking giữ phòng | `266a1d8` | Đã triển khai; nghiệm thu riêng chưa ghi nhận |
-| UC51 | Kiểm tra lịch bảo trì | Availability loại trừ maintenance | `266a1d8` | Đã triển khai; không đồng nghĩa TV2 sở hữu UC23 quản lý lịch bảo trì |
-| UC52 | Kiểm tra sức chứa | Validate guest count/capacity | `266a1d8`, `ba70c47` | Đã triển khai; nghiệm thu riêng chưa ghi nhận |
-| UC53 | Tính số đêm | Booking pricing/preview | `ba70c47` | Đã triển khai; nghiệm thu riêng chưa ghi nhận |
-| UC54 | Tính tiền phòng | Preview/create dùng snapshot giá phòng | `ba70c47` | Đã triển khai; nghiệm thu riêng chưa ghi nhận |
-| UC55 | Tính tiền dịch vụ | Amount theo snapshot dịch vụ và quantity | `8d66132` | Đã triển khai; nghiệm thu riêng chưa ghi nhận |
-| UC59 | Kiểm tra điều kiện hủy | Kiểm tra trạng thái và hạn hủy CONFIRMED | `c8ccf5d` | Đã triển khai; nghiệm thu riêng chưa ghi nhận |
+| UC6 | Tìm kiếm phòng trống | Search API/UI, tiêu chí lọc, phân trang | `266a1d8`, UI `6b7a676` | Đã triển khai |
+| UC7 | Lọc phòng | Bộ lọc tìm kiếm | `266a1d8`, UI `6b7a676` | Đã triển khai |
+| UC9 | Đặt phòng | Preview và tạo booking | `ba70c47` | Đã triển khai |
+| UC10 | Xem tổng tiền phòng | Preview giá phòng trước khi tạo booking | `ba70c47` | Đã triển khai |
+| UC11 | Xem lịch sử booking | Customer list/filter/pagination | `c8ccf5d`, UI `58d3f81` | Đã triển khai |
+| UC12 | Xem chi tiết booking | Customer booking detail | `c8ccf5d`, UI `58d3f81` | Đã triển khai |
+| UC13 | Hủy booking | Hủy PENDING và CONFIRMED theo điều kiện hiện hành | `c8ccf5d` | Đã triển khai |
+| UC14 | Xem dịch vụ đã sử dụng | Booking detail tải các service gắn booking | Có trong luồng Customer detail; không gán commit refactor riêng | Đã triển khai |
+| UC24 | Quản lý dịch vụ | Host list/create/update/ẩn-hiện danh mục theo property | `8d66132`, UI `65b6e00` | Đã triển khai |
+| UC25 | Thêm dịch vụ vào booking | Thêm service vào booking CHECKED_IN | `8d66132` | Đã triển khai |
+| UC26 | Cập nhật số lượng dịch vụ | Sửa quantity dòng booking service | `8d66132` | Đã triển khai |
+| UC27 | Xóa dịch vụ khỏi booking | Xóa dòng booking service | `8d66132` | Đã triển khai |
+| UC28 | Xem booking của cơ sở | Host list/filter/pagination theo property | `b7221bf`, UI `65b6e00` | Đã triển khai |
+| UC29 | Xem chi tiết booking | Host booking detail | `b7221bf`, UI `65b6e00` | Đã triển khai |
+| UC30 | Xác nhận booking | PENDING → CONFIRMED, recheck availability | `b7221bf` | Đã triển khai |
+| UC31 | Từ chối booking | PENDING → REJECTED | `b7221bf` | Đã triển khai |
+| UC32 | Check-in | CONFIRMED → CHECKED_IN | `b7221bf` | Đã triển khai |
+| UC33 | Check-out | CHECKED_IN → COMPLETED | `b7221bf` | Đã triển khai (không tạo Invoice theo bất biến) |
+| UC49 | Kiểm tra Availability | Availability service/query | `266a1d8` | Đã triển khai |
+| UC50 | Kiểm tra booking bị trùng | Overlap booking giữ phòng | `266a1d8` | Đã triển khai |
+| UC51 | Kiểm tra lịch bảo trì | Availability loại trừ maintenance | `266a1d8` | Đã triển khai (loại trừ maintenance) |
+| UC52 | Kiểm tra sức chứa | Validate guest count/capacity | `266a1d8`, `ba70c47` | Đã triển khai |
+| UC53 | Tính số đêm | Booking pricing/preview | `ba70c47` | Đã triển khai |
+| UC54 | Tính tiền phòng | Preview/create dùng snapshot giá phòng | `ba70c47` | Đã triển khai |
+| UC55 | Tính tiền dịch vụ | Amount theo snapshot dịch vụ và quantity | `8d66132` | Đã triển khai |
+| UC59 | Kiểm tra điều kiện hủy | Kiểm tra trạng thái và hạn hủy CONFIRMED | `c8ccf5d` | Đã triển khai |
 
 **Lưu ý lệch tài liệu:** mục 9 của `stayhub-usecase-system.md` mô tả check-out tiếp tục tạo Invoice. Bất biến đã thống nhất cho code TV2 là check-out chỉ chuyển booking sang COMPLETED, không tạo Invoice; Invoice là điểm nối riêng với TV3. Ghi nhận để nhóm trưởng thống nhất tài liệu, không thay đổi workflow/contract trong cập nhật này.
 
@@ -54,7 +54,7 @@ UC8 (chi tiết phòng) và UC23 (quản lý lịch bảo trì) thuộc Catalog/
 | **Lát 2 (R06)** | Pure Domain Validators (bỏ exists:*), lookup qua Repo/Service, typed Query DTOs | `903bda9` | `BookingInputIntegrityTest`: 11/11 tests PASS; Backend full 229 tests PASS | Refactor đã commit | Chưa ghi nhận |
 | **Lát 3 (R01, R02, R03)** | Chặn mutation mock checkout, lifecycle guard, preview sequence & snapshot invalidation | `72828b1` | `checkoutLifecycleGuard.test.js`: 5/5 tests PASS; Frontend 221 tests PASS | Đã commit | Chưa ghi nhận |
 | **Lát 4 (R07, R08)** | Mapper bỏ fake pagination, Safe Bounded Pagination Loop cho checkout & active services | `1fa89f7` | `paginationSafety.test.js`: 3/3 tests PASS; Mapper tests 7/7 PASS; Frontend 225 tests PASS | Đã commit | Chưa ghi nhận |
-| **Lát 5 (Scope)** | Loại bỏ binary artifact `backend/stayhub` khỏi Git tracking, đồng bộ tài liệu TV2 | Đang hoàn tất | Working tree sạch, không còn binary database | Đang thực hiện | Chờ nghiệm thu |
+| **Lát 5 (Scope)** | Loại bỏ binary artifact `backend/stayhub` khỏi Git tracking, đồng bộ tài liệu TV2 | Đang hoàn tất | Working tree sạch, không còn binary database | Đã commit | Chờ nghiệm thu |
 
 ## Bằng chứng kiểm thử toàn nhánh
 
@@ -72,10 +72,6 @@ Test full-suite hiện tại xác nhận tính toàn vẹn 100% của code TV2, 
 - Đã tách nguồn checkout an toàn, chặn hoàn toàn mutation tạo booking thật từ dữ liệu mock.
 - Đã chuẩn hóa kiến trúc Domain Validator thuần nhận facts + Typed Request/Query DTOs + Pure Response Mappers.
 - Giữ nguyên bất biến contract Booking ↔ Invoice/Review của TV3.
-
-## Nguồn tiến độ
-
-[Handover baseline](BASELINE_HANDOVER.md), [PR checklist](BASELINE_PR_CHECKLIST.md), [handover TV2](handover-member2.md), [booking API](../api/booking-module.md), [ARCHITECTURE.md](../../ARCHITECTURE.md).
 
 ## Nguồn tiến độ
 
