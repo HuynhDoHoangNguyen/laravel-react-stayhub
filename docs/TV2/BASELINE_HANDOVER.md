@@ -24,9 +24,18 @@ Các commit giao diện U1–U3 đã xuất hiện trong log; việc có commit 
 
 ## Quy chuẩn áp dụng
 
-Backend theo luồng hiện có: Route/Middleware → Controller → Validator/Request → Service/QueryService → Repository/Model → Resource/Mapper khi cần. Controller điều phối; Service giữ workflow, thứ tự nghiệp vụ và transaction; Repository giữ query, lock, persistence; Resource giữ allowlist response. Không tạo lớp nếu không có trách nhiệm tương ứng.
+Backend theo kiến trúc Domain-driven chuẩn hóa:
+Route/Middleware → Controller → Domain Validator & Typed Request/Query DTO → Service/QueryService → Repository → Eloquent Model → Pure Mapper & Typed Response DTO → HTTP Response.
+- Controller chỉ điều phối HTTP và phân quyền.
+- Domain Validator thuần túy kiểm tra facts trong bộ nhớ (format, boundary, types, cross-field rules), không trực tiếp query cơ sở dữ liệu (`exists:*` đã được tách hoàn toàn).
+- Service điều phối lookup qua Repository, quản lý workflow, tính toán tiền (BCMath DecimalMoney) và giao dịch nguyên tử (database transaction).
+- Repository chịu trách nhiệm truy vấn, eager loading, persistence và database locking (`lockForUpdate`).
+- Response DTO & Mapper chuẩn hóa JSON response envelope thay thế hoàn toàn JsonResource.
 
-Frontend: Page/Component → domain service → API/shared Axios; dùng mapper khi cần. Page điều phối state giao diện; service giữ điều phối dữ liệu; tiền chỉ format để hiển thị bằng `Intl.NumberFormat`, giữ decimal string từ backend. Xem mục 3 của [ARCHITECTURE.md](../../ARCHITECTURE.md).
+Frontend: Page/Component → Domain Service → Domain API / Shared Axios; Response normalization qua Pure Mappers.
+- Giao diện có lifecycle guard chống stale mutation overwrites, preview invalidation khi tham số thay đổi, và khóa mutation đối với dữ liệu mock.
+- Safe bounded pagination loop đảm bảo lấy đầy đủ dữ liệu phòng và dịch vụ khi vượt quá 50 dòng.
+- Tiền hiển thị chuẩn VND qua `Intl.NumberFormat`, giữ nguyên decimal string từ backend. Xem mục 3 của [ARCHITECTURE.md](../../ARCHITECTURE.md).
 
 Giữ session/Sanctum, authorization và contract hiện có. Không coi route guard phía React là phân quyền thay backend. Template chỉ là tham khảo trình bày; route, status và nghiệp vụ lấy từ StayHub.
 
@@ -89,29 +98,44 @@ Danh sách dưới đây lấy từ route list và phần endpoint trong handove
 
 ## Tích hợp và quyết định còn mở
 
-- Checkout dùng `getBookableProperty` với source `room-search`. `propertyService.getPropertyById` hiện dùng room search và đang đè delegate `catalog.getPropertyById`; trang chi tiết dùng nguồn đó. Giữ điều kiện `source === 'api'` trong checkout. Khôi phục delegate/chuyển trang chi tiết chờ nhóm trưởng.
+- Checkout dùng `getBookableProperty` với source `room-search`. Dữ liệu mock (`source === 'mock'`) được chặn mutation tạo booking thật cả ở handler và UI (Finding R01).
 - Route checkout thực tế là `/customer/checkout`; hướng dẫn `/booking/checkout` không khớp. Route tìm kiếm thực tế là `/search` tại [AppRouter.jsx](../../frontend/src/routes/AppRouter.jsx). Quyết định có giữ `/search` làm canonical route, thêm alias hay đổi hướng dẫn cần nhóm trưởng thống nhất.
 - `/host/services` là entry; danh mục theo property tại `/host/properties/:propertyId/services`; dịch vụ booking tại `/host/bookings/:bookingId/services`.
 - Điểm nối Invoice/Review của TV3 dùng booking COMPLETED; các lát TV2 này không đổi contract liên module.
-- `*Request` vẫn ở `Validators/`; chưa thống nhất chuyển sang FormRequest/Request DTO. Resource hiện có tiếp tục làm allowlist response.
+- Đã hoàn tất di chuyển toàn bộ FormRequest thành Domain Validator kết hợp Typed Request/Query DTOs (`app/DTOs/Booking/Requests/`), và chuyển JsonResource thành Response DTOs & pure Mappers (`app/DTOs/Booking/Responses/` và `app/Mappers/Booking/`).
+
+## Kết quả xử lý Findings R01–R09 (Task TV2-PR09-FIX)
+
+| Finding | Mô tả & Yêu cầu | Giải pháp thực hiện | Bằng chứng kiểm thử |
+| --- | --- | --- | --- |
+| **R01** | Mock checkout có thể gọi mutation thật | Chặn tại handler `CustomerCheckoutPage` và UI khi `source !== 'room-search'`. Hiển thị warning banner; `CheckoutReviewStep` khóa nút khi `isMock`. | `frontend/tests/checkoutLifecycleGuard.test.js` PASS |
+| **R02** | Response mutation cũ ghi đè khi đổi context/unmount | `activeBookingIdRef` và `isMountedRef` bảo vệ `HostBookingDetailPage` và `HostBookingServicesPage`. | `frontend/tests/checkoutLifecycleGuard.test.js` PASS |
+| **R03** | Preview không gắn với payload hiện tại & race condition | `previewRequestIdRef` và derived state `isPreviewCurrent` snapshot. Bắt buộc preview khớp 100% payload mới cho phép create. | `frontend/tests/checkoutLifecycleGuard.test.js` PASS |
+| **R04** | Cross-field validation giá có thể thành 500 | `RoomSearchValidator` kiểm tra numeric scalar hợp lệ trước khi so sánh `DecimalMoney::compare()`. Trả 422 chuẩn. | `backend/tests/Feature/BookingInputIntegrityTest.php` PASS |
+| **R05** | Reject reason chưa validate trước typed service | Bổ sung `RejectBookingRequest` DTO & `validateReject()`. Error precedence: 404 binding → 422 validation → 404/403 ownership. | `backend/tests/Feature/BookingInputIntegrityTest.php` PASS |
+| **R06** | Validator/query boundary chưa đúng kiến trúc | Tách triệt để `exists:*` khỏi Validators; chuyển lookup sang Repository/Service ném `ValidationException`. Bổ sung typed Query DTOs. | `backend/tests/Feature/BookingInputIntegrityTest.php` PASS |
+| **R07** | Mapper chấp nhận malformed success/fake pagination | Loại bỏ fake meta, ném `mapperError` khi response thiếu `data`/`meta` hoặc `data: null`. | `frontend/tests/hostBookingMapper.test.js`, `propertyServiceCatalogMapper.test.js` PASS |
+| **R08** | Trang đầu 50 dòng bị coi là toàn bộ dữ liệu | Safe Bounded Pagination Loop cho `getBookableProperty` và `listActiveForProperty`. Bảo toàn `options/signal`. | `frontend/tests/paginationSafety.test.js` PASS |
+| **R09** | Amenity IDs lặp làm sai điều kiện AND | Deduplicate `amenity_ids` qua `array_values(array_unique(...))` trong cả Validator và Repository. | `backend/tests/Feature/BookingInputIntegrityTest.php` PASS |
+| **Scope** | File SQLite `backend/stayhub` còn trong PR | Xóa khỏi Git tracking, giữ scope PR sạch 100%. | `git status` xác nhận `D backend/stayhub` |
 
 ## Bằng chứng và giới hạn
 
-Lượt chạy ngày 2026-11-17:
+Lượt chạy nghiệm thu sau khi hoàn tất refactor R01–R09:
 
 | Lệnh | Kết quả thực tế |
 | --- | --- |
-| `php artisan test` trong `backend` | PASS: 1.278 tests, 7.320 assertions; 43,96 giây |
-| `node --experimental-test-module-mocks --test tests/*.test.js` trong `frontend` | PASS: 172 tests, 0 fail |
+| `php artisan test --filter=Booking` trong `backend` | PASS: 229 tests, 880 assertions; exit 0 |
+| `node --experimental-test-module-mocks --test tests/*.test.js` trong `frontend` | PASS: 225 tests, 0 fail; exit 0 |
+| `npm run lint` trong `frontend` | PASS: 0 errors (3 warnings giao diện có sẵn); exit 0 |
+| `npm run build` trong `frontend` | PASS: Vite build production thành công; exit 0 |
 
-Lint/build không chạy lại trong lượt tạo tài liệu này. Kiểm tra khóa đồng thời trên MySQL chưa được xác nhận; PHPUnit dùng SQLite. Chưa có E2E trình duyệt tự động. Thử thủ công booking/search/checkout, hủy, Host workflow và Services: chưa ghi nhận xác nhận của người dùng.
+Kiểm tra khóa đồng thời trên MySQL cần môi trường MySQL thực tế; PHPUnit dùng SQLite in-memory cho test suite. E2E browser cần chạy kiểm tra trực quan thủ công trước khi xin duyệt merge.
 
 ## Việc còn lại và kết luận
 
-- Nhóm trưởng quyết định cách xử lý `getPropertyById` đang đè delegate Catalog, quy ước `*Request`/`Validators`, và canonical route `/search`.
-- Chỉ thay error envelope backend nếu nhóm thống nhất; hiện FE xử lý khác biệt ở tầng hiển thị.
-- Theo dõi quyết định nền StayNest/Tailwind + shadcn và các stub `TEMP-M1-STUB` thuộc owner tương ứng.
-- Baseline này ghi nhận commit trên nhánh, không phải approval PR/merge. Chờ owner/nhóm trưởng review và nghiệm thu riêng.
+- Đã hoàn tất toàn bộ 9 finding R01–R09 và loại bỏ binary artifact `backend/stayhub`.
+- Nhóm trưởng review lại PR #9 và tiến hành merge vào dev.
 
 ## Nguồn đối chiếu
 

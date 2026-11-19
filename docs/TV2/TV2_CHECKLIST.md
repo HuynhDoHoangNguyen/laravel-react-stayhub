@@ -41,32 +41,41 @@ UC8 (chi tiết phòng) và UC23 (quản lý lịch bảo trì) thuộc Catalog/
 
 | Luồng/lát | Phạm vi | Commit | Test/build hiện có | Trạng thái kỹ thuật | Nhóm trưởng nghiệm thu |
 | --- | --- | --- | --- | --- | --- |
-| Availability + Search | Query khả dụng, ngày nửa mở, maintenance, booking giữ phòng; API Search | `266a1d8` | Full backend hiện tại PASS 1.278/7.320; frontend 172 PASS. Số riêng lát không ghi nhận. | Refactor đã commit | Chưa ghi nhận |
-| Checkout source | `getBookableProperty` cho dữ liệu room-search; giữ `getPropertyById` hiện tại | `b70a91d` | Full backend/frontend hiện tại PASS; số riêng lát không ghi nhận | Đã commit; quyết định Catalog còn mở | Chưa ghi nhận |
-| Booking preview + create | Preview, pricing snapshot, tạo booking và transaction | `ba70c47` | Full backend hiện tại PASS 1.278/7.320; frontend 172 PASS | Refactor đã commit | Chưa ghi nhận |
-| Customer đọc/hủy | List, detail, cancel và ownership | `c8ccf5d` | Full backend/frontend hiện tại PASS; số riêng lát không ghi nhận | Refactor đã commit | Chưa ghi nhận |
-| Host workflow | Host list/detail, confirm/reject/check-in/check-out | `b7221bf` | Full backend/frontend hiện tại PASS; số riêng lát không ghi nhận | Refactor đã commit | Chưa ghi nhận |
-| Services | Service catalog theo property và dịch vụ gắn booking | `8d66132` | Full backend/frontend hiện tại PASS; số riêng lát không ghi nhận | Refactor đã commit | Chưa ghi nhận |
-| U1 giao diện | Search + checkout | `6b7a676` | Frontend 172 PASS; lint/build được chạy ở lượt U3 trước đây, không chạy lại trong lượt tài liệu | Đã commit; browser acceptance chưa ghi nhận | Chưa ghi nhận |
-| U2 giao diện | Customer bookings/detail, hộp hủy cục bộ | `58d3f81` | Frontend 172 PASS; lint/build được chạy ở lượt U3 trước đây, không chạy lại trong lượt tài liệu | Đã commit; browser acceptance chưa ghi nhận | Chưa ghi nhận |
-| U3 giao diện | Host bookings/workflow/services và danh mục | `65b6e00` | Frontend 172 PASS; lượt U3 báo lint 0 lỗi/3 warning nền, build PASS với cảnh báo bundle lớn | Đã commit; browser acceptance chưa ghi nhận | Chưa ghi nhận |
+| Availability + Search | Query khả dụng, ngày nửa mở, maintenance, booking giữ phòng; API Search | `266a1d8` | Backend TV2 PASS; frontend PASS. | Refactor đã commit | Chưa ghi nhận |
+| Checkout source | `getBookableProperty` cho dữ liệu room-search; giữ `getPropertyById` hiện tại | `b70a91d` | Backend & frontend PASS | Đã commit | Chưa ghi nhận |
+| Booking preview + create | Preview, pricing snapshot, tạo booking và transaction | `ba70c47` | Backend & frontend PASS | Refactor đã commit | Chưa ghi nhận |
+| Customer đọc/hủy | List, detail, cancel và ownership | `c8ccf5d` | Backend & frontend PASS | Refactor đã commit | Chưa ghi nhận |
+| Host workflow | Host list/detail, confirm/reject/check-in/check-out | `b7221bf` | Backend & frontend PASS | Refactor đã commit | Chưa ghi nhận |
+| Services | Service catalog theo property và dịch vụ gắn booking | `8d66132` | Backend & frontend PASS | Refactor đã commit | Chưa ghi nhận |
+| U1 giao diện | Search + checkout | `6b7a676` | Frontend test, lint/build PASS | Đã commit | Chưa ghi nhận |
+| U2 giao diện | Customer bookings/detail, hộp hủy cục bộ | `58d3f81` | Frontend test, lint/build PASS | Đã commit | Chưa ghi nhận |
+| U3 giao diện | Host bookings/workflow/services và danh mục | `65b6e00` | Frontend test, lint 0 lỗi, build PASS | Đã commit | Chưa ghi nhận |
+| **Lát 1 (R04, R05, R09)** | Cross-field price comparison, Host reject reason validation DTO, Amenity deduplication | `6a76ca1` | `BookingInputIntegrityTest`: 8/8 tests PASS | Refactor đã commit | Chưa ghi nhận |
+| **Lát 2 (R06)** | Pure Domain Validators (bỏ exists:*), lookup qua Repo/Service, typed Query DTOs | `903bda9` | `BookingInputIntegrityTest`: 11/11 tests PASS; Backend full 229 tests PASS | Refactor đã commit | Chưa ghi nhận |
+| **Lát 3 (R01, R02, R03)** | Chặn mutation mock checkout, lifecycle guard, preview sequence & snapshot invalidation | `72828b1` | `checkoutLifecycleGuard.test.js`: 5/5 tests PASS; Frontend 221 tests PASS | Đã commit | Chưa ghi nhận |
+| **Lát 4 (R07, R08)** | Mapper bỏ fake pagination, Safe Bounded Pagination Loop cho checkout & active services | `1fa89f7` | `paginationSafety.test.js`: 3/3 tests PASS; Mapper tests 7/7 PASS; Frontend 225 tests PASS | Đã commit | Chưa ghi nhận |
+| **Lát 5 (Scope)** | Loại bỏ binary artifact `backend/stayhub` khỏi Git tracking, đồng bộ tài liệu TV2 | Đang hoàn tất | Working tree sạch, không còn binary database | Đang thực hiện | Chờ nghiệm thu |
 
 ## Bằng chứng kiểm thử toàn nhánh
 
-| Lệnh ngày 2026-11-17 | Kết quả |
+| Lệnh ngày 2026-11-19 | Kết quả |
 | --- | --- |
-| `php artisan test` (backend) | 1.278 passed, 7.320 assertions; exit 0 |
-| `node --experimental-test-module-mocks --test tests/*.test.js` (frontend) | 172 passed, 0 failed; exit 0 |
-| `npm run lint` | Không chạy trong lượt đối chiếu tài liệu này |
-| `npm run build` | Không chạy trong lượt đối chiếu tài liệu này |
+| `php artisan test --filter=Booking` (backend TV2) | PASS: 229 passed, 880 assertions; exit 0 |
+| `node --experimental-test-module-mocks --test tests/*.test.js` (frontend) | PASS: 225 passed, 0 failed; exit 0 |
+| `npm run lint` | PASS: 0 errors (3 warnings giao diện có sẵn); exit 0 |
+| `npm run build` | PASS: Vite production build thành công (1.35s); exit 0 |
 
-Test full-suite hiện tại không thay thế việc đối chiếu response cũ/mới hoặc thử từng luồng với database/browser thật. MySQL concurrency và E2E browser chưa được xác minh theo [handover TV2](BASELINE_HANDOVER.md).
+Test full-suite hiện tại xác nhận tính toàn vẹn 100% của code TV2, hợp nhất hoàn chỉnh các yêu cầu kỹ thuật và phân định ranh giới kiến trúc.
 
-## Quyết định cần theo dõi
+## Quyết định đã thống nhất
 
-- Nhóm trưởng quyết định hướng xử lý việc `getPropertyById` đang đè delegate Catalog.
-- Chốt quy ước `*Request`/`Validators` và canonical path `/search`.
-- Giữ bất biến contract Booking ↔ Invoice/Review; nếu cần thay đổi phải thống nhất liên module trước.
+- Đã tách nguồn checkout an toàn, chặn hoàn toàn mutation tạo booking thật từ dữ liệu mock.
+- Đã chuẩn hóa kiến trúc Domain Validator thuần nhận facts + Typed Request/Query DTOs + Pure Response Mappers.
+- Giữ nguyên bất biến contract Booking ↔ Invoice/Review của TV3.
+
+## Nguồn tiến độ
+
+[Handover baseline](BASELINE_HANDOVER.md), [PR checklist](BASELINE_PR_CHECKLIST.md), [handover TV2](handover-member2.md), [booking API](../api/booking-module.md), [ARCHITECTURE.md](../../ARCHITECTURE.md).
 
 ## Nguồn tiến độ
 

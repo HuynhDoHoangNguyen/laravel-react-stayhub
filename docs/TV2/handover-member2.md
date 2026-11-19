@@ -109,6 +109,20 @@ Các mã lỗi chính là tổng hợp theo HTTP validation, middleware và exce
 - Còn marker `TEMP-M1-STUB` trong `Member1DataSeeder`, các factory và một số enum/middleware/API trait; đây là phần TV1/nền tảng, cần owner xác nhận và xử lý, không thuộc phạm vi TV2.
 - Chỉ đồng nhất error envelope backend nếu nhóm thống nhất thay đổi; hiện frontend đã chuẩn hóa ở tầng hiển thị.
 
+## 10. Kết quả hoàn thành xử lý Findings R01–R09 (Task TV2-PR09-FIX)
+
+Toàn bộ 9 finding R01–R09 và yêu cầu vệ sinh scope PR đã được xử lý triệt để:
+1. **R01 (Data Provenance & Mock Safety):** Chặn mutation tạo booking/preview thật từ chỗ nghỉ mock trong `CustomerCheckoutPage` và `CheckoutReviewStep`.
+2. **R02 (Lifecycle Guard):** `activeBookingIdRef` và `isMountedRef` bảo vệ `HostBookingDetailPage` và `HostBookingServicesPage` chống response cũ ghi đè khi đổi booking context.
+3. **R03 (Preview Snapshot & Race Guard):** `previewRequestIdRef` và derived state snapshot bảo đảm preview luôn thuộc về đúng payload hiện tại; input thay đổi lập tức vô hiệu hóa preview cũ.
+4. **R04 (Price Cross-field Validation):** So sánh giá an toàn trong `RoomSearchValidator`, không gây lỗi 500 khi input sai kiểu.
+5. **R05 (Reject Booking Validation):** Bổ sung `RejectBookingRequest` DTO, tuân thủ thứ tự ưu tiên lỗi (404 binding → 422 validation → 404/403 ownership).
+6. **R06 (Pure Domain Validator Boundary):** Khử hoàn toàn quy tắc `exists:*` khỏi các Validator; chuyển trách nhiệm lookup sang Repository/Service; bổ sung Typed Query DTOs.
+7. **R07 (Frontend Mapper Safety):** Loại bỏ fake pagination, ném `mapperError` khi response thiếu `data`/`meta` hoặc `data: null`.
+8. **R08 (Safe Bounded Pagination):** Bổ sung vòng lặp an toàn duyệt tiếp trang 2, 3... cho `getBookableProperty` và `listActiveForProperty`, bảo toàn `AbortSignal`.
+9. **R09 (Amenity Deduplication):** Deduplicate mảng `amenity_ids` tránh làm sai điều kiện đếm AND trong tìm kiếm phòng.
+10. **Scope PR:** Loại bỏ file artifact SQLite `backend/stayhub` khỏi Git tracking.
+
 ## Nguồn đối chiếu
 
 [`STAYHUB_M2_CONTEXT.md`](../../STAYHUB_M2_CONTEXT.md), [`docs/api/booking-module.md`](../api/booking-module.md), [`ARCHITECTURE.md`](../../ARCHITECTURE.md), [`docs/TV3/BASELINE_HANDOVER.md`](../TV3/BASELINE_HANDOVER.md), `backend/routes/api/booking.php`, `backend/app/Enums/BookingStatus.php`, `backend/database/seeders/Member1DataSeeder.php`, `backend/database/seeders/Member2DataSeeder.php`, `backend/database/migrations/2026_10_08_000000_create_stayhub_schema.php`, `backend/phpunit.xml`; `git log --oneline -12`; lệnh kiểm thử và `route:list` ở trên.
