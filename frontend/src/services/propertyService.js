@@ -123,24 +123,44 @@ export function createPropertyService(propertyApi, { dev = false, enableMocks = 
      * TV2 checkout source: rooms that are bookable for the requested stay, from Room Search.
      * Kept separate from getPropertyById (Catalog) so the Catalog delegate stays untouched.
      */
-    async getBookableProperty(id, { startDate, endDate, adults = 2, children = 0 } = {}) {
+    async getBookableProperty(id, { startDate, endDate, adults = 2, children = 0 } = {}, options = {}) {
       if (isMockEnabled) {
         const found = properties.find((item) => String(item.id) === String(id));
         return { data: found || null, source: 'mock' };
       }
 
-      const response = await roomSearchApi.search({
-        check_in_date: startDate,
-        check_out_date: endDate,
-        guest_count: Math.max(1, Number(adults) + Number(children)),
-        per_page: 50,
-        page: 1,
-        property_id: id,
-        sort: 'price_asc',
-      });
+      const allRooms = [];
+      let page = 1;
+      const perPage = 50;
+      const maxPages = 10; // R08: Bounded pagination up to 500 rooms
+
+      while (page <= maxPages) {
+        const response = await roomSearchApi.search({
+          check_in_date: startDate,
+          check_out_date: endDate,
+          guest_count: Math.max(1, Number(adults) + Number(children)),
+          per_page: perPage,
+          page,
+          property_id: id,
+          sort: 'price_asc',
+        }, options);
+
+        const items = response.data?.data;
+        if (!Array.isArray(items)) {
+          throw new Error('Dữ liệu danh sách phòng từ Room Search không đúng định dạng.');
+        }
+        allRooms.push(...items);
+
+        const meta = response.data?.meta;
+        const lastPage = meta?.last_page ? Number(meta.last_page) : 1;
+        if (page >= lastPage || items.length < perPage) {
+          break;
+        }
+        page += 1;
+      }
 
       return {
-        data: mapPropertyFromRooms(mapPropertyRooms(response.data?.data || [])),
+        data: mapPropertyFromRooms(mapPropertyRooms(allRooms)),
         source: 'room-search',
       };
     },

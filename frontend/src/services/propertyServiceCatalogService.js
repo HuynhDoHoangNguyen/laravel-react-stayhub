@@ -1,9 +1,9 @@
-import { propertyServiceCatalogApi } from '@/api/propertyServiceCatalogApi';
+import { propertyServiceCatalogApi } from '../api/propertyServiceCatalogApi.js';
 import {
   mapHostPropertiesResponse,
   mapPropertyServiceListResponse,
   mapPropertyServiceResponse,
-} from '@/mappers/propertyServiceCatalogMapper';
+} from '../mappers/propertyServiceCatalogMapper.js';
 
 export const propertyServiceCatalogService = {
   async getHostProperties(options = {}) {
@@ -18,8 +18,34 @@ export const propertyServiceCatalogService = {
   },
 
   async listActiveForProperty(propertyId, options = {}) {
-    const params = { property_id: propertyId, status: true, per_page: 50 };
-    return mapPropertyServiceListResponse(await propertyServiceCatalogApi.list(params, options));
+    const allServices = [];
+    let page = 1;
+    const perPage = 50;
+    const maxPages = 5; // R08: Bounded pagination up to 250 services
+
+    while (page <= maxPages) {
+      const res = await propertyServiceCatalogApi.list({
+        property_id: propertyId,
+        status: true,
+        per_page: perPage,
+        page,
+      }, options);
+
+      const mapped = mapPropertyServiceListResponse(res.data || res);
+      allServices.push(...mapped.data);
+
+      const lastPage = mapped.meta?.last_page ?? 1;
+      if (page >= lastPage || mapped.data.length < perPage) {
+        break;
+      }
+      page += 1;
+    }
+
+    return {
+      success: true,
+      data: allServices,
+      total: allServices.length,
+    };
   },
 
   async create(payload) {

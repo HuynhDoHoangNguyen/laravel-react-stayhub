@@ -1,11 +1,11 @@
-import { hostBookingApi } from '@/api/hostBookingApi';
+import { hostBookingApi } from '../api/hostBookingApi.js';
 import {
   mapHostBookingListResponse,
   mapHostBookingResponse,
   mapHostBookingServiceResponse,
   mapHostBookingServicesListResponse,
-} from '@/mappers/hostBookingMapper';
-import { propertyServiceCatalogService } from '@/services/propertyServiceCatalogService';
+} from '../mappers/hostBookingMapper.js';
+import { propertyServiceCatalogService } from './propertyServiceCatalogService.js';
 
 export const hostBookingService = {
   async list({ page = 1, perPage = 10, status = '', keyword = '', startDate = '', endDate = '' } = {}, options = {}) {

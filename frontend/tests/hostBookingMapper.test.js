@@ -20,8 +20,8 @@ test('host detail and transition mapper unwraps success envelope and preserves n
   const booking = { id: 8, price_per_night: '225000.00', note: null };
   assert.deepEqual(mapHostBookingResponse({ success: true, data: booking }), booking);
   assert.deepEqual(mapHostBookingResponse({ id: 8, room_total: null }), { id: 8, room_total: null });
-  const emptyEnvelope = { success: true, data: null };
-  assert.equal(mapHostBookingResponse(emptyEnvelope), emptyEnvelope);
+  // R07: Malformed empty envelope { data: null } must throw mapperError rather than returning raw envelope
+  assert.throws(() => mapHostBookingResponse({ success: true, data: null }), /không tồn tại hoặc rỗng/);
 });
 
 test('booking-service mappers preserve snapshot decimals, nulls, omitted fields, and empty lists', () => {
@@ -35,7 +35,11 @@ test('booking-service mappers preserve snapshot decimals, nulls, omitted fields,
 test('host booking mappers reject malformed envelopes with mapper errors', () => {
   assert.throws(() => mapHostBookingListResponse(null), /không hợp lệ/);
   assert.throws(() => mapHostBookingListResponse({ data: 'not-array' }), /không đúng định dạng mảng/);
+  assert.throws(() => mapHostBookingListResponse({ data: [], meta: null }), /phân trang meta không hợp lệ/);
+  assert.throws(() => mapHostBookingListResponse({ data: [] }), /phân trang meta không hợp lệ/);
   assert.throws(() => mapHostBookingResponse('bad-data'), /không hợp lệ/);
+  assert.throws(() => mapHostBookingResponse({}), /không hợp lệ/);
   assert.throws(() => mapHostBookingServicesListResponse({ data: 'invalid' }), /không đúng định dạng mảng/);
   assert.throws(() => mapHostBookingServiceResponse(123), /không hợp lệ/);
+  assert.throws(() => mapHostBookingServiceResponse({ success: true, data: null }), /không tồn tại hoặc rỗng/);
 });
