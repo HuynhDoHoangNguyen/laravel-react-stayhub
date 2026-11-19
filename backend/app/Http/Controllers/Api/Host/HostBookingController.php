@@ -26,7 +26,8 @@ class HostBookingController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $result = $this->bookingQueryService->listForHost($request->user(), $request->all());
+        $query = $this->bookingValidator->validateHostQuery($request->all());
+        $result = $this->bookingQueryService->listForHost($request->user(), $query);
 
         return response()->json([
             'success' => true,

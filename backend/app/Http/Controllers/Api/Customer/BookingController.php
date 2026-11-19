@@ -38,7 +38,8 @@ class BookingController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $result = $this->bookingQueryService->listForCustomer($request->user(), $request->all());
+        $query = $this->bookingValidator->validateCustomerQuery($request->all());
+        $result = $this->bookingQueryService->listForCustomer($request->user(), $query);
 
         return response()->json([
             'success' => true,

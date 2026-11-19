@@ -2,6 +2,8 @@
 
 namespace App\Services\Booking;
 
+use App\DTOs\Booking\Requests\CustomerBookingQuery;
+use App\DTOs\Booking\Requests\HostBookingQuery;
 use App\Models\Booking;
 use App\Models\User;
 use App\Repositories\Booking\BookingRepository;
@@ -61,16 +63,24 @@ class BookingQueryService
     /**
      * List bookings for a Host with filters and pagination.
      *
-     * @param array<string, mixed> $query
+     * @param HostBookingQuery|array<string, mixed> $query
      * @return array{items: array<int, Booking>, meta: array{current_page: int, last_page: int, per_page: int, total: int}}
      */
-    public function listForHost(User $host, array $query): array
+    public function listForHost(User $host, HostBookingQuery|array $query): array
     {
-        $normalized = $this->normalizeQuery($query, ['status', 'property_id', 'start_date', 'end_date', 'keyword']);
+        if ($query instanceof HostBookingQuery) {
+            $filters = $query->filters();
+            $perPage = $query->perPage;
+        } else {
+            $normalized = $this->normalizeQuery($query, ['status', 'property_id', 'start_date', 'end_date', 'keyword']);
+            $filters = $normalized['filters'];
+            $perPage = $normalized['per_page'];
+        }
+
         $paginator = $this->bookingRepository->listForHost(
             $host->id,
-            $normalized['filters'],
-            $normalized['per_page']
+            $filters,
+            $perPage
         );
 
         return [
@@ -93,16 +103,24 @@ class BookingQueryService
     /**
      * List bookings for a Customer with filters and pagination.
      *
-     * @param array<string, mixed> $query
+     * @param CustomerBookingQuery|array<string, mixed> $query
      * @return array{items: array<int, Booking>, meta: array{current_page: int, last_page: int, per_page: int, total: int}}
      */
-    public function listForCustomer(User $customer, array $query): array
+    public function listForCustomer(User $customer, CustomerBookingQuery|array $query): array
     {
-        $normalized = $this->normalizeQuery($query, ['status']);
+        if ($query instanceof CustomerBookingQuery) {
+            $filters = $query->filters();
+            $perPage = $query->perPage;
+        } else {
+            $normalized = $this->normalizeQuery($query, ['status']);
+            $filters = $normalized['filters'];
+            $perPage = $normalized['per_page'];
+        }
+
         $paginator = $this->bookingRepository->listForCustomer(
             $customer->id,
-            $normalized['filters'],
-            $normalized['per_page']
+            $filters,
+            $perPage
         );
 
         return [

@@ -166,4 +166,68 @@ class BookingInputIntegrityTest extends TestCase
         $this->assertCount(1, $data);
         $this->assertSame($room->id, $data[0]['id']);
     }
+
+    public function test_r06_booking_preview_and_create_non_existent_room_returns_422(): void
+    {
+        // R06: Pure validator boundary - Service checks repository and throws ValidationException 422
+        $customer = User::factory()->customer()->create();
+
+        $previewResponse = $this->postJson('/api/public/bookings/preview', [
+            'room_id' => 999999,
+            'check_in_date' => now()->addDays(5)->format('Y-m-d'),
+            'check_out_date' => now()->addDays(7)->format('Y-m-d'),
+            'guest_count' => 2,
+        ]);
+
+        $previewResponse->assertStatus(422)
+            ->assertJsonValidationErrors(['room_id']);
+
+        $createResponse = $this->actingAs($customer)->postJson('/api/customer/bookings', [
+            'room_id' => 999999,
+            'check_in_date' => now()->addDays(5)->format('Y-m-d'),
+            'check_out_date' => now()->addDays(7)->format('Y-m-d'),
+            'guest_count' => 2,
+            'guest_name' => 'Nguyen Van A',
+            'guest_phone' => '0901234567',
+        ]);
+
+        $createResponse->assertStatus(422)
+            ->assertJsonValidationErrors(['room_id']);
+    }
+
+    public function test_r06_service_store_non_existent_property_returns_422(): void
+    {
+        // R06: PropertyServiceManagementService checks repository and throws 422
+        $host = User::factory()->host()->create();
+
+        $response = $this->actingAs($host)->postJson('/api/host/services', [
+            'property_id' => 999999,
+            'name' => 'Dịch vụ giặt ủi',
+            'unit' => 'Lượt',
+            'price' => '50000',
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['property_id']);
+    }
+
+    public function test_r06_query_dtos_clamp_per_page_and_safely_handle_query_inputs(): void
+    {
+        // R06: Customer & Host query endpoints accept typed DTOs and clamp pagination
+        $customer = User::factory()->customer()->create();
+        $host = User::factory()->host()->create();
+
+        $customerList = $this->actingAs($customer)->getJson('/api/customer/bookings?per_page=999&page=0');
+        $customerList->assertOk()
+            ->assertJsonPath('meta.per_page', 50)
+            ->assertJsonPath('meta.current_page', 1);
+
+        $hostList = $this->actingAs($host)->getJson('/api/host/bookings?per_page=-5&status=PENDING');
+        $hostList->assertOk()
+            ->assertJsonPath('meta.per_page', 15);
+
+        $serviceList = $this->actingAs($host)->getJson('/api/host/services?per_page=100');
+        $serviceList->assertOk()
+            ->assertJsonPath('meta.per_page', 50);
+    }
 }

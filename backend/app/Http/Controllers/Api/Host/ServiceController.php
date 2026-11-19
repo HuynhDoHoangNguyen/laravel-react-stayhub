@@ -23,7 +23,8 @@ class ServiceController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $paginator = $this->serviceManagement->list($request->user(), $request->all());
+        $query = $this->validator->validateServiceQuery($request->all());
+        $paginator = $this->serviceManagement->list($request->user(), $query);
 
         return response()->json([
             'success' => true,

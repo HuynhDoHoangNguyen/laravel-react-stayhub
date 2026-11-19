@@ -29,6 +29,11 @@ class ServiceRepository
         return $query->paginate($perPage);
     }
 
+    public function propertyExists(int $propertyId): bool
+    {
+        return Property::query()->whereKey($propertyId)->exists();
+    }
+
     public function findPropertyForHostOrFail(int $propertyId, int $hostId): Property
     {
         return Property::query()->whereKey($propertyId)->where('host_id', $hostId)->firstOrFail();
@@ -39,6 +44,11 @@ class ServiceRepository
         return Service::query()->whereKey($service->id)
             ->whereHas('property', fn (Builder $query) => $query->where('host_id', $hostId))
             ->exists();
+    }
+
+    public function findForUpdate(int $serviceId): ?Service
+    {
+        return Service::query()->whereKey($serviceId)->lockForUpdate()->first();
     }
 
     public function lockForUpdate(int $serviceId): Service

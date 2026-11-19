@@ -3,6 +3,7 @@
 namespace App\Validators\Booking;
 
 use App\DTOs\Booking\Requests\AddBookingServiceRequest;
+use App\DTOs\Booking\Requests\HostServiceQuery;
 use App\DTOs\Booking\Requests\SetServiceStatusRequest;
 use App\DTOs\Booking\Requests\StoreServiceRequest;
 use App\DTOs\Booking\Requests\UpdateBookingServiceRequest;
@@ -23,7 +24,7 @@ class ServiceValidator
     public function validateStoreService(array $input): StoreServiceRequest
     {
         $validated = $this->validation->make($input, [
-            'property_id' => ['required', 'integer', 'exists:properties,id'],
+            'property_id' => ['required', 'integer', 'min:1'],
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'unit' => ['required', 'string', 'max:50'],
@@ -73,7 +74,7 @@ class ServiceValidator
     public function validateAddBookingService(array $input): AddBookingServiceRequest
     {
         $validated = $this->validation->make($input, [
-            'service_id' => ['required', 'integer', 'exists:services,id'],
+            'service_id' => ['required', 'integer', 'min:1'],
             'quantity' => ['required', 'numeric', 'min:0.01', 'max:9999.99'],
         ])->validate();
 
@@ -92,5 +93,23 @@ class ServiceValidator
         ])->validate();
 
         return UpdateBookingServiceRequest::fromArray($validated);
+    }
+
+    /**
+     * Validate raw query and build HostServiceQuery DTO.
+     *
+     * @param array<string, mixed> $query
+     */
+    public function validateServiceQuery(array $query): HostServiceQuery
+    {
+        $validated = $this->validation->make($query, [
+            'property_id' => ['nullable'],
+            'status' => ['nullable'],
+            'keyword' => ['nullable'],
+            'per_page' => ['nullable'],
+            'page' => ['nullable'],
+        ])->validate();
+
+        return HostServiceQuery::fromArray($validated);
     }
 }

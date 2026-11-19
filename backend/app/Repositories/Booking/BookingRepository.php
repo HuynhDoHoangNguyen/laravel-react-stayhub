@@ -15,6 +15,19 @@ class BookingRepository
         return Room::query()->findOrFail($roomId);
     }
 
+    public function findRoom(int $roomId): ?Room
+    {
+        return Room::query()->find($roomId);
+    }
+
+    public function findRoomForUpdate(int $roomId): ?Room
+    {
+        return Room::query()
+            ->whereKey($roomId)
+            ->lockForUpdate()
+            ->first();
+    }
+
     public function lockRoomForUpdate(int $roomId): Room
     {
         return Room::query()

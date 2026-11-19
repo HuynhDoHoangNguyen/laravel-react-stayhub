@@ -14,6 +14,7 @@ use App\Repositories\Booking\ServiceRepository;
 use App\Support\DecimalMoney;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class BookingServiceManagementService
 {
@@ -36,7 +37,12 @@ class BookingServiceManagementService
             $currentBooking = $this->bookingRepository->lockForUpdate($booking->id);
             $this->assertServiceChangeAllowed($currentBooking, 'Chỉ được thêm dịch vụ khi đặt phòng ở trạng thái đang lưu trú (CHECKED_IN).');
 
-            $service = $this->serviceRepository->lockForUpdate($input->serviceId);
+            $service = $this->serviceRepository->findForUpdate($input->serviceId);
+            if (! $service) {
+                throw ValidationException::withMessages([
+                    'service_id' => [__('validation.exists', ['attribute' => 'service id'])],
+                ]);
+            }
             $room = $this->bookingRepository->findRoomOrFail($currentBooking->room_id);
             if ($service->property_id !== $room->property_id) {
                 throw new ServiceNotAllowedException('Dịch vụ không thuộc cơ sở lưu trú của phòng này.');

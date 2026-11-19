@@ -13,6 +13,7 @@ use App\Repositories\Booking\BookingServiceRepository;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class BookingService
 {
@@ -31,7 +32,12 @@ class BookingService
      */
     public function preview(PreviewBookingRequest $input): array
     {
-        $room = $this->bookingRepository->findRoomOrFail($input->roomId);
+        $room = $this->bookingRepository->findRoom($input->roomId);
+        if (! $room) {
+            throw ValidationException::withMessages([
+                'room_id' => [__('validation.exists', ['attribute' => 'room id'])],
+            ]);
+        }
         $quote = $this->pricingService->quote(
             $room,
             $input->checkInDate,
@@ -65,7 +71,12 @@ class BookingService
     {
         return DB::transaction(function () use ($customer, $input) {
             // Lock room row for update
-            $room = $this->bookingRepository->lockRoomForUpdate($input->roomId);
+            $room = $this->bookingRepository->findRoomForUpdate($input->roomId);
+            if (! $room) {
+                throw ValidationException::withMessages([
+                    'room_id' => [__('validation.exists', ['attribute' => 'room id'])],
+                ]);
+            }
 
             // Re-check availability under lock
             $checkResult = $this->availabilityService->check(

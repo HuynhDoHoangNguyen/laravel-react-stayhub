@@ -2,6 +2,7 @@
 
 namespace App\Services\Booking;
 
+use App\DTOs\Booking\Requests\HostServiceQuery;
 use App\DTOs\Booking\Requests\SetServiceStatusRequest;
 use App\DTOs\Booking\Requests\StoreServiceRequest;
 use App\DTOs\Booking\Requests\UpdateServiceRequest;
@@ -9,6 +10,7 @@ use App\Models\Service;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use App\Repositories\Booking\ServiceRepository;
+use Illuminate\Validation\ValidationException;
 
 class PropertyServiceManagementService
 {
@@ -17,14 +19,10 @@ class PropertyServiceManagementService
     /**
      * List services belonging to host's properties.
      */
-    public function list(User $host, array $filters): LengthAwarePaginator
+    public function list(User $host, HostServiceQuery|array $filters): LengthAwarePaginator
     {
-        $perPage = min((int) ($filters['per_page'] ?? 15), 50);
-        if ($perPage < 1) {
-            $perPage = 15;
-        }
-
-        return $this->serviceRepository->listForHost($host->id, $filters, $perPage);
+        $dto = $filters instanceof HostServiceQuery ? $filters : HostServiceQuery::fromArray($filters);
+        return $this->serviceRepository->listForHost($host->id, $dto->filters(), $dto->perPage);
     }
 
     /**
@@ -32,7 +30,13 @@ class PropertyServiceManagementService
      */
     public function create(User $host, StoreServiceRequest $input): Service
     {
-        // Verify property ownership
+        if (! $this->serviceRepository->propertyExists($input->propertyId)) {
+            throw ValidationException::withMessages([
+                'property_id' => [__('validation.exists', ['attribute' => 'property id'])],
+            ]);
+        }
+
+        // Verify property ownership: if property exists but does not belong to host, 404 (privacy)
         $this->serviceRepository->findPropertyForHostOrFail($input->propertyId, $host->id);
 
         return $this->serviceRepository->create([

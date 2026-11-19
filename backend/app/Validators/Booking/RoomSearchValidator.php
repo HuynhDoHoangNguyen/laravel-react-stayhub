@@ -24,9 +24,9 @@ class RoomSearchValidator
             'check_in_date' => ['required', 'date', 'date_format:Y-m-d', 'after_or_equal:today'],
             'check_out_date' => ['required', 'date', 'date_format:Y-m-d', 'after:check_in_date'],
             'guest_count' => ['required', 'integer', 'min:1'],
-            'property_id' => ['nullable', 'integer', 'exists:properties,id'],
+            'property_id' => ['nullable', 'integer', 'min:1'],
             'keyword' => ['nullable', 'string'],
-            'room_type_id' => ['nullable', 'integer', 'exists:room_types,id'],
+            'room_type_id' => ['nullable', 'integer', 'min:1'],
             'min_price' => ['nullable', 'numeric', 'min:0'],
             'max_price' => [
                 'nullable',
@@ -51,7 +51,7 @@ class RoomSearchValidator
                 },
             ],
             'amenity_ids' => ['nullable', 'array'],
-            'amenity_ids.*' => ['integer', 'exists:amenities,id'],
+            'amenity_ids.*' => ['integer', 'min:1'],
             'sort' => ['nullable', 'string', 'in:price_asc,price_desc,newest'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:50'],
         ])->validate();
