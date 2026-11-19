@@ -22,7 +22,6 @@ function PropertyList({ params }) {
         {status === 'loading' && <p role="status" className="py-16">Đang tải danh sách...</p>}
         {status === 'error' && <div role="alert" className="my-8 rounded-2xl border border-border p-6"><p>{error.message}</p><button onClick={retry} className="mt-3 text-primary underline">Thử lại</button></div>}
         {status === 'ready' && <>
-            {result.source === 'mock' && <p className="my-4 text-sm text-amber-800">Đang xem dữ liệu giả lập DEV.</p>}
             <p role="status" className="my-6 text-sm text-muted-foreground">{result.meta.total} cơ sở · Trang {result.meta.current_page}/{result.meta.last_page}</p>
             {result.data.length ? <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">{result.data.map((property) => <PropertyCard key={property.id} property={property} />)}</div>
                 : <p className="rounded-3xl bg-surface p-10 text-center">Trang này chưa có cơ sở lưu trú. <Link className="text-primary underline" to="/properties">Về trang đầu</Link></p>}

@@ -25,7 +25,7 @@ function PropertyView({ id }) {
             <h1 className="font-display text-3xl text-primary">Không tìm thấy cơ sở lưu trú</h1><p className="mt-3 text-sm">Cơ sở không tồn tại hoặc chưa được công khai.</p><Link to="/properties" className="mt-5 inline-block text-primary underline">Khám phá cơ sở khác</Link>
         </section>}
         {status === 'ready' && property && <div className="mt-6 space-y-8">
-            {result.source === 'mock' && <p className="text-sm text-amber-800">Dữ liệu giả lập DEV.</p>}
+            {result.source === 'mock' && <p className="text-sm text-amber-800"></p>}
             <PropertyHeader property={property} />
             <PropertyGallery photos={property.photos} name={property.name} />
             <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_320px]">

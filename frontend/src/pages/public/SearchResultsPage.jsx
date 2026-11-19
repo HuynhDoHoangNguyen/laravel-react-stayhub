@@ -1,340 +1,71 @@
-import { useSearchParams } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import { SearchSummaryBar } from "@/components/search/SearchSummaryBar";
-import { FilterSidebar } from "@/components/search/FilterSidebar";
-import { ResultsHeader } from "@/components/search/ResultsHeader";
-import { ResultsGrid } from "@/components/search/ResultsGrid";
-import { AssistantPanel } from "@/components/search/AssistantPanel";
-import { EmptyState } from "@/components/search/EmptyState";
-import { BenefitsStrip } from "@/components/search/BenefitsStrip";
-import { Pagination } from "@/components/search/Pagination";
-import { propertyService } from "@/services/propertyService";
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { FilterSidebar } from '../../components/search/FilterSidebar';
+import { ResultsHeader } from '../../components/search/ResultsHeader';
+import { ResultsGrid } from '../../components/search/ResultsGrid';
+import { SearchSummaryBar } from '../../components/search/SearchSummaryBar';
+import { roomSearchService, readRoomSearch, updateRoomSearch, createRoomSearchLoader } from '../../services/roomSearchService';
+
+function useRoomRequest(request) {
+    const [loader] = useState(createRoomSearchLoader);
+    const state = useSyncExternalStore(loader.subscribe, loader.getSnapshot);
+    useEffect(() => { loader.load(request); return () => loader.cancel(); }, [loader, request]);
+    return { ...state, retry: () => loader.load(request) };
+}
+const getOptions = signal => roomSearchService.filterOptions({ signal });
+
+// Keyed by URL so history navigation starts with the correct form and no stale results.
+function RoomResults({ search, navigate }) {
+    const parsed = readRoomSearch(search);
+    const [request] = useState(() => signal => roomSearchService.list(search, { signal }));
+    const results = useRoomRequest(request);
+    const options = useRoomRequest(getOptions);
+    const [view, setView] = useState('grid');
+    const errors = results.error?.response?.data?.errors ?? {};
+    const meta = results.value?.meta;
+    const change = patch => navigate(updateRoomSearch(search, patch));
+    return <div className="grid items-start gap-8 lg:grid-cols-[280px_minmax(0,1fr)]">
+        <FilterSidebar params={parsed.params} options={options.value} optionsLoading={options.loading} optionsError={options.error}
+            onRetryOptions={options.retry} errors={errors} onApply={change}
+            onReset={() => change({ min_price: null, max_price: null, guest_count: null, min_rating: null, room_type_ids: [], amenity_ids: [], sort: null, per_page: null })} />
+        <section aria-label="Kết quả lọc phòng" className="min-w-0">
+            <ResultsHeader meta={meta} sortBy={parsed.params.sort ?? 'price_asc'} onSortChange={sort => change({ sort })} view={view} onViewChange={setView} />
+            {results.loading && <p role="status" className="mb-4 text-sm">Đang tải phòng…</p>}
+            {results.error && <div role="alert" className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-5 text-red-700">
+                <p>{results.error.response?.status === 422 ? 'Bộ lọc không hợp lệ. Vui lòng kiểm tra các trường bên dưới.' : 'Không tải được danh sách phòng. Vui lòng thử lại.'}</p>
+                {Object.entries(errors).filter(([key]) => !['min_price', 'max_price', 'guest_count', 'min_rating', 'room_type_ids', 'amenity_ids'].some(field => key === field || key.startsWith(`${field}.`))).map(([key, messages]) => <p key={key} className="mt-2 text-sm">{key}: {Array.isArray(messages) ? messages.join(' ') : String(messages)}</p>)}
+                <button type="button" onClick={results.retry} className="mt-3 font-semibold underline">Thử lại</button>
+            </div>}
+            {!results.error && <ResultsGrid rooms={results.value?.data ?? []} isLoading={results.loading} view={view} />}
+            {results.value?.data.length === 0 && <div className="rounded-3xl border border-border bg-card p-10 text-center">
+                <h3 className="font-display text-xl">{meta.total > 0 ? 'Trang này không có kết quả' : 'Không có phòng phù hợp'}</h3>
+                <p className="mt-3 text-sm text-muted-foreground">{meta.total > 0 ? 'Hãy quay lại trang đầu của danh sách.' : 'Bạn có thể mở rộng khoảng giá hoặc bỏ bớt bộ lọc.'}</p>
+                {meta.total > 0 && <button type="button" onClick={() => change({ page: 1 })} className="mt-4 text-primary underline">Về trang đầu</button>}
+            </div>}
+            {meta && meta.last_page > 1 && <nav aria-label="Phân trang phòng" className="mt-8 flex items-center justify-center gap-4">
+                <button type="button" disabled={meta.current_page <= 1} onClick={() => change({ page: meta.current_page - 1 })} className="rounded-full border border-border px-4 py-2 disabled:opacity-40">Trang trước</button>
+                <span className="text-sm">Trang {meta.current_page} / {meta.last_page}</span>
+                <button type="button" disabled={meta.current_page >= meta.last_page} onClick={() => change({ page: meta.current_page + 1 })} className="rounded-full border border-border px-4 py-2 disabled:opacity-40">Trang sau</button>
+            </nav>}
+        </section>
+    </div>;
+}
 
 export default function SearchResultsPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
-
-  // Search Context parsed from URL
-  const search = useMemo(() => {
-    return {
-      city: searchParams.get("city") || "",
-      startDate: searchParams.get("startDate") || "",
-      endDate: searchParams.get("endDate") || "",
-      roomsCount: Number(searchParams.get("roomsCount")) || 1,
-      adults: Number(searchParams.get("adults")) || 2,
-      children: Number(searchParams.get("children")) || 0,
-      q: searchParams.get("q") || "",
-      minPrice: searchParams.get("minPrice")
-        ? Number(searchParams.get("minPrice"))
-        : undefined,
-      maxPrice: searchParams.get("maxPrice")
-        ? Number(searchParams.get("maxPrice"))
-        : undefined,
-      minRating: searchParams.get("minRating")
-        ? Number(searchParams.get("minRating"))
-        : undefined,
-      sortBy: searchParams.get("sortBy") || "PRICE_ASC",
-    };
-  }, [searchParams]);
-
-  // View state: grid or list
-  const [view, setView] = useState(() => {
-    try {
-      return sessionStorage.getItem("stayhub_search_view") || "grid";
-    } catch (e) {
-      void e;
-      return "grid";
-    }
-  });
-
-  useEffect(() => {
-    try {
-      sessionStorage.setItem("stayhub_search_view", view);
-    } catch (e) {
-      void e;
-    }
-  }, [view]);
-
-  // Filter state
-  const [selectedAmenities, setSelectedAmenities] = useState([]);
-  const [selectedPropertyTypes, setSelectedPropertyTypes] = useState([]);
-
-  const filters = useMemo(
-    () => ({
-      minPrice: search.minPrice,
-      maxPrice: search.maxPrice,
-      minRating: search.minRating,
-      sortBy: search.sortBy,
-      selectedAmenities,
-      selectedPropertyTypes,
-    }),
-    [
-      search.minPrice,
-      search.maxPrice,
-      search.minRating,
-      search.sortBy,
-      selectedAmenities,
-      selectedPropertyTypes,
-    ]
-  );
-
-  const setFilters = (next) => {
-    if (next.selectedAmenities !== undefined) {
-      setSelectedAmenities(next.selectedAmenities);
-    }
-    if (next.selectedPropertyTypes !== undefined) {
-      setSelectedPropertyTypes(next.selectedPropertyTypes);
-    }
-
-    const params = new URLSearchParams(searchParams);
-    params.delete("page");
-    if (next.minPrice !== undefined) {
-      params.set("minPrice", String(next.minPrice));
-    } else {
-      params.delete("minPrice");
-    }
-
-    if (next.maxPrice !== undefined) {
-      params.set("maxPrice", String(next.maxPrice));
-    } else {
-      params.delete("maxPrice");
-    }
-
-    if (next.minRating !== undefined) {
-      params.set("minRating", String(next.minRating));
-    } else {
-      params.delete("minRating");
-    }
-
-    if (next.sortBy) {
-      params.set("sortBy", next.sortBy);
-    }
-
-    setSearchParams(params, { replace: true });
-  };
-
-  const resetFilters = () => {
-    setSelectedAmenities([]);
-    setSelectedPropertyTypes([]);
-    const params = new URLSearchParams(searchParams);
-    params.delete("minPrice");
-    params.delete("maxPrice");
-    params.delete("minRating");
-    params.delete("q");
-    params.delete("page");
-    params.set("sortBy", "PRICE_ASC");
-    setSearchParams(params, { replace: true });
-  };
-
-  const handleKeywordChange = (newQ) => {
-    const params = new URLSearchParams(searchParams);
-    params.delete("page");
-    if (newQ) {
-      params.set("q", newQ);
-    } else {
-      params.delete("q");
-    }
-    setSearchParams(params, { replace: true });
-  };
-
-  // Data fetching
-  const [properties, setProperties] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isError, setIsError] = useState(false);
-  const [isUnavailable, setIsUnavailable] = useState(false);
-  const [retryKey, setRetryKey] = useState(0);
-
-  useEffect(() => {
-    let active = true;
-
-    propertyService
-      .searchProperties({
-        city: search.city,
-        startDate: search.startDate,
-        endDate: search.endDate,
-        roomsCount: search.roomsCount,
-        adults: search.adults,
-        children: search.children,
-        minPrice: filters.minPrice,
-        maxPrice: filters.maxPrice,
-        minRating: filters.minRating,
-        sortBy: filters.sortBy,
-        amenities: filters.selectedAmenities,
-        propertyTypes: filters.selectedPropertyTypes,
-        keyword: search.q,
-      })
-      .then((res) => {
-        if (active) {
-          if (res.unavailable) {
-            setIsUnavailable(true);
-            setProperties([]);
-          } else {
-            setProperties(res.data || []);
-          }
-          setIsLoading(false);
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setIsError(true);
-          setProperties([]);
-          setIsLoading(false);
-        }
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [
-    search.city,
-    search.startDate,
-    search.endDate,
-    search.roomsCount,
-    search.adults,
-    search.children,
-    search.q,
-    filters.minPrice,
-    filters.maxPrice,
-    filters.minRating,
-    filters.sortBy,
-    filters.selectedAmenities,
-    filters.selectedPropertyTypes,
-    retryKey,
-  ]);
-
-  const PAGE_SIZE = 10;
-  const currentPage = Math.max(1, Number(searchParams.get("page")) || 1);
-  const total = properties.length;
-  const totalPages = Math.ceil(total / PAGE_SIZE);
-  const activePage = totalPages > 0 ? Math.min(currentPage, totalPages) : 1;
-  const startIndex = (activePage - 1) * PAGE_SIZE;
-  const paginatedProperties = properties.slice(
-    startIndex,
-    startIndex + PAGE_SIZE
-  );
-
-  const from = total === 0 ? 0 : startIndex + 1;
-  const to = Math.min(startIndex + PAGE_SIZE, total);
-
-  const handlePageChange = (newPage) => {
-    const params = new URLSearchParams(searchParams);
-    if (newPage <= 1) {
-      params.delete("page");
-    } else {
-      params.set("page", String(newPage));
-    }
-    setSearchParams(params);
-    const el = document.getElementById("results-header");
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
-    } else {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  };
-
-  const handleRetry = () => {
-    setIsLoading(true);
-    setIsError(false);
-    setIsUnavailable(false);
-    setRetryKey((k) => k + 1);
-  };
-
-  return (
-    <div className="min-h-screen bg-background">
-      {/* Search Bar at Top */}
-      <SearchSummaryBar
-        city={search.city}
-        startDate={search.startDate}
-        endDate={search.endDate}
-        roomsCount={search.roomsCount}
-        adults={search.adults}
-        children={search.children}
-      />
-
-      <main className="mx-auto max-w-[1440px] px-6 pb-16 pt-8 md:px-10">
-        <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-[280px_minmax(0,1fr)_340px]">
-          {/* Col 1: Filters */}
-          <FilterSidebar
-            value={filters}
-            onChange={setFilters}
-            onReset={resetFilters}
-            availableProperties={properties}
-          />
-
-          {/* Col 2: Results List */}
-          <section className="min-w-0 space-y-6">
-            <div>
-              <ResultsHeader
-                total={total}
-                city={search.city}
-                from={from}
-                to={to}
-                sortBy={filters.sortBy}
-                onSortChange={(s) => setFilters({ ...filters, sortBy: s })}
-                view={view}
-                onViewChange={setView}
-              />
-
-              <motion.div
-                key={`grid-${total}-${view}-${activePage}`}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-              >
-                {isError ? (
-                  <EmptyState
-                    title="Đã xảy ra lỗi kết nối"
-                    message="Không thể tải danh sách chỗ nghỉ vào lúc này. Vui lòng kiểm tra lại đường truyền và thử lại."
-                    onRetry={handleRetry}
-                  />
-                ) : isUnavailable ? (
-                  <EmptyState
-                    title="Tính năng chưa khả dụng"
-                    message="Hệ thống đang hoàn thiện dịch vụ tìm kiếm phòng trực tuyến. Vui lòng quay lại sau."
-                  />
-                ) : !isLoading && total === 0 ? (
-                  <EmptyState
-                    title="Không tìm thấy chỗ nghỉ phù hợp"
-                    message="Hãy thử nới rộng khoảng giá, giảm bớt tiện ích yêu cầu hoặc tìm kiếm tại điểm đến lân cận."
-                    onRetry={resetFilters}
-                  />
-                ) : (
-                  <>
-                    <ResultsGrid
-                      properties={paginatedProperties}
-                      isLoading={isLoading}
-                      view={view}
-                      context={{
-                        startDate: search.startDate,
-                        endDate: search.endDate,
-                        roomsCount: search.roomsCount,
-                        adults: search.adults,
-                      }}
-                    />
-                    {!isLoading && totalPages > 1 && (
-                      <Pagination
-                        currentPage={activePage}
-                        totalPages={totalPages}
-                        onPageChange={handlePageChange}
-                      />
-                    )}
-                  </>
-                )}
-              </motion.div>
-            </div>
-          </section>
-
-          {/* Col 3: Assistant & Quick Refine Panel */}
-          <AssistantPanel
-            filters={filters}
-            onFiltersChange={setFilters}
-            keyword={search.q}
-            onKeywordChange={handleKeywordChange}
-          />
+    const [searchParams, setSearchParams] = useSearchParams();
+    const search = searchParams.toString();
+    const unsupported = readRoomSearch(search).unsupported;
+    return <>
+        <SearchSummaryBar city={searchParams.get('city') ?? ''} startDate={searchParams.get('startDate') ?? ''}
+            endDate={searchParams.get('endDate') ?? ''} roomsCount={searchParams.get('roomsCount') ?? 1}
+            adults={searchParams.get('adults') ?? searchParams.get('guest_count') ?? 2} children={searchParams.get('children') ?? 0} />
+        <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
+        <header className="mb-8"><h1 className="font-display text-3xl text-ink md:text-4xl">Tìm phòng phù hợp</h1><p className="mt-3 max-w-3xl text-sm text-muted-foreground">Lọc theo giá mỗi đêm, sức chứa, loại phòng, tiện nghi và đánh giá của cơ sở. Danh sách chưa kiểm tra phòng trống theo ngày; giá hiển thị là giá tham khảo.</p></header>
+        {unsupported.length ? <section role="alert" className="rounded-3xl border border-border bg-card p-8">
+            <h2 className="font-display text-xl">Tìm kiếm theo ngày hoặc địa điểm chưa được hỗ trợ</h2>
+            <p className="mt-3 text-sm text-muted-foreground">Địa chỉ hiện tại có bộ lọc chưa được hỗ trợ ({unsupported.join(', ')}). Chưa có kết quả xác nhận khả dụng cho yêu cầu này.</p>
+            <button type="button" className="mt-5 rounded-full bg-primary px-5 py-3 font-semibold text-primary-foreground" onClick={() => setSearchParams(updateRoomSearch(search, {}, { clearUnsupported: true }))}>Chuyển sang lọc phòng cơ bản</button>
+        </section> : <RoomResults key={search} search={search} navigate={setSearchParams} />}
         </div>
-      </main>
-
-      <BenefitsStrip />
-    </div>
-  );
+    </>;
 }
