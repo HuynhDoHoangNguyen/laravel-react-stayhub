@@ -34,19 +34,37 @@ export default function HostBookingDetailPage() {
   const [rejectReason, setRejectReason] = useState('');
   const [pendingTransition, setPendingTransition] = useState(null);
   const actionLock = useRef(false);
+  const activeBookingIdRef = useRef(bookingId);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    activeBookingIdRef.current = bookingId;
+  }, [bookingId]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const loadBooking = useCallback(async (signal) => {
+    const targetBookingId = bookingId;
     setLoading(true);
     setError('');
     try {
-      const data = await hostBookingService.detail(bookingId, { signal });
+      const data = await hostBookingService.detail(targetBookingId, { signal });
+      if (!isMountedRef.current || activeBookingIdRef.current !== targetBookingId) return;
       setBooking(data);
     } catch (loadError) {
+      if (!isMountedRef.current || activeBookingIdRef.current !== targetBookingId) return;
       if (loadError.name !== 'CanceledError' && loadError.name !== 'AbortError') {
         setError(bookingDisplayError(loadError, 'Không thể tải chi tiết booking.'));
       }
     } finally {
-      if (!signal.aborted) setLoading(false);
+      if (isMountedRef.current && activeBookingIdRef.current === targetBookingId && !signal.aborted) {
+        setLoading(false);
+      }
     }
   }, [bookingId]);
 
@@ -61,22 +79,32 @@ export default function HostBookingDetailPage() {
 
   const runTransition = async (action, payload = {}) => {
     if (actionLock.current) return;
+    const targetBookingId = bookingId;
     actionLock.current = true;
     setActionLoading(true);
     setActionError('');
     try {
-      const updated = await hostBookingService.transition(bookingId, action, payload);
+      const updated = await hostBookingService.transition(targetBookingId, action, payload);
+      // R02: Stale response guard - do not overwrite if booking changed or unmounted
+      if (!isMountedRef.current || activeBookingIdRef.current !== targetBookingId) {
+        return;
+      }
       setBooking(updated);
       setRejectFormOpen(false);
       setRejectReason('');
       toast.success('Đã cập nhật trạng thái booking.');
     } catch (transitionError) {
+      if (!isMountedRef.current || activeBookingIdRef.current !== targetBookingId) {
+        return;
+      }
       const message = bookingDisplayError(transitionError, 'Không thể cập nhật booking.');
       setActionError(message);
       toast.error(message);
     } finally {
       actionLock.current = false;
-      setActionLoading(false);
+      if (isMountedRef.current && activeBookingIdRef.current === targetBookingId) {
+        setActionLoading(false);
+      }
     }
   };
 

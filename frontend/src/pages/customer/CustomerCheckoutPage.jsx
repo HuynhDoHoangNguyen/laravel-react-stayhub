@@ -31,15 +31,18 @@ export default function CustomerCheckoutPage() {
   const [children, setChildren] = useState(urlChildren);
   const [note, setNote] = useState('');
   const [preview, setPreview] = useState(null);
+  const [previewSnapshot, setPreviewSnapshot] = useState(null);
   const [previewError, setPreviewError] = useState('');
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [createError, setCreateError] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [createdBooking, setCreatedBooking] = useState(null);
   const createLock = useRef(false);
+  const previewRequestIdRef = useRef(0);
 
   // 3. Tải thông tin cơ sở lưu trú và hạng phòng thật
   const [property, setProperty] = useState(null);
+  const [propertySource, setPropertySource] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState(null);
 
@@ -62,6 +65,7 @@ export default function CustomerCheckoutPage() {
           children: urlChildren,
         });
         if (!ignore) {
+          setPropertySource(res?.source || null);
           if (res?.source === 'api') {
             setProperty(null);
             setErrorMsg('Hiện chưa thể đặt phòng trực tuyến từ danh mục này. Giá phòng chỉ để tham khảo.');
@@ -122,35 +126,100 @@ export default function CustomerCheckoutPage() {
     note: note.trim() || null,
   }), [roomId, startDate, endDate, adults, children, note]);
 
+  // R03: Pure derived active preview; invalidates automatically whenever booking parameters change
+  const isPreviewCurrent = useMemo(() => {
+    if (!preview || !previewSnapshot) return false;
+    return (
+      previewSnapshot.room_id === bookingPayload.room_id &&
+      previewSnapshot.check_in_date === bookingPayload.check_in_date &&
+      previewSnapshot.check_out_date === bookingPayload.check_out_date &&
+      previewSnapshot.guest_count === bookingPayload.guest_count
+    );
+  }, [preview, previewSnapshot, bookingPayload]);
+
+  const activePreview = isPreviewCurrent ? preview : null;
+
   const handlePreviewBooking = async () => {
+    // R01: Block mutation if source is not verified real room-search
+    if (propertySource !== 'room-search') {
+      setPreview(null);
+      setPreviewSnapshot(null);
+      setPreviewError(
+        propertySource === 'mock'
+          ? 'Chỗ nghỉ này đang ở chế độ xem thử (mock), không thể tính giá hoặc đặt phòng từ hệ thống thực tế.'
+          : 'Nguồn dữ liệu chỗ nghỉ không hợp lệ để tính giá.'
+      );
+      return;
+    }
+
+    const currentReqId = ++previewRequestIdRef.current;
+    const requestedPayload = {
+      room_id: bookingPayload.room_id,
+      check_in_date: bookingPayload.check_in_date,
+      check_out_date: bookingPayload.check_out_date,
+      guest_count: bookingPayload.guest_count,
+    };
+
     setPreview(null);
+    setPreviewSnapshot(null);
     setPreviewError('');
     setCreateError('');
     setIsPreviewing(true);
     try {
-      const result = await bookingService.previewBooking({
-        room_id: bookingPayload.room_id,
-        check_in_date: bookingPayload.check_in_date,
-        check_out_date: bookingPayload.check_out_date,
-        guest_count: bookingPayload.guest_count,
-      });
-      setPreview(result);
+      const result = await bookingService.previewBooking(requestedPayload);
+      // R03: Only set preview if this request is still current
+      if (currentReqId === previewRequestIdRef.current) {
+        setPreview(result);
+        setPreviewSnapshot(requestedPayload);
+      }
     } catch (error) {
-      setPreviewError(error.message);
+      if (currentReqId === previewRequestIdRef.current) {
+        setPreviewError(error.message);
+      }
     } finally {
-      setIsPreviewing(false);
+      if (currentReqId === previewRequestIdRef.current) {
+        setIsPreviewing(false);
+      }
     }
   };
 
   const updateGuestCount = (setter, value) => {
     setter(value);
     setPreview(null);
+    setPreviewSnapshot(null);
     setPreviewError('');
     setCreateError('');
+    previewRequestIdRef.current += 1;
   };
 
   const handleCreateBooking = async () => {
-    if (createLock.current || !preview?.availability?.available) return;
+    if (createLock.current) return;
+
+    // R01: Block mutation if data source is mock
+    if (propertySource !== 'room-search') {
+      setCreateError(
+        propertySource === 'mock'
+          ? 'Không thể tạo đặt phòng thật từ chỗ nghỉ xem thử (mock).'
+          : 'Nguồn dữ liệu chỗ nghỉ không hợp lệ để đặt phòng.'
+      );
+      return;
+    }
+
+    // R03: Validate that preview exists and matches the exact current payload
+    const isPreviewCurrent =
+      preview &&
+      previewSnapshot &&
+      previewSnapshot.room_id === bookingPayload.room_id &&
+      previewSnapshot.check_in_date === bookingPayload.check_in_date &&
+      previewSnapshot.check_out_date === bookingPayload.check_out_date &&
+      previewSnapshot.guest_count === bookingPayload.guest_count &&
+      preview.availability?.available;
+
+    if (!isPreviewCurrent) {
+      setCreateError('Thông tin đặt phòng đã thay đổi hoặc chưa có báo giá hợp lệ. Quý khách vui lòng kiểm tra lại giá trước khi xác nhận.');
+      return;
+    }
+
     createLock.current = true;
     setCreateError('');
     setIsCreating(true);
@@ -159,7 +228,10 @@ export default function CustomerCheckoutPage() {
       setCreatedBooking(result);
     } catch (error) {
       setCreateError(error.message);
-      if (error.status === 409 || error.status === 422) setPreview(null);
+      if (error.status === 409 || error.status === 422) {
+        setPreview(null);
+        setPreviewSnapshot(null);
+      }
     } finally {
       createLock.current = false;
       setIsCreating(false);
@@ -281,6 +353,19 @@ export default function CustomerCheckoutPage() {
         </div>
       </div>
 
+      {/* R01: Mock Data Warning Banner */}
+      {propertySource === 'mock' && (
+        <div role="status" className="mt-6 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-xs text-amber-900 shadow-xs">
+          <div className="flex items-center gap-2 font-semibold">
+            <AlertCircle className="h-4 w-4 text-amber-700" />
+            <span>Chế độ xem thử (Mock data)</span>
+          </div>
+          <p className="mt-1 text-amber-800">
+            Chỗ nghỉ này đang được hiển thị từ dữ liệu mẫu phát triển. Chức năng tính giá thực tế và tạo đặt phòng trên hệ thống bị khóa để tránh ảnh hưởng đến cơ sở dữ liệu.
+          </p>
+        </div>
+      )}
+
       {/* Main 2-Column Content Layout (Content + Sticky Price Summary) */}
       <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_380px]">
         {/* Left Column: Form Steps */}
@@ -310,11 +395,12 @@ export default function CustomerCheckoutPage() {
               user={user}
               onEditGuests={() => setStep('guests')}
               onBackToProperty={() => navigate(backToPropertyUrl)}
-              preview={preview}
+              preview={activePreview}
               previewError={previewError}
               createError={createError}
               isPreviewing={isPreviewing}
               isCreating={isCreating}
+              isMock={propertySource === 'mock'}
               onRequestPreview={handlePreviewBooking}
               onCreateBooking={handleCreateBooking}
             />
@@ -326,7 +412,7 @@ export default function CustomerCheckoutPage() {
           <CheckoutPriceSummary
             room={selectedRoom}
             nights={nights}
-            quote={preview}
+            quote={activePreview}
           />
         </div>
       </div>

@@ -24,29 +24,47 @@ export default function HostBookingServicesPage() {
   const [saving, setSaving] = useState('');
   const [pendingRemoval, setPendingRemoval] = useState(null);
   const actionLock = useRef(false);
+  const activeBookingIdRef = useRef(bookingId);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    activeBookingIdRef.current = bookingId;
+  }, [bookingId]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const loadPage = useCallback(async (signal) => {
+    const targetBookingId = bookingId;
     setLoading(true);
     setError('');
     try {
-      const bookingData = await hostBookingService.detail(bookingId, { signal });
+      const bookingData = await hostBookingService.detail(targetBookingId, { signal });
+      if (!isMountedRef.current || activeBookingIdRef.current !== targetBookingId) return;
       setBooking(bookingData);
-      const serviceRequests = [hostBookingService.listBookingServices(bookingId, { signal })];
+      const serviceRequests = [hostBookingService.listBookingServices(targetBookingId, { signal })];
       if (bookingData.status === 'CHECKED_IN' && bookingData.room?.property?.id) {
         serviceRequests.push(hostBookingService.listPropertyServices(bookingData.room.property.id, { signal }));
       }
       const [bookingServices, availableServices = []] = await Promise.all(serviceRequests);
-      if (signal.aborted) return;
+      if (signal.aborted || !isMountedRef.current || activeBookingIdRef.current !== targetBookingId) return;
       setServices(bookingServices);
       setCatalog(availableServices);
       setQuantityDrafts(Object.fromEntries(bookingServices.map((item) => [item.id, String(item.quantity)])));
       setSelectedServiceId((current) => current || String(availableServices[0]?.id || ''));
     } catch (loadError) {
+      if (!isMountedRef.current || activeBookingIdRef.current !== targetBookingId) return;
       if (loadError.name !== 'CanceledError' && loadError.name !== 'AbortError') {
         setError(bookingDisplayError(loadError, 'Không thể tải dịch vụ booking.'));
       }
     } finally {
-      if (!signal.aborted) setLoading(false);
+      if (isMountedRef.current && activeBookingIdRef.current === targetBookingId && !signal.aborted) {
+        setLoading(false);
+      }
     }
   }, [bookingId]);
 
@@ -60,10 +78,14 @@ export default function HostBookingServicesPage() {
   }, [loadPage]);
 
   const reloadServices = async () => {
+    const targetBookingId = bookingId;
     const [bookingData, bookingServices] = await Promise.all([
-      hostBookingService.detail(bookingId),
-      hostBookingService.listBookingServices(bookingId),
+      hostBookingService.detail(targetBookingId),
+      hostBookingService.listBookingServices(targetBookingId),
     ]);
+    if (!isMountedRef.current || activeBookingIdRef.current !== targetBookingId) {
+      return;
+    }
     setBooking(bookingData);
     setServices(bookingServices);
     setQuantityDrafts(Object.fromEntries(bookingServices.map((item) => [item.id, String(item.quantity)])));
@@ -71,20 +93,32 @@ export default function HostBookingServicesPage() {
 
   const performAction = async (key, action) => {
     if (actionLock.current) return;
+    const targetBookingId = bookingId;
     actionLock.current = true;
     setSaving(key);
     setError('');
     try {
       await action();
+      if (!isMountedRef.current || activeBookingIdRef.current !== targetBookingId) {
+        return;
+      }
       await reloadServices();
+      if (!isMountedRef.current || activeBookingIdRef.current !== targetBookingId) {
+        return;
+      }
       toast.success('Đã cập nhật dịch vụ booking.');
     } catch (actionError) {
+      if (!isMountedRef.current || activeBookingIdRef.current !== targetBookingId) {
+        return;
+      }
       const message = bookingDisplayError(actionError, 'Không thể cập nhật dịch vụ booking.');
       setError(message);
       toast.error(message);
     } finally {
       actionLock.current = false;
-      setSaving('');
+      if (isMountedRef.current && activeBookingIdRef.current === targetBookingId) {
+        setSaving('');
+      }
     }
   };
 

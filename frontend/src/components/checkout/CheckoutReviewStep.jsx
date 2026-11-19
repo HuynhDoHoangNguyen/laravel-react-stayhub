@@ -34,6 +34,7 @@ export function CheckoutReviewStep({
   createError,
   isPreviewing,
   isCreating,
+  isMock = false,
   onRequestPreview,
   onCreateBooking,
 }) {
@@ -248,12 +249,12 @@ export function CheckoutReviewStep({
 
           <Button
             type="button"
-            disabled={isPreviewing || isCreating}
+            disabled={isMock || isPreviewing || isCreating}
             onClick={handleOpenPreview}
             className="h-11 rounded-xl px-7 text-xs font-semibold"
           >
             <Info className="h-4 w-4" />
-            <span>Kiểm tra và đặt phòng</span>
+            <span>{isMock ? 'Chế độ xem thử (Khóa đặt phòng)' : 'Kiểm tra và đặt phòng'}</span>
           </Button>
         </div>
       </div>
