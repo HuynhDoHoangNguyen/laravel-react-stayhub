@@ -8,6 +8,7 @@ use App\Models\Booking;
 use App\Services\Booking\BookingQueryService;
 use App\Services\Booking\BookingWorkflowService;
 use App\Traits\ApiResponse;
+use App\Validators\Booking\BookingValidator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -19,7 +20,8 @@ class HostBookingController extends Controller
     public function __construct(
         protected BookingWorkflowService $workflowService,
         protected BookingQueryService $bookingQueryService,
-        protected BookingMapper $bookingMapper
+        protected BookingMapper $bookingMapper,
+        protected BookingValidator $bookingValidator
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -58,7 +60,8 @@ class HostBookingController extends Controller
 
     public function reject(Request $request, Booking $booking): JsonResponse
     {
-        $rejected = $this->workflowService->reject($booking, $request->user(), $request->input('reason'));
+        $input = $this->bookingValidator->validateReject($request->all());
+        $rejected = $this->workflowService->reject($booking, $request->user(), $input->reason);
 
         return $this->successResponse(
             $this->bookingMapper->toHostBooking($rejected),

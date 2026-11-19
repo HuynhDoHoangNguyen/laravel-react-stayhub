@@ -3,6 +3,7 @@
 namespace App\Validators\Booking;
 
 use App\DTOs\Booking\Requests\PreviewBookingRequest;
+use App\DTOs\Booking\Requests\RejectBookingRequest;
 use App\DTOs\Booking\Requests\StoreBookingRequest;
 use Illuminate\Contracts\Validation\Factory;
 
@@ -45,5 +46,19 @@ class BookingValidator
         ])->validate();
 
         return StoreBookingRequest::fromArray($validated);
+    }
+
+    /**
+     * Validate raw input and build RejectBookingRequest DTO.
+     *
+     * @param array<string, mixed> $input
+     */
+    public function validateReject(array $input): RejectBookingRequest
+    {
+        $validated = $this->validation->make($input, [
+            'reason' => ['nullable', 'string', 'max:500'],
+        ])->validate();
+
+        return RejectBookingRequest::fromArray($validated);
     }
 }

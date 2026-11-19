@@ -109,7 +109,7 @@ class RoomAvailabilityRepository
         }
 
         if (! empty($filters['amenity_ids']) && is_array($filters['amenity_ids'])) {
-            $amenityIds = array_filter(array_map('intval', $filters['amenity_ids']));
+            $amenityIds = array_values(array_unique(array_filter(array_map('intval', $filters['amenity_ids']))));
             if (! empty($amenityIds)) {
                 $query->whereHas('amenities', function (Builder $query) use ($amenityIds): void {
                     $query->whereIn('amenities.id', $amenityIds);

@@ -34,8 +34,19 @@ class RoomSearchValidator
                 'min:0',
                 function ($attribute, $value, $fail) use ($input) {
                     $minPrice = $input['min_price'] ?? null;
-                    if ($minPrice !== null && $minPrice !== '' && DecimalMoney::compare($value, $minPrice) < 0) {
-                        $fail('The max price field must be greater than or equal to min price.');
+                    if (
+                        $minPrice !== null && $minPrice !== ''
+                        && is_scalar($minPrice) && is_numeric($minPrice)
+                        && is_scalar($value) && is_numeric($value)
+                        && (float) $minPrice >= 0 && (float) $value >= 0
+                    ) {
+                        try {
+                            if (DecimalMoney::compare((string) $value, (string) $minPrice) < 0) {
+                                $fail('The max price field must be greater than or equal to min price.');
+                            }
+                        } catch (\Throwable) {
+                            // Non-decimal or malformed numeric caught safely
+                        }
                     }
                 },
             ],
@@ -54,7 +65,7 @@ class RoomSearchValidator
             : null;
 
         $amenityIds = isset($validated['amenity_ids']) && is_array($validated['amenity_ids'])
-            ? array_values(array_map('intval', $validated['amenity_ids']))
+            ? array_values(array_unique(array_map('intval', $validated['amenity_ids'])))
             : null;
 
         return new SearchRoomsQuery(
