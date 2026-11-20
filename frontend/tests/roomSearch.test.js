@@ -1,14 +1,19 @@
 import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import axios, { AxiosError, CanceledError } from 'axios';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { MemoryRouter } from 'react-router-dom';
+import { fileURLToPath } from 'node:url';
 import { createPublicRoomApi } from '../src/api/publicRoomApi.js';
 import { mapRoomSearchPage, mapRoomFilterOptions } from '../src/mappers/roomSearchMapper.js';
 
 let adapter;
+let uiServer;
 const client = axios.create({ adapter: config => adapter(config) });
 mock.module(new URL('../src/api/axios.js', import.meta.url).href, { defaultExport: client });
 const { roomSearchService, createRoomSearchService, readRoomSearch, updateRoomSearch, createRoomSearchLoader } = await import('../src/services/roomSearchService.js');
-test.after(() => mock.restoreAll());
+test.after(async () => { await uiServer?.close(); mock.restoreAll(); });
 
 const row = { id: 3, name: 'Fixture room', capacity: 3, price_per_night: '100.25', currency: 'VND', price_unit: 'night',
     property: { id: 2, name: 'Fixture property', address: null, rating: 4.5, review_count: 2 }, room_type: { id: 1, name: 'Suite' }, images: [], amenities: [{ id: 1, name: 'Wifi' }] };
@@ -180,4 +185,144 @@ test('rating persists in URL, resets paging, travels to API and preserves actual
         { ...row.property, review_count: -1 }, { ...row.property, review_count: 0 }]) {
         assert.throws(() => mapRoomSearchPage({ ...page, data: [{ ...row, property }] }), /Dữ liệu phòng/);
     }
+});
+
+test('quick refinement changes preserve the other room criteria and send decimal input unchanged', async () => {
+    const original = 'guest_count=3&room_type_ids[]=1&amenity_ids[]=7&min_rating=4&page=5&per_page=2';
+    const priced = updateRoomSearch(original, { min_price: '0.00', max_price: '1000000.25' });
+    const sorted = updateRoomSearch(priced, { sort: 'price_desc' });
+    adapter = async config => {
+        assert.deepEqual(config.params, { min_price: '0.00', max_price: '1000000.25', guest_count: '3', min_rating: '4',
+            sort: 'price_desc', per_page: '2', room_type_ids: ['1'], amenity_ids: ['7'] });
+        return response(page, config);
+    };
+    assert.equal((await roomSearchService.list(sorted)).meta.total, 1);
+    assert.equal(readRoomSearch(updateRoomSearch(sorted, { page: 2 })).params.page, '2');
+    assert.equal(readRoomSearch(updateRoomSearch(sorted, { min_rating: '4.5' })).params.page, undefined);
+    assert.equal(readRoomSearch(original).params.page, '5');
+});
+
+test('quick price presets remove only the lower price bound and keep room type, amenities and rating', () => {
+    const next = readRoomSearch(updateRoomSearch('min_price=500000&min_rating=4&room_type_ids[]=3&amenity_ids[]=8&page=2',
+        { min_price: null, max_price: '1000000' }));
+    assert.deepEqual(next.params, { max_price: '1000000', min_rating: '4', room_type_ids: ['3'], amenity_ids: ['8'] });
+});
+
+test('refinement field errors survive the real API and loader for both input panels', async () => {
+    const errors = { min_price: ['Giá tối thiểu không hợp lệ.'], max_price: ['Giá tối đa không hợp lệ.'] };
+    const failure = new AxiosError('Validation', 'ERR_BAD_REQUEST', undefined, undefined, { status: 422, data: { errors } });
+    adapter = async () => { throw failure; };
+    const loader = createRoomSearchLoader();
+    await loader.load(signal => roomSearchService.list('min_price=1.001&max_price=bad', { signal }));
+    assert.equal(loader.getSnapshot().error, failure);
+    assert.deepEqual(loader.getSnapshot().error.response.data.errors, errors);
+    assert.equal(loader.getSnapshot().value, null);
+    loader.cancel();
+});
+
+// Compile production JSX with the project's Vite config; these are SSR checks, not browser interaction tests.
+async function renderSearch(component, props) {
+    if (!uiServer) {
+        const { createServer } = await import('vite');
+        uiServer = await createServer({ root: fileURLToPath(new URL('..', import.meta.url)), logLevel: 'error',
+            server: { middlewareMode: true, hmr: false, watch: null } });
+    }
+    const module = await uiServer.ssrLoadModule('/src/components/search/' + component + '.jsx');
+    return renderToStaticMarkup(createElement(MemoryRouter, null, createElement(module[component], props)));
+}
+
+test('restored room card renders real room facts, property rating and a safe image placeholder', async () => {
+    const room = mapRoomSearchPage(page).data[0];
+    const markup = await renderSearch('SearchRoomCard', { room });
+    for (const text of ['Fixture room', 'Fixture property', 'Suite', 'Wifi', '2 đánh giá cơ sở', 'khách / phòng', 'Chưa có ảnh']) {
+        assert.ok(markup.includes(text), text);
+    }
+    assert.match(markup, /href="\/properties\/2"/);
+    assert.ok(markup.includes('100,25'));
+    assert.ok(!markup.includes('unsplash.com'));
+    assert.ok(!markup.includes('Lưu yêu thích'));
+    const photos = await renderSearch('SearchRoomCard', { room: { ...room,
+        images: ['https://example.test/first.jpg', 'https://example.test/second.jpg'] } });
+    assert.equal((photos.match(/<img /g) ?? []).length, 2);
+    assert.ok(photos.includes('https://example.test/first.jpg'));
+    assert.ok(photos.includes('https://example.test/second.jpg'));
+    assert.match(photos, /aria-label="Xem ảnh 1 của Fixture room" aria-pressed="true"/);
+    assert.match(photos, /aria-label="Xem ảnh 2 của Fixture room" aria-pressed="false"/);
+    const unrated = await renderSearch('SearchRoomCard', { room: { ...room, price_per_night: '0.00',
+        property: { ...room.property, rating: null, review_count: 0 } } });
+    assert.ok(unrated.includes('Cơ sở chưa có đánh giá'));
+    assert.match(unrated, /0\s*₫/u);
+});
+
+test('restored result header uses server metadata and offers only supported sort values', async () => {
+    const markup = await renderSearch('ResultsHeader', { meta: { ...page.meta, total: 1234, from: 13, to: 24 },
+        sortBy: 'price_desc', view: 'list', onSortChange() {}, onViewChange() {} });
+    assert.ok(markup.includes('1.234 phòng phù hợp'));
+    assert.ok(markup.includes('Hiển thị 13–24 trên tổng số 1.234 kết quả'));
+    assert.match(markup, /value="price_desc" selected/);
+    assert.match(markup, /aria-label="Xem dạng danh sách" aria-pressed="true"/);
+    assert.ok(!markup.includes('RATING_DESC'));
+});
+
+test('AssistantPanel preserves raw decimal values, field error associations and supported suggestions', async () => {
+    const markup = await renderSearch('AssistantPanel', { params: { min_price: '0.00', max_price: '1000000.25', sort: 'price_desc' },
+        errors: { max_price: ['Khoảng giá không hợp lệ.'] }, onApply() {} });
+    for (const text of ['Tinh chỉnh tìm kiếm', 'value="0.00"', 'value="1000000.25"', 'assistant-max_price-error',
+        'Khoảng giá không hợp lệ.', 'Cơ sở được đánh giá 4+', 'Dưới 1 triệu']) assert.ok(markup.includes(text), text);
+    assert.ok(!markup.includes('Resort'));
+    assert.ok(!markup.includes('Hồ bơi &amp; Spa'));
+    assert.ok(!markup.includes('Tìm theo tên'));
+});
+
+test('restored grid displays loading skeletons instead of stale room data', async () => {
+    const room = mapRoomSearchPage(page).data[0];
+    const loading = await renderSearch('ResultsGrid', { rooms: [room], isLoading: true, view: 'list' });
+    assert.match(loading, /aria-busy="true"/);
+    assert.ok(!loading.includes('Fixture room'));
+    const ready = await renderSearch('ResultsGrid', { rooms: [room], isLoading: false, view: 'grid' });
+    assert.match(ready, /aria-busy="false"/);
+    assert.ok(ready.includes('Fixture room'));
+});
+
+test('pagination stays bounded for very large server totals and marks the active page', async () => {
+    const markup = await renderSearch('Pagination', { currentPage: 500, totalPages: 2147483647, onPageChange() {} });
+    assert.ok((markup.match(/<button/g) ?? []).length <= 9);
+    assert.match(markup, /aria-label="Trang 500" aria-current="page"/);
+    assert.ok(markup.includes('Trang 2147483647'));
+    assert.equal(await renderSearch('Pagination', { currentPage: 1, totalPages: 1, onPageChange() {} }), '');
+    const first = await renderSearch('Pagination', { currentPage: 1, totalPages: 3, onPageChange() {} });
+    assert.match(first, /aria-label="Trang trước" disabled/);
+    const last = await renderSearch('Pagination', { currentPage: 3, totalPages: 3, onPageChange() {} });
+    assert.match(last, /aria-label="Trang sau" disabled/);
+});
+
+test('empty result actions distinguish retry from clearing filters without inventing data', async () => {
+    const empty = await renderSearch('EmptyState', { title: 'Không có phòng phù hợp', message: 'Thử thay đổi bộ lọc.',
+        onRetry() {}, actionLabel: 'Xóa bộ lọc' });
+    assert.ok(empty.includes('Xóa bộ lọc'));
+    const failure = await renderSearch('EmptyState', { title: 'Đã xảy ra lỗi kết nối', message: 'Không tải được phòng.', onRetry() {} });
+    assert.ok(failure.includes('Thử lại'));
+});
+
+test('property card preserves missing and zero prices without fake rating, city, amenities or image', async () => {
+    const property = { id: 9, name: 'Real property', propertyType: 'HOMESTAY', address: 'Real address', price: null,
+        averageRating: null, reviewCount: 0, photos: [], amenities: [] };
+    const html = await renderSearch('SearchPropertyCard', { property });
+    for (const text of ['Real property', 'Real address', 'Chưa có ảnh', 'Chưa có giá tham khảo', 'Cơ sở chưa có đánh giá']) assert.ok(html.includes(text));
+    assert.match(html, /href="\/properties\/9"/);
+    assert.ok(!html.includes('unsplash'));
+    assert.ok(!html.includes('Lưu yêu thích'));
+    const zero = await renderSearch('SearchPropertyCard', { property: { ...property, price: '0.00', averageRating: 4.5, reviewCount: 2 } });
+    assert.match(zero, /0\s*₫/u);
+    assert.ok(zero.includes('2 đánh giá cơ sở'));
+});
+
+test('property header hides unsupported sorting and grid selects the correct card projection', async () => {
+    const html = await renderSearch('ResultsHeader', { kind: 'properties', meta: { total: 3, current_page: 1, last_page: 2 }, view: 'grid', onViewChange() {} });
+    assert.ok(html.includes('3 cơ sở lưu trú'));
+    assert.ok(!html.includes('<select'));
+    assert.ok(!html.includes('undefined'));
+    const grid = await renderSearch('ResultsGrid', { properties: [{ id: 4, name: 'Property without rooms', propertyType: 'HOTEL', address: '', price: null, averageRating: null, reviewCount: 0, photos: [] }], isLoading: false });
+    assert.ok(grid.includes('Property without rooms'));
+    assert.ok(!grid.includes('khách / phòng'));
 });

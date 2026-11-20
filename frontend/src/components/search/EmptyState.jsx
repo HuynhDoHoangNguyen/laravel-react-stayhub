@@ -1,6 +1,6 @@
 import { Compass, RefreshCw } from "lucide-react";
 
-export function EmptyState({ title, message, onRetry }) {
+export function EmptyState({ title, message, onRetry, actionLabel = 'Thử lại' }) {
   return (
     <div className="mx-auto flex max-w-md flex-col items-center px-6 py-20 text-center">
       <div className="grid h-16 w-16 place-items-center rounded-full bg-accent-pale/60 text-primary">
@@ -17,7 +17,7 @@ export function EmptyState({ title, message, onRetry }) {
           className="mt-6 inline-flex items-center gap-2 rounded-2xl border border-primary px-5 py-2.5 text-sm font-medium text-primary transition-colors hover:bg-accent-pale/40"
         >
           <RefreshCw className="h-4 w-4" />
-          Thử lại
+          {actionLabel}
         </button>
       )}
     </div>
