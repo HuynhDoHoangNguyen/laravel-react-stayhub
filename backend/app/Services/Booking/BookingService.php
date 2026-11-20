@@ -38,11 +38,17 @@ class BookingService
                 'room_id' => [__('validation.exists', ['attribute' => 'room id'])],
             ]);
         }
-        $quote = $this->pricingService->quote(
-            $room,
-            $input->checkInDate,
-            $input->checkOutDate
-        );
+        try {
+            $quote = $this->pricingService->quote(
+                $room,
+                $input->checkInDate,
+                $input->checkOutDate
+            );
+        } catch (\OverflowException) {
+            throw ValidationException::withMessages([
+                'check_out_date' => ['Tổng tiền phòng cho khoảng thời gian này vượt quá giới hạn tối đa cho phép.'],
+            ]);
+        }
         $availability = $this->availabilityService->check(
             $room,
             $input->checkInDate,
@@ -94,11 +100,17 @@ class BookingService
             }
 
             // Snapshot price from DB
-            $quote = $this->pricingService->quote(
-                $room,
-                $input->checkInDate,
-                $input->checkOutDate
-            );
+            try {
+                $quote = $this->pricingService->quote(
+                    $room,
+                    $input->checkInDate,
+                    $input->checkOutDate
+                );
+            } catch (\OverflowException) {
+                throw ValidationException::withMessages([
+                    'check_out_date' => ['Tổng tiền phòng cho khoảng thời gian này vượt quá giới hạn tối đa cho phép.'],
+                ]);
+            }
 
             // Generate unique booking code
             $prefix = config('booking.code_prefix', 'BK');

@@ -310,4 +310,55 @@ class BookingInputIntegrityTest extends TestCase
             ->assertJsonPath('meta.total', 1)
             ->assertJsonPath('data.0.id', $room->id);
     }
+
+    public function test_pr12_08_search_scientific_notation_returns_422_not_500(): void
+    {
+        $checkIn = now()->addDays(5)->format('Y-m-d');
+        $checkOut = now()->addDays(7)->format('Y-m-d');
+
+        // min_price=1e101 should return 422, not 500
+        $responseMin = $this->getJson('/api/public/rooms/search?' . http_build_query([
+            'check_in_date' => $checkIn,
+            'check_out_date' => $checkOut,
+            'guest_count' => 2,
+            'min_price' => '1e101',
+        ]));
+        $responseMin->assertStatus(422)
+            ->assertJsonValidationErrors(['min_price']);
+
+        // max_price=1e101 should return 422, not 500
+        $responseMax = $this->getJson('/api/public/rooms/search?' . http_build_query([
+            'check_in_date' => $checkIn,
+            'check_out_date' => $checkOut,
+            'guest_count' => 2,
+            'max_price' => '1e101',
+        ]));
+        $responseMax->assertStatus(422)
+            ->assertJsonValidationErrors(['max_price']);
+    }
+
+    public function test_pr12_08_booking_preview_overflow_amount_returns_422_not_500(): void
+    {
+        $property = Property::factory()->create(['status' => PropertyStatus::ACTIVE]);
+        $room = Room::factory()->create([
+            'property_id' => $property->id,
+            'status' => RoomStatus::ACTIVE,
+            'capacity' => 4,
+            'price_per_night' => '100000000.00', // 100 million VND / night
+        ]);
+
+        // 101 nights * 100,000,000.00 = 10,100,000,000.00 > MAX_MONEY (9,999,999,999.99)
+        $checkIn = now()->addDays(1)->format('Y-m-d');
+        $checkOut = now()->addDays(102)->format('Y-m-d'); // 101 nights
+
+        $response = $this->postJson('/api/public/bookings/preview', [
+            'room_id' => $room->id,
+            'check_in_date' => $checkIn,
+            'check_out_date' => $checkOut,
+            'guest_count' => 2,
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['check_out_date']);
+    }
 }

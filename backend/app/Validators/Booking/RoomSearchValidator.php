@@ -27,25 +27,58 @@ class RoomSearchValidator
             'property_id' => ['nullable', 'integer', 'min:1'],
             'keyword' => ['nullable', 'string'],
             'room_type_id' => ['nullable', 'integer', 'min:1'],
-            'min_price' => ['nullable', 'numeric', 'min:0'],
+            'min_price' => [
+                'nullable',
+                'numeric',
+                'min:0',
+                function ($attribute, $value, $fail) {
+                    if (is_scalar($value) && is_numeric($value)) {
+                        if (preg_match('/[eE]/', (string) $value) || ! preg_match('/^[+-]?\d+(\.\d{1,2})?$/', (string) $value)) {
+                            $fail("The {$attribute} field format is invalid.");
+                            return;
+                        }
+                        try {
+                            if (DecimalMoney::compare((string) $value, DecimalMoney::MAX_MONEY) > 0) {
+                                $fail("The {$attribute} must not be greater than " . DecimalMoney::MAX_MONEY . '.');
+                            }
+                        } catch (\Throwable) {
+                            $fail("The {$attribute} field format is invalid.");
+                        }
+                    }
+                },
+            ],
             'max_price' => [
                 'nullable',
                 'numeric',
                 'min:0',
                 function ($attribute, $value, $fail) use ($input) {
+                    if (is_scalar($value) && is_numeric($value)) {
+                        if (preg_match('/[eE]/', (string) $value) || ! preg_match('/^[+-]?\d+(\.\d{1,2})?$/', (string) $value)) {
+                            $fail("The {$attribute} field format is invalid.");
+                            return;
+                        }
+                        try {
+                            if (DecimalMoney::compare((string) $value, DecimalMoney::MAX_MONEY) > 0) {
+                                $fail("The {$attribute} must not be greater than " . DecimalMoney::MAX_MONEY . '.');
+                                return;
+                            }
+                        } catch (\Throwable) {
+                            $fail("The {$attribute} field format is invalid.");
+                            return;
+                        }
+                    }
                     $minPrice = $input['min_price'] ?? null;
                     if (
                         $minPrice !== null && $minPrice !== ''
                         && is_scalar($minPrice) && is_numeric($minPrice)
                         && is_scalar($value) && is_numeric($value)
-                        && (float) $minPrice >= 0 && (float) $value >= 0
                     ) {
                         try {
                             if (DecimalMoney::compare((string) $value, (string) $minPrice) < 0) {
                                 $fail('The max price field must be greater than or equal to min price.');
                             }
                         } catch (\Throwable) {
-                            // Non-decimal or malformed numeric caught safely
+                            $fail("The {$attribute} field format is invalid.");
                         }
                     }
                 },
@@ -56,13 +89,19 @@ class RoomSearchValidator
             'per_page' => ['nullable', 'integer', 'min:1', 'max:50'],
         ])->validate();
 
-        $minPrice = isset($validated['min_price']) && $validated['min_price'] !== ''
-            ? DecimalMoney::queryDecimal($validated['min_price'], 'min_price')
-            : null;
+        try {
+            $minPrice = isset($validated['min_price']) && $validated['min_price'] !== ''
+                ? DecimalMoney::queryDecimal($validated['min_price'], 'min_price')
+                : null;
 
-        $maxPrice = isset($validated['max_price']) && $validated['max_price'] !== ''
-            ? DecimalMoney::queryDecimal($validated['max_price'], 'max_price')
-            : null;
+            $maxPrice = isset($validated['max_price']) && $validated['max_price'] !== ''
+                ? DecimalMoney::queryDecimal($validated['max_price'], 'max_price')
+                : null;
+        } catch (\Throwable) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'min_price' => ['Định dạng giá tìm kiếm không hợp lệ.'],
+            ]);
+        }
 
         $amenityIds = isset($validated['amenity_ids']) && is_array($validated['amenity_ids'])
             ? array_values(array_unique(array_map('intval', $validated['amenity_ids'])))

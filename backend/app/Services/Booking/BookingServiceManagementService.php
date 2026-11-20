@@ -54,13 +54,25 @@ class BookingServiceManagementService
             $qty = $input->quantity;
             $existing = $this->bookingServiceRepository->findForBookingAndService($currentBooking->id, $service->id);
             if ($existing) {
-                $newQty = DecimalMoney::addQuantity((string) $existing->quantity, $qty);
-                $newAmount = $this->pricingService->serviceAmount($newQty, $existing->unit_price);
+                try {
+                    $newQty = DecimalMoney::addQuantity((string) $existing->quantity, $qty);
+                    $newAmount = $this->pricingService->serviceAmount($newQty, $existing->unit_price);
+                } catch (\OverflowException) {
+                    throw ValidationException::withMessages([
+                        'quantity' => ['Số lượng hoặc tổng tiền dịch vụ vượt quá giới hạn tối đa cho phép.'],
+                    ]);
+                }
                 return $this->bookingServiceRepository->update($existing, ['quantity' => $newQty, 'amount' => $newAmount]);
             }
 
-            $unitPriceStr = DecimalMoney::format($service->price);
-            $amountStr = $this->pricingService->serviceAmount($qty, $unitPriceStr);
+            try {
+                $unitPriceStr = DecimalMoney::format($service->price);
+                $amountStr = $this->pricingService->serviceAmount($qty, $unitPriceStr);
+            } catch (\OverflowException) {
+                throw ValidationException::withMessages([
+                    'quantity' => ['Số lượng hoặc tổng tiền dịch vụ vượt quá giới hạn tối đa cho phép.'],
+                ]);
+            }
             return $this->bookingServiceRepository->create([
                 'booking_id' => $currentBooking->id,
                 'service_id' => $service->id,
@@ -81,7 +93,13 @@ class BookingServiceManagementService
             $this->assertServiceChangeAllowed($currentBooking, 'Chỉ được thay đổi dịch vụ khi đặt phòng ở trạng thái đang lưu trú (CHECKED_IN).');
 
             $qty = $input->quantity;
-            $newAmount = $this->pricingService->serviceAmount($qty, $currentLine->unit_price);
+            try {
+                $newAmount = $this->pricingService->serviceAmount($qty, $currentLine->unit_price);
+            } catch (\OverflowException) {
+                throw ValidationException::withMessages([
+                    'quantity' => ['Số lượng hoặc tổng tiền dịch vụ vượt quá giới hạn tối đa cho phép.'],
+                ]);
+            }
             return $this->bookingServiceRepository->update($currentLine, ['quantity' => $qty, 'amount' => $newAmount]);
         });
     }
