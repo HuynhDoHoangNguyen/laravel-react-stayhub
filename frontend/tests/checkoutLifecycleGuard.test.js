@@ -425,6 +425,97 @@ test('PR12-07: CustomerBookingDetailPage cancel mutation on booking A does not o
   assert.equal(isCancelDialogOpen, false);
 });
 
+test('PR13-01: CustomerBookingDetailPage cancel mutation resolves with string route ID "42" and numeric API ID 42 without getting stuck', async () => {
+  // Simulate CustomerBookingDetailPage exact state and types
+  const routeBookingId = '42'; // useParams() always returns string
+  let activeBookingIdRef = routeBookingId;
+  let cancelRequestIdRef = 0;
+  let cancelLock = false;
+  let isCancelling = false;
+  let isCancelDialogOpen = true;
+  let cancelError = '';
+  let isMounted = true;
+  let bookingState = { id: 42, status: 'CONFIRMED' }; // API returns numeric ID
+
+  let resolveCancel = null;
+  let rejectCancel = null;
+  const mockCancelService = () => new Promise((resolve, reject) => {
+    resolveCancel = resolve;
+    rejectCancel = reject;
+  });
+
+  const handleCancelBooking = async () => {
+    if (cancelLock) return;
+    const targetBookingId = String(bookingState?.id ?? routeBookingId ?? '');
+    const currentRequestId = ++cancelRequestIdRef;
+
+    cancelLock = true;
+    isCancelling = true;
+    cancelError = '';
+
+    try {
+      const updatedBooking = await mockCancelService(targetBookingId);
+      if (!isMounted || String(activeBookingIdRef) !== targetBookingId || currentRequestId !== cancelRequestIdRef) {
+        return;
+      }
+      bookingState = { ...bookingState, ...updatedBooking };
+      isCancelDialogOpen = false;
+    } catch (error) {
+      if (!isMounted || String(activeBookingIdRef) !== targetBookingId || currentRequestId !== cancelRequestIdRef) {
+        return;
+      }
+      cancelError = error?.message || 'Không thể hủy đơn đặt phòng.';
+    } finally {
+      if (currentRequestId === cancelRequestIdRef && String(activeBookingIdRef) === targetBookingId) {
+        cancelLock = false;
+        if (isMounted) {
+          isCancelling = false;
+        }
+      }
+    }
+  };
+
+  // 1. Success case with mixed types (route string "42", API number 42)
+  const taskSuccess = handleCancelBooking();
+  assert.equal(isCancelling, true);
+  assert.equal(cancelLock, true);
+
+  // Duplicate call while in-flight must be blocked by lock
+  handleCancelBooking();
+  assert.equal(cancelRequestIdRef, 1, 'Duplicate call does not increment request id');
+
+  resolveCancel({ id: 42, status: 'CANCELLED' });
+  await taskSuccess;
+
+  // Crucial PR13-01 assertion: lock must be released, UI not stuck in isCancelling
+  assert.equal(cancelLock, false, 'Lock must be released after cancel success');
+  assert.equal(isCancelling, false, 'isCancelling must be false after cancel success');
+  assert.equal(isCancelDialogOpen, false, 'Dialog must close after cancel success');
+  assert.equal(bookingState.status, 'CANCELLED');
+
+  // 2. Error case with mixed types: lock must still be released and error recorded
+  bookingState = { id: 42, status: 'CONFIRMED' };
+  isCancelDialogOpen = true;
+  const taskError = handleCancelBooking();
+  assert.equal(isCancelling, true);
+  assert.equal(cancelLock, true);
+
+  rejectCancel(new Error('Hạn hủy phòng đã hết'));
+  await taskError;
+
+  assert.equal(cancelLock, false, 'Lock must be released on error');
+  assert.equal(isCancelling, false, 'isCancelling must be false on error');
+  assert.equal(cancelError, 'Hạn hủy phòng đã hết');
+  assert.equal(isCancelDialogOpen, true, 'Dialog stays open to show error');
+
+  // 3. Verify CustomerBookingDetailPage source code uses String() coercion
+  const customerDetailPath = fileURLToPath(new URL('../src/pages/customer/CustomerBookingDetailPage.jsx', import.meta.url));
+  const detailCode = await readFile(customerDetailPath, 'utf8');
+  assert.match(detailCode, /const\s+targetBookingId\s*=\s*String\(booking\?\.id\s*\?\?\s*bookingId/);
+  assert.match(detailCode, /String\(activeBookingIdRef\.current\)\s*!==\s*targetBookingId/);
+  assert.match(detailCode, /String\(activeBookingIdRef\.current\)\s*===\s*targetBookingId/);
+});
+
 test('PR12-02: SearchRoomCard wires "Đặt ngay" CTA directly to customer checkout with room and search parameters', async () => {
   const searchCardPath = fileURLToPath(new URL('../src/components/search/SearchRoomCard.jsx', import.meta.url));
   const code = await readFile(searchCardPath, 'utf8');

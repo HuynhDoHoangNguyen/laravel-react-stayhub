@@ -16,9 +16,9 @@ Ngày kiểm: 2026-11-20 (Asia/Saigon). Nhánh: `feature/member-2-booking`. HEAD
 | Chỉ file TV2 / không có env | `[x]` Đạt: Chỉ bao gồm các file Backend/Frontend và Test thuộc phạm vi TV2 (giữ file TV1 nguyên vẹn sau merge dev) | `git status`, `git diff` |
 | Backend full suite | `[x]` PASS — 1872 passed, 91 skipped, 9700 assertions, 0 failed (54.99s) | `php artisan test` trong `backend` |
 | Backend TV2 suite | `[x]` PASS — 233 passed, 4 skipped, 919 assertions, 0 failed | `php artisan test --filter=Booking` trong `backend` |
-| Frontend full tests | `[x]` PASS — 247 tests / 0 fail (2.25s) | `node --experimental-test-module-mocks --test tests/**/*.test.js` trong `frontend` |
+| Frontend full tests | `[x]` PASS — 250 tests / 0 fail (2.63s) | `node --experimental-test-module-mocks --test tests/**/*.test.js` trong `frontend` |
 | Frontend lint | `[x]` PASS — 0 errors (3 warnings giao diện có sẵn) | `npm run lint` trong `frontend` |
-| Frontend build | `[x]` PASS — Vite production bundle hoàn thành (1.35s) | `npm run build` trong `frontend` |
+| Frontend build | `[x]` PASS — Vite production bundle hoàn thành (1.78s) | `npm run build` trong `frontend` |
 | Diff whitespace/scope | `[x]` Đạt: Không có whitespace lỗi, không chạm vào TV1/TV3 ngoài phạm vi | `git diff --check` |
 
 ## Gate trước khi mở PR
@@ -32,20 +32,14 @@ Ngày kiểm: 2026-11-20 (Asia/Saigon). Nhánh: `feature/member-2-booking`. HEAD
 - [x] Xác nhận checkout không tạo Invoice; chỉ quản lý dịch vụ booking khi CHECKED_IN; snapshot tên/đơn vị/giá/amount được giữ.
 - [x] Xác nhận FK RESTRICT và migration `2026_10_08_000000_create_stayhub_schema.php` không bị sửa.
 - [x] Xác nhận không sửa file Catalog/TV1/TV3 hoặc file dùng chung ngoài scope đã duyệt.
-- [x] Đã xử lý triệt để 9 findings PR12-01–PR12-09 bằng integration tests, deferred promise tests và database safety guards.
+- [x] Đã xử lý triệt để 9 findings PR12 và 3 findings PR13-01–03 bằng integration tests, deferred promise tests và database safety guards.
 - [x] PR target `dev`; TV1/TV3 review điểm tích hợp liên module.
 
-## Trạng thái các quyết định kỹ thuật PR #12
+## Trạng thái các quyết định kỹ thuật PR #13
 
-- **PR12-01:** Bảo vệ `isMountedRef` trong `CustomerCheckoutPage` sống sót qua chu kỳ double-mount của React 19 StrictMode.
-- **PR12-02:** Nối hoàn chỉnh nút "Đặt ngay" tại `SearchRoomCard` sang direct checkout URL kèm đầy đủ param phòng & ngày/khách khi `isAvailableDate === true`.
-- **PR12-03:** Thống nhất luồng UC07 `room_type_ids[]` và `min_rating` từ URL → Validator → DTO → Query; tính điểm trung bình thực tế từ bảng `reviews`.
-- **PR12-04:** Bổ sung `mutationRequestIdRef` cô lập async mutation context tại `HostBookingServicesPage` và `HostBookingDetailPage`, ngăn request cũ mở khóa thao tác mới.
-- **PR12-05:** Tách mapper thuần túy `roomAvailabilitySearchMapper.js` vào `frontend/src/mappers/`, ném `MapperError` khi payload sai cấu trúc, phân biệt danh sách rỗng hợp lệ.
-- **PR12-06:** An toàn database test: Hook `beforeRefreshingDatabase()` trong `TestCase.php` fail-closed nếu DB target không thuộc whitelist test.
-- **PR12-07:** Bổ sung `activeBookingIdRef`, `cancelRequestIdRef`, `isMountedRef` tại `CustomerBookingDetailPage`, ngăn late cancel response ghi đè booking mới.
-- **PR12-08:** Chặn số khoa học (`1e101`) và vượt trần `MAX_MONEY` tại `RoomSearchValidator`; bắt `OverflowException` trả HTTP 422 chuẩn thay vì 500.
-- **PR12-09:** Safe Bounded Pagination (`propertyServiceCatalogService` & `propertyService.getBookableProperty`): Giữ đúng server `total`, gắn cờ minh bạch `hasMore` và `isTruncated` khi chạm giới hạn an toàn.
+- **PR13-01:** Chuẩn hóa `String(...)` so sánh ID booking (`useParams` chuỗi `"42"` vs API số `42`), đảm bảo `cancelLock` và `isCancelling` được giải phóng chính xác ở cả success/error mà không kẹt trạng thái.
+- **PR13-02:** Guard DB test `TestCase::validateDatabaseConfiguration()` phân tích cấu hình qua `ConfigurationUrlParser` (chặn URL override trỏ DB dev), siết chặt whitelist SQLite (chỉ cho phép `:memory:` hoặc file `_test.sqlite` / `.test.sqlite`).
+- **PR13-03:** Bảo toàn metadata `{ data, total, hasMore, isTruncated }` qua `hostBookingService.listPropertyServices`; hiển thị banner thông báo minh bạch trên UI Host khi danh mục dịch vụ vượt quá 250 dòng kèm link điều hướng sang trang quản trị dịch vụ cơ sở.
 - Giữ nguyên bất biến contract Booking ↔ Invoice/Review của TV3.
 
 ## Dependencies và giới hạn

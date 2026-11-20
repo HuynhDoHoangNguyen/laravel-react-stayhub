@@ -1,5 +1,7 @@
 import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import axios from 'axios';
 
 const sharedClient = axios.create({ adapter: async () => { throw new Error('unexpected network call'); } });
@@ -7,6 +9,7 @@ mock.module(new URL('../src/api/axios.js', import.meta.url).href, { defaultExpor
 const { createPropertyService } = await import('../src/services/propertyService.js');
 const { propertyServiceCatalogService } = await import('../src/services/propertyServiceCatalogService.js');
 const { propertyServiceCatalogApi } = await import('../src/api/propertyServiceCatalogApi.js');
+const { hostBookingService } = await import('../src/services/hostBookingService.js');
 
 test.after(() => mock.restoreAll());
 
@@ -271,4 +274,53 @@ test('PR12-09: listActiveForProperty passes options/signal and propagates errors
   } finally {
     propertyServiceCatalogApi.list = originalList;
   }
+});
+
+test('PR13-03: hostBookingService.listPropertyServices preserves total, hasMore, and isTruncated metadata for 290 services (bounded to 250)', async () => {
+  const originalList = propertyServiceCatalogApi.list;
+  const requestedPages = [];
+
+  propertyServiceCatalogApi.list = async (params) => {
+    requestedPages.push(params.page);
+    const pageServices = Array.from({ length: 50 }, (_, i) => ({
+      id: (params.page - 1) * 50 + i + 1,
+      name: `Service ${(params.page - 1) * 50 + i + 1}`,
+      price: '50000.00',
+      is_active: true,
+    }));
+    return {
+      success: true,
+      data: pageServices,
+      meta: { current_page: params.page, last_page: 6, per_page: 50, total: 290 },
+    };
+  };
+
+  try {
+    const result = await hostBookingService.listPropertyServices(12);
+    assert.equal(result.success, true);
+    assert.deepEqual(requestedPages, [1, 2, 3, 4, 5]);
+    assert.equal(result.data.length, 250);
+    // Preserved metadata forwarded to UI consumer
+    assert.equal(result.total, 290);
+    assert.equal(result.hasMore, true);
+    assert.equal(result.isTruncated, true);
+  } finally {
+    propertyServiceCatalogApi.list = originalList;
+  }
+});
+
+test('PR13-03: HostBookingServicesPage renders truncation alert banner and link to property services when catalog is bounded', async () => {
+  const hostServicesPagePath = fileURLToPath(new URL('../src/pages/host/HostBookingServicesPage.jsx', import.meta.url));
+  const pageCode = await readFile(hostServicesPagePath, 'utf8');
+
+  // Verify catalogMeta tracking
+  assert.match(pageCode, /const\s*\[catalogMeta,\s*setCatalogMeta\]\s*=\s*useState/);
+  assert.match(pageCode, /isTruncated:\s*Boolean\(catalogResult\?\.isTruncated\s*\|\|\s*catalogResult\?\.hasMore\)/);
+
+  // Verify alert banner is rendered conditionally
+  assert.match(pageCode, /catalogMeta\.isTruncated\s*&&\s*\(/);
+  assert.match(pageCode, /role="status"/);
+  assert.match(pageCode, /Danh sách dịch vụ hiển thị có giới hạn/);
+  assert.match(pageCode, /to=\{`\/host\/properties\/\$\{booking\.room\?\.property\?\.id\}\/services`\}/);
+  assert.match(pageCode, /Quản lý dịch vụ cơ sở/);
 });

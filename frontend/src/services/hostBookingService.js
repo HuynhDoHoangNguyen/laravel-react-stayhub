@@ -30,7 +30,13 @@ export const hostBookingService = {
 
   async listPropertyServices(propertyId, options = {}) {
     const response = await propertyServiceCatalogService.listActiveForProperty(propertyId, options);
-    return response?.data || [];
+    return {
+      success: true,
+      data: response?.data || [],
+      total: response?.total ?? (response?.data?.length || 0),
+      hasMore: Boolean(response?.hasMore),
+      isTruncated: Boolean(response?.isTruncated),
+    };
   },
 
   async listBookingServices(bookingId, options = {}) {

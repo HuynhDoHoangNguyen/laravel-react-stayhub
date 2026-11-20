@@ -16,6 +16,7 @@ export default function HostBookingServicesPage() {
   const [booking, setBooking] = useState(null);
   const [services, setServices] = useState([]);
   const [catalog, setCatalog] = useState([]);
+  const [catalogMeta, setCatalogMeta] = useState({ total: 0, hasMore: false, isTruncated: false });
   const [selectedServiceId, setSelectedServiceId] = useState('');
   const [quantity, setQuantity] = useState('1');
   const [quantityDrafts, setQuantityDrafts] = useState({});
@@ -59,10 +60,16 @@ export default function HostBookingServicesPage() {
       if (bookingData.status === 'CHECKED_IN' && bookingData.room?.property?.id) {
         serviceRequests.push(hostBookingService.listPropertyServices(bookingData.room.property.id, { signal }));
       }
-      const [bookingServices, availableServices = []] = await Promise.all(serviceRequests);
+      const [bookingServices, catalogResult = null] = await Promise.all(serviceRequests);
       if (signal.aborted || !isMountedRef.current || activeBookingIdRef.current !== targetBookingId) return;
       setServices(bookingServices);
+      const availableServices = Array.isArray(catalogResult) ? catalogResult : (catalogResult?.data || []);
       setCatalog(availableServices);
+      setCatalogMeta({
+        total: catalogResult?.total ?? availableServices.length,
+        hasMore: Boolean(catalogResult?.hasMore),
+        isTruncated: Boolean(catalogResult?.isTruncated || catalogResult?.hasMore),
+      });
       setQuantityDrafts(Object.fromEntries(bookingServices.map((item) => [item.id, String(item.quantity)])));
       setSelectedServiceId((current) => current || String(availableServices[0]?.id || ''));
     } catch (loadError) {
@@ -186,7 +193,22 @@ export default function HostBookingServicesPage() {
         <Card className="rounded-2xl border-border/70 p-5 shadow-xs sm:p-6">
           <h2 className="font-display text-xl font-bold text-primary">Thêm dịch vụ</h2>
           {catalog.length > 0 ? (
-            <form onSubmit={(event) => {
+            <>
+              {catalogMeta.isTruncated && (
+                <div role="status" className="mt-3 rounded-xl border border-amber-200 bg-amber-50/80 p-3.5 text-xs text-amber-900">
+                  <p className="font-semibold">✦ Danh sách dịch vụ hiển thị có giới hạn</p>
+                  <p className="mt-1 leading-relaxed text-amber-800">
+                    Đang hiển thị {catalog.length} trên tổng số {catalogMeta.total} dịch vụ đang bật của cơ sở. Để xem toàn bộ danh mục hoặc tìm kiếm dịch vụ khác, quý khách vui lòng truy cập{' '}
+                    <Link
+                      to={`/host/properties/${booking.room?.property?.id}/services`}
+                      className="font-semibold underline hover:text-amber-950"
+                    >
+                      Quản lý dịch vụ cơ sở
+                    </Link>.
+                  </p>
+                </div>
+              )}
+              <form onSubmit={(event) => {
               event.preventDefault();
               if (!selectedServiceId || !selectedService) return;
               performAction('add', async () => {
@@ -210,6 +232,7 @@ export default function HostBookingServicesPage() {
                 Thêm dịch vụ
               </Button>
             </form>
+            </>
           ) : (
             <p className="mt-3 rounded-xl bg-surface px-4 py-5 text-sm text-muted-foreground">Cơ sở này chưa có dịch vụ nào đang bật để thêm vào booking.</p>
           )}
