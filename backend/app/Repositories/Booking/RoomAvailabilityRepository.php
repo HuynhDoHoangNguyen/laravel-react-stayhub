@@ -6,10 +6,12 @@ use App\Enums\BookingStatus;
 use App\Enums\MaintenanceStatus;
 use App\Enums\PropertyStatus;
 use App\Enums\RoomStatus;
+use App\Models\Amenity;
 use App\Models\Booking;
 use App\Models\Maintenance;
 use App\Models\Property;
 use App\Models\Room;
+use App\Models\RoomType;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -22,6 +24,33 @@ class RoomAvailabilityRepository
         return $room->relationLoaded('property')
             ? $room->getRelation('property')
             : $room->property()->first();
+    }
+
+    public function propertyExists(int $propertyId): bool
+    {
+        return Property::query()->where('id', $propertyId)->exists();
+    }
+
+    public function roomTypeExists(int $roomTypeId): bool
+    {
+        return RoomType::query()->where('id', $roomTypeId)->exists();
+    }
+
+    /**
+     * @param  array<int>  $amenityIds
+     * @return array<int>
+     */
+    public function findExistingAmenityIds(array $amenityIds): array
+    {
+        if (empty($amenityIds)) {
+            return [];
+        }
+
+        return Amenity::query()
+            ->whereIn('id', $amenityIds)
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
     }
 
     public function hasBlockingMaintenanceOverlap(int $roomId, string $checkIn, string $checkOut): bool

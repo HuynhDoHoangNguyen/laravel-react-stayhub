@@ -9,6 +9,7 @@ use App\Models\Amenity;
 use App\Models\Booking;
 use App\Models\Property;
 use App\Models\Room;
+use App\Models\RoomType;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -229,5 +230,84 @@ class BookingInputIntegrityTest extends TestCase
         $serviceList = $this->actingAs($host)->getJson('/api/host/services?per_page=100');
         $serviceList->assertOk()
             ->assertJsonPath('meta.per_page', 50);
+    }
+
+    public function test_pr10_03_room_search_validates_referenced_entities_via_service_repository(): void
+    {
+        $checkIn = now()->addDays(5)->format('Y-m-d');
+        $checkOut = now()->addDays(7)->format('Y-m-d');
+
+        // 1. Non-existent property_id returns 422 with validation error
+        $resProp = $this->getJson('/api/public/rooms/search?' . http_build_query([
+            'check_in_date' => $checkIn,
+            'check_out_date' => $checkOut,
+            'guest_count' => 2,
+            'property_id' => 999999,
+        ]));
+        $resProp->assertStatus(422)
+            ->assertJsonValidationErrors(['property_id'])
+            ->assertJsonPath('errors.property_id.0', 'The selected property id is invalid.');
+
+        // 2. Non-existent room_type_id returns 422 with validation error
+        $resRoomType = $this->getJson('/api/public/rooms/search?' . http_build_query([
+            'check_in_date' => $checkIn,
+            'check_out_date' => $checkOut,
+            'guest_count' => 2,
+            'room_type_id' => 888888,
+        ]));
+        $resRoomType->assertStatus(422)
+            ->assertJsonValidationErrors(['room_type_id'])
+            ->assertJsonPath('errors.room_type_id.0', 'The selected room type id is invalid.');
+
+        // 3. Non-existent amenity_ids returns 422 with validation error
+        $resAmenity = $this->getJson('/api/public/rooms/search?' . http_build_query([
+            'check_in_date' => $checkIn,
+            'check_out_date' => $checkOut,
+            'guest_count' => 2,
+            'amenity_ids' => [777777],
+        ]));
+        $resAmenity->assertStatus(422)
+            ->assertJsonValidationErrors(['amenity_ids.0']);
+        $this->assertSame(
+            'The selected amenity_ids.0 is invalid.',
+            $resAmenity->json('errors')['amenity_ids.0'][0]
+        );
+
+        // 4. Combined non-existent reference IDs return all 422 validation errors together
+        $resAll = $this->getJson('/api/public/rooms/search?' . http_build_query([
+            'check_in_date' => $checkIn,
+            'check_out_date' => $checkOut,
+            'guest_count' => 2,
+            'property_id' => 999999,
+            'room_type_id' => 888888,
+            'amenity_ids' => [777777],
+        ]));
+        $resAll->assertStatus(422)
+            ->assertJsonValidationErrors(['property_id', 'room_type_id', 'amenity_ids.0']);
+
+        // 5. Existing valid entities return 200 OK
+        $property = Property::factory()->create(['status' => PropertyStatus::ACTIVE]);
+        $roomType = RoomType::factory()->create(['property_id' => $property->id]);
+        $amenity = Amenity::factory()->create();
+        $room = Room::factory()->create([
+            'property_id' => $property->id,
+            'room_type_id' => $roomType->id,
+            'status' => RoomStatus::ACTIVE,
+            'capacity' => 4,
+            'price_per_night' => '600000.00',
+        ]);
+        $room->amenities()->attach($amenity->id);
+
+        $resValid = $this->getJson('/api/public/rooms/search?' . http_build_query([
+            'check_in_date' => $checkIn,
+            'check_out_date' => $checkOut,
+            'guest_count' => 2,
+            'property_id' => $property->id,
+            'room_type_id' => $roomType->id,
+            'amenity_ids' => [$amenity->id],
+        ]));
+        $resValid->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.id', $room->id);
     }
 }
