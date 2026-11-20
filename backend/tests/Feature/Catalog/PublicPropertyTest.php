@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Catalog;
 
+use App\DTOs\Catalog\Requests\PublicPropertyListInputRequest;
 use App\DTOs\Catalog\Responses\PublicPropertyDetailResponse;
 use App\DTOs\Catalog\Responses\PublicPropertyListItemResponse;
 use App\DTOs\Catalog\Responses\PublicRoomResponse;
@@ -16,15 +17,18 @@ use App\Models\Amenity;
 use App\Models\Review;
 use App\Models\Booking;
 use App\Repositories\Catalog\CatalogRepository;
+use App\Validators\Catalog\CatalogValidator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\TestCase;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
+use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Symfony\Component\ObjectMapper\ObjectMapper;
 use Symfony\Component\ObjectMapper\ObjectMapperInterface;
+use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 class PublicPropertyTest extends TestCase
 {
@@ -121,6 +125,92 @@ class PublicPropertyTest extends TestCase
             ->assertSessionHasErrors(['page' => $errors['page'][0], 'city' => $errors['city'][0]])
             ->assertSessionHasInput('page', '0')
             ->assertSessionHasInput('city', 'Hue');
+    }
+
+    public static function paginationInputs(): array
+    {
+        return [
+            'defaults' => [[], [], [1, 12], []],
+            'upper bounds' => [['page' => '2147483647', 'per_page' => '24'], [], [2147483647, 24], []],
+            'integer values' => [['page' => 2, 'per_page' => 3], [], [2, 3], []],
+            'integer floats' => [['page' => 2.0, 'per_page' => 3.0], [], [2, 3], []],
+            'true' => [['page' => true, 'per_page' => true], [], [1, 1], []],
+            'signed strings' => [['page' => '+2', 'per_page' => '+3'], [], [2, 3], []],
+            'padded strings' => [['page' => ' 2 ', 'per_page' => "\t3\n"], [], [2, 3], []],
+            'ignored body fields' => [['page' => 2, 'ignored' => 'value'], [], [2, 12], []],
+            'null' => [['page' => null, 'per_page' => null], [], null, ['page', 'per_page']],
+            'empty strings' => [['page' => '', 'per_page' => ' '], [], null, ['page', 'per_page']],
+            'false' => [['page' => false, 'per_page' => false], [], null, ['page', 'per_page']],
+            'zero' => [['page' => 0, 'per_page' => '0'], [], null, ['page', 'per_page']],
+            'negative' => [['page' => -1, 'per_page' => '-1'], [], null, ['page', 'per_page']],
+            'fractional' => [['page' => 1.5, 'per_page' => '1.5'], [], null, ['page', 'per_page']],
+            'decimal strings' => [['page' => '1.0', 'per_page' => '2.0'], [], null, ['page', 'per_page']],
+            'exponent strings' => [['page' => '1e0', 'per_page' => '2e0'], [], null, ['page', 'per_page']],
+            'leading zeros' => [['page' => '01', 'per_page' => '02'], [], null, ['page', 'per_page']],
+            'arrays' => [['page' => [], 'per_page' => ['1']], [], null, ['page', 'per_page']],
+            'objects' => [['page' => new \stdClass(), 'per_page' => new \stdClass()], [], null, ['page', 'per_page']],
+            'page overflow' => [['page' => '2147483648'], [], null, ['page']],
+            'per page overflow' => [['per_page' => 25], [], null, ['per_page']],
+            'native overflow' => [['page' => '9223372036854775808'], [], null, ['page']],
+            'field error order' => [['per_page' => 25, 'page' => 0], ['city' => 'Hue', 'keyword' => 'stay'], null, ['page', 'per_page', 'city', 'keyword']],
+        ];
+    }
+
+    #[DataProvider('paginationInputs')]
+    public function test_raw_pagination_contract_and_error_order_without_queries(array $input, array $query, ?array $expected, array $fields): void
+    {
+        $messages = [
+            'page' => 'Trang phải là số nguyên từ 1 đến 2147483647.',
+            'per_page' => 'Số cơ sở mỗi trang phải là số nguyên từ 1 đến 24.',
+        ];
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        try {
+            try {
+                $dto = app(CatalogValidator::class)->validatePublicPropertyList($input, $query);
+                $this->assertSame($expected, [$dto->page, $dto->perPage]);
+            } catch (ValidationException $exception) {
+                $this->assertNull($expected);
+                $this->assertSame($fields, array_keys($exception->errors()));
+                foreach ($fields as $field) {
+                    $this->assertSame([$messages[$field] ?? 'Danh sách cơ sở chỉ hỗ trợ page và per_page; chưa lọc phòng trống theo ngày.'], $exception->errors()[$field]);
+                }
+            }
+            $this->assertSame([], DB::getQueryLog());
+        } finally {
+            DB::disableQueryLog();
+            DB::flushQueryLog();
+        }
+    }
+
+    public function test_list_keeps_json_body_precedence_and_duplicate_query_parsing(): void
+    {
+        $this->json('GET', '/api/public/properties?page=0', ['page' => true, 'per_page' => 2.0])
+            ->assertOk()->assertJsonPath('meta.current_page', 1)->assertJsonPath('meta.per_page', 2);
+        $this->getJson('/api/public/properties?page=0&page=2&per_page=1')
+            ->assertOk()->assertJsonPath('meta.current_page', 2);
+        $this->getJson('/api/public/properties?page=2&page=0')->assertUnprocessable()->assertJsonValidationErrors('page');
+    }
+
+    public function test_public_list_validates_raw_values_through_symfony_with_an_explicit_group(): void
+    {
+        $engine = app(ValidatorInterface::class);
+        $validator = $this->createMock(ValidatorInterface::class);
+        $validator->expects($this->once())->method('validate')->willReturnCallback(
+            function (object $input, $constraints, $groups) use ($engine) {
+                $this->assertInstanceOf(PublicPropertyListInputRequest::class, $input);
+                $this->assertTrue($input->page);
+                $this->assertSame(2.0, $input->per_page);
+                $this->assertNull($constraints);
+                $this->assertSame(['catalog-public-list'], $groups);
+
+                return $engine->validate($input, $constraints, $groups);
+            },
+        );
+        $this->app->instance(ValidatorInterface::class, $validator);
+
+        $dto = app(CatalogValidator::class)->validatePublicPropertyList(['page' => true, 'per_page' => 2.0], []);
+        $this->assertSame([1, 2], [$dto->page, $dto->perPage]);
     }
 
     public function test_container_maps_a_loaded_public_property_through_symfony_without_queries(): void

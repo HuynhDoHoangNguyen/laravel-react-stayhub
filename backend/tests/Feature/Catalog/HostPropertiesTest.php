@@ -7,6 +7,7 @@ use App\DTOs\Catalog\Requests\HostPropertyDetailQuery;
 use App\DTOs\Catalog\Requests\CreateHostPropertyRequest;
 use App\DTOs\Catalog\Requests\UpdateHostPropertyRequest;
 use App\DTOs\Catalog\Requests\ChangeHostPropertyStatusRequest;
+use App\Exceptions\GlobalExceptionHandler;
 use App\Enums\PropertyStatus;
 use App\DTOs\Catalog\Responses\HostPropertyDetailResponse;
 use App\Mappers\Catalog\CatalogMapper;
@@ -19,7 +20,9 @@ use App\Repositories\Catalog\CatalogRepository;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Foundation\Testing\TestCase;
-use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use App\Exceptions\AppException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -111,19 +114,61 @@ class HostPropertiesTest extends TestCase
         try {
             $this->app->make(HostPropertyQueryService::class)->listForHost($actor);
             $this->fail('Expected role rejection.');
-        } catch (HttpResponseException $exception) {
-            $this->assertSame(403, $exception->getResponse()->getStatusCode());
+        } catch (AppException $exception) {
+            $this->assertSame(403, $exception->status);
             $this->assertSame([], DB::getQueryLog());
         } finally {
             DB::disableQueryLog();
         }
-        $this->expectException(HttpResponseException::class);
+        $this->expectException(AppException::class);
         $this->app->make(HostPropertyQueryService::class)->detailForHost($actor, new HostPropertyDetailQuery(1));
     }
 
     public static function inactiveStatuses(): array
     {
         return [['BLOCKED', 'ACCOUNT_BLOCKED'], ['INACTIVE', 'ACCOUNT_INACTIVE']];
+    }
+
+    public function test_catalog_role_denial_keeps_the_real_login_session(): void
+    {
+        config(['sanctum.stateful' => ['localhost:5173']]);
+        $customer = $this->actor('CUSTOMER');
+        $cookie = null;
+        $browser = function (string $method, string $uri, array $data = []) use (&$cookie) {
+            Auth::forgetGuards();
+            Auth::shouldUse('web');
+            $this->withCredentials();
+            if ($cookie !== null) {
+                $this->withCookie(config('session.cookie'), $cookie);
+            }
+            $response = $this->json($method, $uri, $data, [
+                'Origin' => 'http://localhost:5173', 'Referer' => 'http://localhost:5173/',
+            ]);
+            if ($session = $response->getCookie(config('session.cookie'))) {
+                $cookie = $session->getValue();
+            }
+
+            return $response;
+        };
+
+        $browser('POST', '/login', ['email' => $customer->email, 'password' => 'password'])->assertOk();
+        $this->assertNotNull($cookie);
+        $browser('GET', '/api/host/properties')->assertForbidden()
+            ->assertExactJson(['message' => 'Bạn không có quyền truy cập.']);
+        $browser('GET', '/api/me')->assertOk()->assertJsonPath('user.id', $customer->id);
+    }
+
+    public function test_property_status_conflict_keeps_json_for_html_requests(): void
+    {
+        $host = $this->actor();
+        $property = $this->ownedProperty($host, 'BLOCKED');
+
+        $this->actingAs($host)->withHeader('Accept', 'text/html')
+            ->patch('/api/host/properties/'.$property->id.'/status', ['status' => 'ACTIVE', 'expected_status' => 'BLOCKED'])
+            ->assertConflict()->assertHeader('Content-Type', 'application/json')->assertExactJson([
+                'message' => 'Host không thể thay đổi trạng thái cơ sở đang chờ duyệt hoặc đã bị khóa.',
+            ]);
+        $this->assertSame(PropertyStatus::BLOCKED, $property->fresh()->status);
     }
 
     #[DataProvider('inactiveStatuses')]
@@ -484,8 +529,8 @@ class HostPropertiesTest extends TestCase
         try {
             $this->app->make(HostPropertyService::class)->update($actor, 1, $this->updateCommand());
             $this->fail('Expected role denial.');
-        } catch (HttpResponseException $exception) {
-            $this->assertSame(403, $exception->getResponse()->getStatusCode());
+        } catch (AppException $exception) {
+            $this->assertSame(403, $exception->status);
             $this->assertSame([], DB::getQueryLog());
         } finally {
             DB::disableQueryLog();
@@ -663,14 +708,23 @@ class HostPropertiesTest extends TestCase
             try {
                 $this->app->make(HostPropertyService::class)->changeStatus($actor, $property->id, $command);
                 $this->fail('Expected role denial.');
-            } catch (HttpResponseException $exception) {
-                $this->assertSame(403, $exception->getResponse()->getStatusCode());
+            } catch (AppException $exception) {
+                $this->assertSame(403, $exception->status);
                 $this->assertSame([], DB::getQueryLog());
             } finally { DB::disableQueryLog(); }
         }
-        $this->expectException(HttpResponseException::class);
-        $this->app->make(HostPropertyService::class)->changeStatus($property->host, $property->id,
-            new ChangeHostPropertyStatusRequest(PropertyStatus::BLOCKED, PropertyStatus::ACTIVE));
+        try {
+            $this->app->make(HostPropertyService::class)->changeStatus($property->host, $property->id,
+                new ChangeHostPropertyStatusRequest(PropertyStatus::BLOCKED, PropertyStatus::ACTIVE));
+            $this->fail('Expected an invalid property status target.');
+        } catch (AppException $exception) {
+            $this->assertSame('CATALOG_PROPERTY_STATUS_INVALID', $exception->errorCode);
+            $this->assertSame(422, $exception->status);
+            $response = app(GlobalExceptionHandler::class)->render($exception, Request::create('/api/host/properties/'.$property->id.'/status', 'PATCH'));
+            $this->assertNotNull($response);
+            $this->assertSame(422, $response->getStatusCode());
+            $this->assertSame(['message' => 'Trạng thái đích phải là ACTIVE hoặc INACTIVE.'], $response->getData(true));
+        }
     }
 
     public function test_status_change_updates_public_visibility_and_preserves_host_list(): void

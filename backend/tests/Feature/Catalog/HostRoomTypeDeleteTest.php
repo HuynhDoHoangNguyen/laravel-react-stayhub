@@ -10,7 +10,7 @@ use App\Services\Catalog\HostRoomTypeService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Foundation\Testing\TestCase;
-use Illuminate\Http\Exceptions\HttpResponseException;
+use App\Exceptions\AppException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -158,8 +158,8 @@ final class HostRoomTypeDeleteTest extends TestCase
             try {
                 $this->app->make(HostRoomTypeService::class)->delete($actor, new DeleteHostRoomTypeRequest(1));
                 $this->fail('Expected role denial');
-            } catch (HttpResponseException $error) {
-                $this->assertSame(403, $error->getResponse()->getStatusCode());
+            } catch (AppException $error) {
+                $this->assertSame(403, $error->status);
             }
         }
         foreach (['BLOCKED', 'INACTIVE'] as $status) {
