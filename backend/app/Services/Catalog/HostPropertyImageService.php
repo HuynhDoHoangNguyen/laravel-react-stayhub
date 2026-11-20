@@ -10,7 +10,7 @@ use App\Mappers\Catalog\CatalogMapper;
 use App\Models\User;
 use App\Repositories\Catalog\CatalogRepository;
 use App\Validators\Catalog\CatalogValidator;
-use Illuminate\Http\Exceptions\HttpResponseException;
+use App\Exceptions\AppException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -44,7 +44,7 @@ class HostPropertyImageService
             $image = $images->firstWhere('id', $input->imageId);
             if ($image === null) return null;
             if (PublicImageUrl::from($image->image_path) === null) {
-                throw new HttpResponseException(response()->json(['message' => 'Ảnh không có URL công khai hợp lệ để làm ảnh đại diện.'], 409));
+                throw new AppException('CATALOG_IMAGE_URL_INVALID', 'Ảnh không có URL công khai hợp lệ để làm ảnh đại diện.', 409);
             }
             $changed = $this->repository->setPropertyPrimary($input->propertyId, $input->imageId);
 
@@ -126,7 +126,7 @@ class HostPropertyImageService
                 if ($property === null) return null;
                 $images = $this->repository->getPropertyImages($propertyId);
                 if ($images->count() >= 20) {
-                    throw new HttpResponseException(response()->json(['message' => 'Cơ sở đã đạt giới hạn 20 ảnh.'], 409));
+                    throw new AppException('CATALOG_IMAGE_LIMIT_REACHED', 'Cơ sở đã đạt giới hạn 20 ảnh.', 409);
                 }
                 $extension = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'][$input->image->getMimeType()];
                 $filename = Str::uuid().'.'.$extension;

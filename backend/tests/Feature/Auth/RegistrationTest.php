@@ -8,6 +8,7 @@ use App\Enums\UserStatus;
 use App\Models\User;
 use App\Repositories\Auth\AuthRepository;
 use App\Services\Auth\RegistrationService;
+use App\Validators\Auth\AuthValidator;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -18,6 +19,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Testing\TestResponse;
 use Illuminate\Validation\ValidationException;
+use PDO;
 use PDOException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
@@ -177,7 +179,9 @@ class RegistrationTest extends TestCase
     public function test_registration_passes_only_validated_fields_to_the_typed_service(): void
     {
         $workflow = app(RegistrationService::class);
-        $service = $this->createMock(RegistrationService::class);
+        $service = $this->getMockBuilder(RegistrationService::class)
+            ->setConstructorArgs([app(AuthRepository::class), app(AuthValidator::class)])
+            ->onlyMethods(['register'])->getMock();
         $service->expects($this->once())->method('register')
             ->willReturnCallback(function (RegisterRequest $command) use ($workflow): void {
                 $this->assertSame(['name', 'email', 'password'], array_keys(get_object_vars($command)));
@@ -216,6 +220,7 @@ class RegistrationTest extends TestCase
     {
         $realRepository = $this->app->make(AuthRepository::class);
         $repository = $this->createMock(AuthRepository::class);
+        $repository->expects($this->once())->method('emailExists')->with('uc1@example.test')->willReturn(false);
         $repository->expects($this->once())->method('createUser')
             ->willReturnCallback(function (array $attributes) use ($realRepository): User {
                 $this->assertSame(2, DB::transactionLevel());
@@ -422,6 +427,108 @@ class RegistrationTest extends TestCase
             ->assertUnprocessable()->assertJsonPath('errors.email.0', RegistrationService::DUPLICATE_EMAIL);
         $this->assertDatabaseCount('users', 1);
         $this->assertSame(UserRole::HOST, $existing->fresh()->role);
+    }
+
+    public function test_registration_validator_uses_supplied_email_facts_without_queries(): void
+    {
+        $existing = $this->fixture();
+        $input = $this->payload(['email' => $existing->email]);
+        $validator = app(AuthValidator::class);
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        try {
+            $this->assertSame($existing->email, $validator->registrationEmailForLookup($input));
+            $this->assertNull($validator->registrationEmailForLookup(['email' => ['invalid']]));
+            $this->assertSame($existing->email, $validator->validateRegistration($input, false)->email);
+            try {
+                $validator->validateRegistration($input, true);
+                $this->fail('Expected the supplied duplicate-email fact to fail validation.');
+            } catch (ValidationException $exception) {
+                $this->assertSame(['email' => [RegistrationService::DUPLICATE_EMAIL]], $exception->errors());
+            }
+            $this->assertSame([], DB::getQueryLog());
+        } finally {
+            DB::disableQueryLog();
+            DB::flushQueryLog();
+        }
+    }
+
+    public function test_duplicate_email_and_other_invalid_fields_keep_the_exact_error_order(): void
+    {
+        $existing = $this->fixture();
+        $response = $this->browser('POST', '/register', $this->payload([
+            'name' => null, 'email' => $existing->email,
+            'password' => 'short', 'password_confirmation' => null,
+        ]))->assertUnprocessable()->assertExactJson([
+            'message' => 'Vui lòng nhập họ và tên. (and 3 more errors)',
+            'errors' => [
+                'name' => ['Vui lòng nhập họ và tên.'],
+                'email' => [RegistrationService::DUPLICATE_EMAIL],
+                'password' => ['Mật khẩu phải có ít nhất 8 ký tự.'],
+                'password_confirmation' => ['Vui lòng xác nhận mật khẩu.'],
+            ],
+        ]);
+        $this->assertSame(['name', 'email', 'password', 'password_confirmation'], array_keys($response->json('errors')));
+        $this->assertDatabaseCount('users', 1);
+    }
+
+    public static function emailsIneligibleForLookup(): array
+    {
+        return [[null], [true], [123], [['invalid']], [''], ['invalid']];
+    }
+
+    #[DataProvider('emailsIneligibleForLookup')]
+    public function test_invalid_email_never_reaches_repository_lookup_or_insert(mixed $email): void
+    {
+        $repository = $this->createMock(AuthRepository::class);
+        $repository->expects($this->never())->method('emailExists');
+        $repository->expects($this->never())->method('createUser');
+        $this->app->instance(AuthRepository::class, $repository);
+
+        $this->browser('POST', '/register', $this->payload(['email' => $email]))
+            ->assertUnprocessable()->assertJsonValidationErrors('email');
+        $this->assertDatabaseCount('users', 0);
+    }
+
+    public function test_repository_email_lookup_uses_the_writer_and_database_comparison(): void
+    {
+        $default = DB::getDefaultConnection();
+        config(['database.connections.registration_lookup' => [
+            'driver' => 'sqlite', 'database' => ':memory:', 'prefix' => '',
+        ]]);
+        $connection = DB::connection('registration_lookup');
+        try {
+            $connection->statement('CREATE TABLE users (email TEXT NOT NULL)');
+            $connection->table('users')->insert(['email' => 'MixedCase@example.test']);
+            // The reader has no users table: a query on it must fail instead of passing silently.
+            $connection->setReadPdo(new PDO('sqlite::memory:'));
+            DB::setDefaultConnection('registration_lookup');
+
+            $repository = app(AuthRepository::class);
+            $this->assertTrue($repository->emailExists('MixedCase@example.test'));
+            $this->assertFalse($repository->emailExists('mixedcase@example.test'));
+            $this->assertFalse($repository->emailExists('missing@example.test'));
+        } finally {
+            DB::setDefaultConnection($default);
+            DB::purge('registration_lookup');
+        }
+    }
+
+    public function test_http_registration_handles_a_unique_conflict_after_a_stale_lookup(): void
+    {
+        $existing = $this->fixture();
+        $repository = $this->createPartialMock(AuthRepository::class, ['emailExists']);
+        $repository->expects($this->once())->method('emailExists')->with($existing->email)->willReturn(false);
+        $this->app->instance(AuthRepository::class, $repository);
+        Log::spy();
+
+        $this->browser('POST', '/register', $this->payload(['email' => $existing->email]))
+            ->assertUnprocessable()->assertExactJson([
+                'message' => RegistrationService::DUPLICATE_EMAIL,
+                'errors' => ['email' => [RegistrationService::DUPLICATE_EMAIL]],
+            ]);
+        $this->assertDatabaseCount('users', 1);
+        Log::shouldNotHaveReceived('info');
     }
 
     public static function maliciousRoles(): array

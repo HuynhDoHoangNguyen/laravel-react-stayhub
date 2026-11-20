@@ -2,6 +2,8 @@
 
 namespace App\Exceptions;
 
+use App\Exceptions\Auth\LoginThrottledException;
+use App\Services\Auth\AccountStatusException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
@@ -13,6 +15,20 @@ use Throwable;
 
 final class GlobalExceptionHandler
 {
+    private const CATALOG_ERROR_STATUSES = [
+        'CATALOG_HOST_FORBIDDEN' => 403,
+        'CATALOG_PROPERTY_STATUS_INVALID' => 422,
+        'CATALOG_PROPERTY_STATUS_STALE' => 409,
+        'CATALOG_PROPERTY_STATUS_CONFLICT' => 409,
+        'CATALOG_ROOM_BOOKING_CONFLICT' => 409,
+        'CATALOG_ROOM_MAINTENANCE_CONFLICT' => 409,
+        'CATALOG_ROOM_NUMBER_CONFLICT' => 409,
+        'CATALOG_ROOM_TYPE_IN_USE' => 409,
+        'CATALOG_ROOM_TYPE_NAME_CONFLICT' => 409,
+        'CATALOG_IMAGE_URL_INVALID' => 409,
+        'CATALOG_IMAGE_LIMIT_REACHED' => 409,
+    ];
+
     private const ROUTES = [
         'admin.dashboard.show',
         'admin.invoices.index',
@@ -26,6 +42,25 @@ final class GlobalExceptionHandler
 
     public function render(Throwable $exception, Request $request): ?JsonResponse
     {
+        if ($exception instanceof LoginThrottledException) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+                'retry_after' => $exception->retryAfter,
+            ], 429, ['Retry-After' => (string) $exception->retryAfter]);
+        }
+
+        if ($exception instanceof AccountStatusException) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+                'code' => $exception->accountCode,
+            ], 403);
+        }
+
+        if ($exception instanceof AppException
+            && (self::CATALOG_ERROR_STATUSES[$exception->errorCode] ?? null) === $exception->status) {
+            return response()->json(['message' => $exception->getMessage()], $exception->status);
+        }
+
         if (!$request->routeIs(...self::ROUTES)) {
             return null;
         }

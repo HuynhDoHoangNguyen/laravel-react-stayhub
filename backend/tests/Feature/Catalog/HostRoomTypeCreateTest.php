@@ -9,7 +9,7 @@ use App\Services\Catalog\HostRoomTypeService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Foundation\Testing\TestCase;
-use Illuminate\Http\Exceptions\HttpResponseException;
+use App\Exceptions\AppException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -172,8 +172,8 @@ final class HostRoomTypeCreateTest extends TestCase
             try {
                 $this->app->make(HostRoomTypeService::class)->create($actor, new CreateHostRoomTypeRequest(1, 'Suite', null));
                 $this->fail('Expected denial.');
-            } catch (HttpResponseException $error) {
-                $this->assertSame(403, $error->getResponse()->getStatusCode());
+            } catch (AppException $error) {
+                $this->assertSame(403, $error->status);
             }
         }
         foreach (['BLOCKED', 'INACTIVE'] as $status) {

@@ -14,7 +14,7 @@ use App\Services\Catalog\HostPropertyImageService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Foundation\Testing\TestCase;
-use Illuminate\Http\Exceptions\HttpResponseException;
+use App\Exceptions\AppException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -124,7 +124,7 @@ class HostPropertyImagesTest extends TestCase
             try {
                 $this->app->make(HostPropertyImageService::class)->upload($actor, 1, new UploadHostPropertyImageRequest($this->image()));
                 $this->fail('Expected role denial.');
-            } catch (HttpResponseException $error) { $this->assertSame(403, $error->getResponse()->getStatusCode()); }
+            } catch (AppException $error) { $this->assertSame(403, $error->status); }
         }
         Storage::disk('public')->assertDirectoryEmpty('properties');
     }
@@ -357,7 +357,7 @@ class HostPropertyImagesTest extends TestCase
             $this->deleteJson($this->endpoint('01').'/abc')->assertForbidden();
             foreach(['makePrimary','delete'] as $operation){
                 try{$this->app->make(HostPropertyImageService::class)->$operation($actor,new HostPropertyImageRequest($property->id,$image->id));$this->fail('Expected denial.');}
-                catch(HttpResponseException $e){$this->assertSame(403,$e->getResponse()->getStatusCode());}
+                catch(AppException $e){$this->assertSame(403,$e->status);}
             }
         }
         foreach(['BLOCKED'=>'ACCOUNT_BLOCKED','INACTIVE'=>'ACCOUNT_INACTIVE'] as $status=>$code){

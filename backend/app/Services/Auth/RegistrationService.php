@@ -6,6 +6,7 @@ use App\DTOs\Auth\Requests\RegisterRequest;
 use App\Enums\UserRole;
 use App\Enums\UserStatus;
 use App\Repositories\Auth\AuthRepository;
+use App\Validators\Auth\AuthValidator;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -16,7 +17,18 @@ class RegistrationService
 {
     public const DUPLICATE_EMAIL = 'Địa chỉ email này đã được sử dụng.';
 
-    public function __construct(private readonly AuthRepository $repository) {}
+    public function __construct(
+        private readonly AuthRepository $repository,
+        private readonly AuthValidator $validator,
+    ) {}
+
+    public function registerFromInput(#[SensitiveParameter] array $input): void
+    {
+        $email = $this->validator->registrationEmailForLookup($input);
+        $emailExists = $email !== null && $this->repository->emailExists($email);
+
+        $this->register($this->validator->validateRegistration($input, $emailExists));
+    }
 
     public function register(#[SensitiveParameter] RegisterRequest $request): void
     {

@@ -5,7 +5,9 @@ namespace App\Validators\Auth;
 use App\DTOs\Auth\Requests\LoginRequest;
 use App\DTOs\Auth\Requests\RegisterRequest;
 use App\Enums\UserRole;
+use App\Services\Auth\RegistrationService;
 use App\Validators\Auth\CredentialRules;
+use Closure;
 use Illuminate\Contracts\Validation\Factory;
 use Illuminate\Validation\Rule;
 use SensitiveParameter;
@@ -39,11 +41,22 @@ final class AuthValidator
         );
     }
 
-    public function validateRegistration(#[SensitiveParameter] array $input): RegisterRequest
+    public function registrationEmailForLookup(#[SensitiveParameter] array $input): ?string
+    {
+        $validator = $this->validation->make($input, ['email' => CredentialRules::email()], CredentialRules::messages());
+
+        return $validator->fails() ? null : $validator->validated()['email'];
+    }
+
+    public function validateRegistration(#[SensitiveParameter] array $input, bool $emailExists): RegisterRequest
     {
         $validated = $this->validation->make($input, [
             'name' => ['bail', 'required', 'string', 'max:255'],
-            'email' => [...CredentialRules::email(), 'unique:users,email'],
+            'email' => [...CredentialRules::email(), static function (string $attribute, mixed $value, Closure $fail) use ($emailExists): void {
+                if ($emailExists) {
+                    $fail(RegistrationService::DUPLICATE_EMAIL);
+                }
+            }],
             'password' => CredentialRules::password(),
             'password_confirmation' => ['bail', 'required', 'string'],
         ], CredentialRules::messages())->validate();
