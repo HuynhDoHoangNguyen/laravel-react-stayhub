@@ -42,7 +42,7 @@ class AuthController extends Controller
             }
         }
 
-        $registrationService->register($this->validator->validateRegistration($request->all()));
+        $registrationService->registerFromInput($request->all());
 
         return response()->json(['message' => 'Đăng ký thành công. Vui lòng đăng nhập để tiếp tục.'], 201);
     }

@@ -11,7 +11,7 @@ use App\Services\Catalog\HostRoomService;
 use App\Validators\Catalog\CatalogValidator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\TestCase;
-use Illuminate\Http\Exceptions\HttpResponseException;
+use App\Exceptions\AppException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -241,8 +241,8 @@ final class HostRoomCreateTest extends TestCase
             $this->app->make(HostRoomService::class)->create($this->actor('CUSTOMER'),
                 new CreateHostRoomRequest(1, 1, '101', 'Fixture', null, 2, '1.00'));
             $this->fail('Expected role denial.');
-        } catch (HttpResponseException $error) {
-            $this->assertSame(403, $error->getResponse()->getStatusCode());
+        } catch (AppException $error) {
+            $this->assertSame(403, $error->status);
         }
     }
 

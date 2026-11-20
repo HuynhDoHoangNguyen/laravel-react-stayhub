@@ -11,7 +11,7 @@ use App\Models\User;
 use App\Services\Catalog\HostRoomTypeQueryService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\TestCase;
-use Illuminate\Http\Exceptions\HttpResponseException;
+use App\Exceptions\AppException;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
@@ -148,8 +148,8 @@ final class HostRoomTypeListTest extends TestCase
         try {
             $this->app->make(HostRoomTypeQueryService::class)->listing($actor, new HostRoomTypeListQuery(1));
             $this->fail('Expected role denial.');
-        } catch (HttpResponseException $error) {
-            $this->assertSame(403, $error->getResponse()->getStatusCode());
+        } catch (AppException $error) {
+            $this->assertSame(403, $error->status);
         }
     }
 

@@ -6,15 +6,21 @@ use App\DTOs\Auth\Requests\LoginRequest;
 use App\DTOs\Auth\Responses\AuthUserResponse;
 use App\Enums\UserRole;
 use App\Enums\UserStatus;
+use App\Exceptions\Auth\LoginThrottledException;
+use App\Http\Middleware\EnsureAccountIsActive;
 use App\Models\User;
 use App\Mappers\Auth\AuthUserMapper;
 use App\Services\Auth\AuthService;
+use Illuminate\Auth\Middleware\Authenticate;
+use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Contracts\Session\Session;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\TestCase;
+use Illuminate\Routing\Route;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
+use PHPUnit\Framework\AssertionFailedError;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Symfony\Component\ObjectMapper\ObjectMapperInterface;
@@ -320,9 +326,78 @@ class AuthenticationTest extends TestCase
             $this->login($user, ['password' => 'wrong'])->assertUnprocessable();
         }
         $this->login($user)->assertStatus(429)->assertHeader('Retry-After', '60')
-            ->assertJsonPath('retry_after', 60);
-        $this->travel(61)->seconds();
+            ->assertExactJson([
+                'message' => 'Bạn đã thử đăng nhập quá nhiều lần. Vui lòng thử lại sau.',
+                'retry_after' => 60,
+            ]);
+        $this->travel(59)->seconds();
+        $this->login($user)->assertStatus(429)->assertHeader('Retry-After', '1')
+            ->assertJsonPath('retry_after', 1);
+        $this->travel(2)->seconds();
         $this->login($user)->assertOk();
+    }
+
+    public function test_rate_limited_service_throws_retry_facts_without_a_reportable_http_response(): void
+    {
+        $this->freezeTime();
+        $user = $this->user();
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $this->login($user, ['password' => 'wrong'])->assertUnprocessable();
+        }
+
+        try {
+            app(AuthService::class)->login(new LoginRequest($user->email, self::PASSWORD, null), '127.0.0.1', $this->app['session']->driver());
+            $this->fail('Expected the login throttle exception.');
+        } catch (LoginThrottledException $exception) {
+            $this->assertSame(60, $exception->retryAfter);
+            $this->assertFalse(app(ExceptionHandler::class)->shouldReport($exception));
+        }
+    }
+
+    public function test_rate_limiting_keeps_an_existing_authenticated_session(): void
+    {
+        $active = $this->user();
+        $limited = $this->user();
+        $this->login($active)->assertOk();
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $this->login($limited, ['password' => 'wrong'])->assertUnprocessable();
+        }
+
+        $this->login($limited)->assertStatus(429);
+        $this->browser('GET', '/api/me')->assertOk()->assertJsonPath('user.id', $active->id);
+    }
+
+    public function test_login_throttle_keeps_its_json_contract_for_html_requests(): void
+    {
+        $this->freezeTime();
+        $user = $this->user();
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $this->login($user, ['password' => 'wrong'])->assertUnprocessable();
+        }
+
+        $this->withHeader('Accept', 'text/html')->post('/login', [
+            'email' => $user->email, 'password' => self::PASSWORD,
+        ])->assertStatus(429)->assertHeader('Content-Type', 'application/json')->assertHeader('Retry-After', '60')
+            ->assertExactJson([
+                'message' => 'Bạn đã thử đăng nhập quá nhiều lần. Vui lòng thử lại sau.',
+                'retry_after' => 60,
+            ]);
+    }
+
+    #[DataProvider('rejectedStatuses')]
+    public function test_account_denial_keeps_its_json_contract_for_html_requests(string $status, string $code): void
+    {
+        $user = $this->user(status: UserStatus::from($status));
+        $messages = [
+            'BLOCKED' => 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.',
+            'INACTIVE' => 'Tài khoản của bạn chưa được kích hoạt. Vui lòng liên hệ quản trị viên.',
+        ];
+
+        $this->withHeader('Accept', 'text/html')->post('/login', [
+            'email' => $user->email, 'password' => self::PASSWORD,
+        ])->assertForbidden()->assertHeader('Content-Type', 'application/json')
+            ->assertExactJson(['message' => $messages[$status], 'code' => $code]);
+        $this->browser('GET', '/api/me')->assertUnauthorized();
     }
 
     public function test_successful_login_resets_the_failed_attempt_counter(): void
@@ -509,17 +584,201 @@ class AuthenticationTest extends TestCase
 
     public function test_every_existing_protected_route_checks_account_status_after_auth(): void
     {
-        $protected = 0;
-        foreach ($this->app['router']->getRoutes() as $route) {
-            $middleware = $route->gatherMiddleware();
-            if (in_array('auth:sanctum', $middleware, true)) {
-                $protected++;
-                $this->assertContains('account.active', $middleware, $route->uri());
-                $this->assertLessThan(array_search('account.active', $middleware, true), array_search('auth:sanctum', $middleware, true));
-            } elseif (in_array($route->uri(), ['login', 'logout', 'api/test', 'api/public/properties/{property}/reviews'], true)) {
-                $this->assertNotContains('account.active', $middleware);
+        $router = $this->app['router'];
+        foreach ($router->getRoutes() as $route) {
+            // Identify intended protection before exclusions so removing auth cannot hide a route.
+            $declared = $router->resolveMiddleware($route->gatherMiddleware());
+            if (in_array(Authenticate::class.':sanctum', $declared, true)) {
+                $this->assertProtectedRouteMiddleware($route);
             }
         }
-        $this->assertSame(32, $protected);
+    }
+
+    public function test_known_protected_routes_exist_and_keep_auth_before_account_status(): void
+    {
+        $expected = [
+            ['GET', 'api/me'],
+            ['GET', 'api/profile'],
+            ['PATCH', 'api/profile'],
+            ['PATCH', 'api/profile/password'],
+            ['GET', 'api/profile/avatar'],
+            ['POST', 'api/profile/avatar'],
+            ['GET', 'api/admin/invoices/filter-options'],
+            ['GET', 'api/admin/invoices'],
+            ['GET', 'api/host/invoices'],
+            ['POST', 'api/host/bookings/{booking}/invoice'],
+            ['GET', 'api/host/invoices/{invoice}'],
+            ['PATCH', 'api/host/invoices/{invoice}/payment-status'],
+            ['GET', 'api/customer/invoices'],
+            ['GET', 'api/customer/invoices/{invoice}'],
+            ['POST', 'api/customer/bookings/{booking}/review'],
+            ['GET', 'api/customer/reviews'],
+            ['GET', 'api/host/reviews'],
+            ['GET', 'api/host/properties'],
+            ['POST', 'api/host/properties'],
+            ['PUT', 'api/host/properties/{property}'],
+            ['PATCH', 'api/host/properties/{property}/status'],
+            ['GET', 'api/host/properties/{property}'],
+            ['GET', 'api/host/properties/{property}/images'],
+            ['POST', 'api/host/properties/{property}/images'],
+            ['PATCH', 'api/host/properties/{property}/images/{image}/primary'],
+            ['DELETE', 'api/host/properties/{property}/images/{image}'],
+            ['GET', 'api/host/properties/{property}/room-types'],
+            ['GET', 'api/host/properties/{property}/rooms'],
+            ['POST', 'api/host/properties/{property}/rooms'],
+            ['PATCH', 'api/host/rooms/{room}/status'],
+            ['PUT', 'api/host/rooms/{room}'],
+            ['GET', 'api/host/rooms/{room}'],
+            ['POST', 'api/host/properties/{property}/room-types'],
+            ['PUT', 'api/host/room-types/{roomType}'],
+            ['DELETE', 'api/host/room-types/{roomType}'],
+        ];
+
+        foreach ($expected as [$method, $uri]) {
+            $label = $method.' '.$uri;
+            $route = $this->app['router']->getRoutes()->get($method)[$uri] ?? null;
+            $this->assertNotNull($route, $label);
+            $this->assertProtectedRouteMiddleware($route);
+        }
+    }
+
+    public function test_known_public_routes_exist_without_auth_or_account_status_middleware(): void
+    {
+        $expected = [
+            ['POST', 'login'],
+            ['POST', 'register'],
+            ['POST', 'logout'],
+            ['GET', 'api/test'],
+            ['GET', 'api/public/properties'],
+            ['GET', 'api/public/properties/{property}'],
+            ['GET', 'api/public/properties/{property}/reviews'],
+            ['GET', 'api/public/rooms'],
+            ['GET', 'api/public/rooms/filter-options'],
+        ];
+
+        foreach ($expected as [$method, $uri]) {
+            $label = $method.' '.$uri;
+            $route = $this->app['router']->getRoutes()->get($method)[$uri] ?? null;
+            $this->assertNotNull($route, $label);
+            $middleware = array_map(
+                static fn ($entry) => is_string($entry) ? explode(':', $entry, 2)[0] : $entry,
+                $this->app['router']->gatherRouteMiddleware($route),
+            );
+            $this->assertNotContains(Authenticate::class, $middleware, $label);
+            $this->assertNotContains(EnsureAccountIsActive::class, $middleware, $label);
+        }
+    }
+
+    private function assertProtectedRouteMiddleware(Route $route): void
+    {
+        $label = $route->methods()[0].' '.$route->uri();
+        $middleware = $this->app['router']->gatherRouteMiddleware($route);
+        $this->assertContains(Authenticate::class.':sanctum', $middleware, $label);
+        $this->assertContains(EnsureAccountIsActive::class, $middleware, $label);
+        $this->assertLessThan(
+            array_search(EnsureAccountIsActive::class, $middleware, true),
+            array_search(Authenticate::class.':sanctum', $middleware, true),
+            $label,
+        );
+    }
+
+    public static function routeProtectionRegressions(): array
+    {
+        $regressions = [
+            'excluded account alias' => [['account.active'], false],
+            'excluded auth alias' => [['auth:sanctum'], false],
+            'excluded both guards' => [['auth:sanctum', 'account.active'], false],
+            'excluded account class' => [[EnsureAccountIsActive::class], false],
+            'excluded auth class' => [[Authenticate::class.':sanctum'], false],
+            'reversed middleware priority' => [[], true],
+        ];
+        $cases = [];
+        foreach (['test_every_existing_protected_route_checks_account_status_after_auth',
+            'test_known_protected_routes_exist_and_keep_auth_before_account_status'] as $gate) {
+            foreach ($regressions as $name => [$excluded, $reversePriority]) {
+                $cases[$gate.' '.$name] = [$gate, $excluded, $reversePriority];
+            }
+        }
+
+        return $cases;
+    }
+
+    #[DataProvider('routeProtectionRegressions')]
+    public function test_route_gates_detect_excluded_guards_and_wrong_priority(string $gate, array $excluded, bool $reversePriority): void
+    {
+        $router = $this->app['router'];
+        $route = $router->getRoutes()->get('GET')['api/me'];
+        $action = $route->getAction();
+        $priority = $router->middlewarePriority;
+        try {
+            $route->withoutMiddleware($excluded);
+            if ($reversePriority) {
+                $router->middlewarePriority = [EnsureAccountIsActive::class, Authenticate::class];
+            }
+            $this->expectException(AssertionFailedError::class);
+            $this->expectExceptionMessage('GET api/me');
+            $this->$gate();
+        } finally {
+            $route->setAction($action);
+            $route->computedMiddleware = null;
+            $router->middlewarePriority = $priority;
+        }
+    }
+
+    public function test_route_gates_accept_resolved_groups_and_new_fully_qualified_routes(): void
+    {
+        $router = $this->app['router'];
+        $router->middlewareGroup('e1-protected', ['auth:sanctum', 'account.active']);
+        $route = $router->getRoutes()->get('GET')['api/me'];
+        $action = $route->getAction();
+        try {
+            $grouped = $action;
+            $grouped['middleware'] = ['api', 'e1-protected'];
+            $route->setAction($grouped);
+            $route->computedMiddleware = null;
+            $router->get('/_e1/fully-qualified', static fn () => null)
+                ->middleware([Authenticate::class.':sanctum', EnsureAccountIsActive::class]);
+
+            $this->test_every_existing_protected_route_checks_account_status_after_auth();
+            $this->test_known_protected_routes_exist_and_keep_auth_before_account_status();
+            $this->test_known_public_routes_exist_without_auth_or_account_status_middleware();
+        } finally {
+            $route->setAction($action);
+            $route->computedMiddleware = null;
+        }
+    }
+
+    public function test_dynamic_route_gate_detects_a_new_fully_qualified_route_without_account_guard(): void
+    {
+        $this->app['router']->get('/_e1/fully-qualified', static fn () => null)
+            ->middleware(Authenticate::class.':sanctum');
+
+        $this->expectException(AssertionFailedError::class);
+        $this->expectExceptionMessage('GET _e1/fully-qualified');
+        $this->test_every_existing_protected_route_checks_account_status_after_auth();
+    }
+
+    public static function unexpectedPublicGuards(): array
+    {
+        return [['auth:sanctum'], [Authenticate::class.':web'], [EnsureAccountIsActive::class]];
+    }
+
+    #[DataProvider('unexpectedPublicGuards')]
+    public function test_public_route_gate_detects_guards_inside_a_group(string $guard): void
+    {
+        $router = $this->app['router'];
+        $router->middlewareGroup('e1-public-guard', [$guard]);
+        $route = $router->getRoutes()->get('GET')['api/public/rooms'];
+        $action = $route->getAction();
+        try {
+            $route->middleware('e1-public-guard');
+            $route->computedMiddleware = null;
+            $this->expectException(AssertionFailedError::class);
+            $this->expectExceptionMessage('GET api/public/rooms');
+            $this->test_known_public_routes_exist_without_auth_or_account_status_middleware();
+        } finally {
+            $route->setAction($action);
+            $route->computedMiddleware = null;
+        }
     }
 }

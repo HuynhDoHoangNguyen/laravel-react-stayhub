@@ -25,18 +25,24 @@ use App\DTOs\Catalog\Requests\HostPropertyImageRequest;
 use App\Models\User;
 use App\DTOs\Catalog\Requests\PublicPropertyDetailQuery;
 use App\DTOs\Catalog\Requests\PublicPropertyListQuery;
+use App\DTOs\Catalog\Requests\PublicPropertyListInputRequest;
+use App\Validators\AttributeValidator;
 use Illuminate\Contracts\Validation\Factory;
 use Illuminate\Validation\Validator;
-use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Validation\ValidationException;
+use App\Exceptions\AppException;
 
 final class CatalogValidator
 {
-    public function __construct(private readonly Factory $validation) {}
+    public function __construct(
+        private readonly Factory $validation,
+        private readonly AttributeValidator $attributes,
+    ) {}
 
     public function authorizeHost(User $actor): void
     {
         if ($actor->role !== UserRole::HOST) {
-            throw new HttpResponseException(response()->json(['message' => 'Bạn không có quyền truy cập.'], 403));
+            throw new AppException('CATALOG_HOST_FORBIDDEN', 'Bạn không có quyền truy cập.', 403);
         }
     }
 
@@ -362,13 +368,13 @@ final class CatalogValidator
     public function validateHostPropertyTransition(PropertyStatus $current, ChangeHostPropertyStatusRequest $input): void
     {
         if (!in_array($input->status, [PropertyStatus::ACTIVE, PropertyStatus::INACTIVE], true)) {
-            throw new HttpResponseException(response()->json(['message' => 'Trạng thái đích phải là ACTIVE hoặc INACTIVE.'], 422));
+            throw new AppException('CATALOG_PROPERTY_STATUS_INVALID', 'Trạng thái đích phải là ACTIVE hoặc INACTIVE.', 422);
         }
         if ($current !== $input->expectedStatus) {
-            throw new HttpResponseException(response()->json(['message' => 'Trạng thái cơ sở đã thay đổi. Vui lòng tải lại chi tiết.'], 409));
+            throw new AppException('CATALOG_PROPERTY_STATUS_STALE', 'Trạng thái cơ sở đã thay đổi. Vui lòng tải lại chi tiết.', 409);
         }
         if (!in_array($current, [PropertyStatus::ACTIVE, PropertyStatus::INACTIVE], true)) {
-            throw new HttpResponseException(response()->json(['message' => 'Host không thể thay đổi trạng thái cơ sở đang chờ duyệt hoặc đã bị khóa.'], 409));
+            throw new AppException('CATALOG_PROPERTY_STATUS_CONFLICT', 'Host không thể thay đổi trạng thái cơ sở đang chờ duyệt hoặc đã bị khóa.', 409);
         }
     }
 
@@ -472,25 +478,18 @@ final class CatalogValidator
 
     public function validatePublicPropertyList(array $input, array $query): PublicPropertyListQuery
     {
-        $validator = $this->validation->make($input, [
-            'page' => ['bail', 'sometimes', 'required', 'integer', 'min:1', 'max:2147483647'],
-            'per_page' => ['bail', 'sometimes', 'required', 'integer', 'between:1,24'],
-        ], [
-            'page.*' => 'Trang phải là số nguyên từ 1 đến 2147483647.',
-            'per_page.*' => 'Số cơ sở mỗi trang phải là số nguyên từ 1 đến 24.',
-        ]);
-
-        $validator->after(static function (Validator $validator) use ($query): void {
-            foreach (array_diff(array_keys($query), ['page', 'per_page']) as $field) {
-                $validator->errors()->add($field, 'Danh sách cơ sở chỉ hỗ trợ page và per_page; chưa lọc phòng trống theo ngày.');
-            }
-        });
-
-        $validated = $validator->validate();
+        $raw = new PublicPropertyListInputRequest(...array_intersect_key($input, array_flip(['page', 'per_page'])));
+        $errors = $this->attributes->errors($raw, ['catalog-public-list']);
+        foreach (array_diff(array_keys($query), ['page', 'per_page']) as $field) {
+            $errors[$field] = ['Danh sách cơ sở chỉ hỗ trợ page và per_page; chưa lọc phòng trống theo ngày.'];
+        }
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
 
         return new PublicPropertyListQuery(
-            page: (int) ($validated['page'] ?? 1),
-            perPage: (int) ($validated['per_page'] ?? 12),
+            page: (int) $raw->page,
+            perPage: (int) $raw->per_page,
         );
     }
 

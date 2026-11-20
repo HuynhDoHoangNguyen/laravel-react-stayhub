@@ -12,7 +12,7 @@ use App\Services\Catalog\HostRoomService;
 use App\Validators\Catalog\CatalogValidator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\TestCase;
-use Illuminate\Http\Exceptions\HttpResponseException;
+use App\Exceptions\AppException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -241,8 +241,8 @@ final class HostRoomStatusTest extends TestCase
             $this->app->make(HostRoomService::class)->changeStatus(User::factory()->create(['role' => 'CUSTOMER']),
                 new ChangeHostRoomStatusRequest($room->id, RoomStatus::INACTIVE));
             $this->fail('Expected role denial');
-        } catch (HttpResponseException $e) {
-            $this->assertSame(403, $e->getResponse()->getStatusCode());
+        } catch (AppException $e) {
+            $this->assertSame(403, $e->status);
         }
     }
 

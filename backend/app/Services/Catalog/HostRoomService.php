@@ -11,7 +11,7 @@ use App\Mappers\Catalog\CatalogMapper;
 use App\Models\User;
 use App\Repositories\Catalog\CatalogRepository;
 use App\Validators\Catalog\CatalogValidator;
-use Illuminate\Http\Exceptions\HttpResponseException;
+use App\Exceptions\AppException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -41,16 +41,12 @@ final class HostRoomService
                 $day = now(config('app.timezone'))->toDateString();
                 if (in_array($input->status, [RoomStatus::INACTIVE, RoomStatus::MAINTENANCE], true)
                     && $this->validator->hostRoomHasBlockingBookings($this->repository->lockRoomBookingFacts($room), $day)) {
-                    throw new HttpResponseException(response()->json([
-                        'message' => 'Phòng còn booking đang giữ chỗ hoặc đang lưu trú.',
-                    ], 409));
+                    throw new AppException('CATALOG_ROOM_BOOKING_CONFLICT', 'Phòng còn booking đang giữ chỗ hoặc đang lưu trú.', 409);
                 }
                 if (($input->status === RoomStatus::ACTIVE
                     || ($room->status === RoomStatus::MAINTENANCE && $input->status === RoomStatus::INACTIVE))
                     && $this->validator->hostRoomHasBlockingMaintenances($this->repository->lockRoomMaintenanceFacts($room), $day)) {
-                    throw new HttpResponseException(response()->json([
-                        'message' => 'Phòng còn lịch bảo trì đang có hiệu lực hoặc chưa hoàn tất.',
-                    ], 409));
+                    throw new AppException('CATALOG_ROOM_MAINTENANCE_CONFLICT', 'Phòng còn lịch bảo trì đang có hiệu lực hoặc chưa hoàn tất.', 409);
                 }
                 $this->repository->changeHostRoomStatus($room, $input->status);
             }
@@ -85,7 +81,7 @@ final class HostRoomService
                 ]);
             }
             if ($this->repository->hostRoomNumberExists($property, $input->roomNumber, $room->getKey())) {
-                throw new HttpResponseException(response()->json(['message' => 'Cơ sở đã có phòng cùng số.'], 409));
+                throw new AppException('CATALOG_ROOM_NUMBER_CONFLICT', 'Cơ sở đã có phòng cùng số.', 409);
             }
 
             $changed = $this->repository->updateHostRoom($room, $type, $input);
@@ -116,7 +112,7 @@ final class HostRoomService
                 ]);
             }
             if ($this->repository->hostRoomNumberExists($property, $input->roomNumber)) {
-                throw new HttpResponseException(response()->json(['message' => 'Cơ sở đã có phòng cùng số.'], 409));
+                throw new AppException('CATALOG_ROOM_NUMBER_CONFLICT', 'Cơ sở đã có phòng cùng số.', 409);
             }
 
             $room = $this->repository->createHostRoom($property, $type, $input);
