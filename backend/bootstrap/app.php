@@ -14,7 +14,11 @@ $app = Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->statefulApi();
-        $middleware->alias(['account.active' => EnsureAccountIsActive::class]);
+        // TEMP-M2-WIRING
+        $middleware->alias([
+            'role' => \App\Http\Middleware\CheckRole::class,
+            'account.active' => EnsureAccountIsActive::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (\Throwable $exception, \Illuminate\Http\Request $request) {

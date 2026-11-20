@@ -25,6 +25,11 @@ import CustomerInvoiceDetailPage from '../pages/customer/CustomerInvoiceDetailPa
 import CustomerReviewsPage from '../pages/customer/CustomerReviewsPage';
 
 import HostDashboardPage from '../pages/host/HostDashboardPage';
+import HostBookingsPage from '../pages/host/HostBookingsPage';
+import HostBookingDetailPage from '../pages/host/HostBookingDetailPage';
+import HostBookingServicesPage from '../pages/host/HostBookingServicesPage';
+import HostServiceListPage from '../pages/host/HostServiceListPage';
+import HostServicesEntryPage from '../pages/host/HostServicesEntryPage';
 import HostPropertiesPage from '../pages/host/HostPropertiesPage';
 import HostPropertyDetailPage from '../pages/host/HostPropertyDetailPage';
 import HostPropertyCreatePage from '../pages/host/HostPropertyCreatePage';
@@ -75,6 +80,11 @@ function AppRouter() {
             <Route element={<ProtectedRoute allowedRoles={['HOST']} />}>
                 <Route path="/host" element={<HostLayout />}>
                     <Route index element={<HostDashboardPage />} />
+                    <Route path="bookings" element={<HostBookingsPage />} />
+                    <Route path="bookings/:bookingId" element={<HostBookingDetailPage />} />
+                    <Route path="bookings/:bookingId/services" element={<HostBookingServicesPage />} />
+                    <Route path="services" element={<HostServicesEntryPage />} />
+                    <Route path="properties/:propertyId/services" element={<HostServiceListPage />} />
                     <Route path="profile" element={<ProfilePage />} />
                     <Route path="properties" element={<HostPropertiesPage />} />
                     <Route path="properties/create" element={<HostPropertyCreatePage />} />

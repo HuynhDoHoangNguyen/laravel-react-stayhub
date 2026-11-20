@@ -16,5 +16,5 @@ export const PROPERTY_TYPES = [
 export const SORT_OPTIONS = [
   { value: "PRICE_ASC", label: "Giá: Thấp đến Cao" },
   { value: "PRICE_DESC", label: "Giá: Cao đến Thấp" },
-  { value: "RATING_DESC", label: "Đánh giá cao nhất" },
+  { value: "NEWEST", label: "Phòng mới nhất" },
 ];
