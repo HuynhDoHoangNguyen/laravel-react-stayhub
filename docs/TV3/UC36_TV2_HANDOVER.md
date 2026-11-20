@@ -1,8 +1,9 @@
 # UC36 — Nghiệm thu TV3 và dependency TV2
 
-Cập nhật: 2026-11-17 (Asia/Bangkok), theo [phân công TV3](../stayhub-team-work-assignment.md). Baseline `feature/tv3-uc36-payment-status`, HEAD `6bd6838` cộng working tree đã nghiệm thu; không dùng HEAD riêng thay source.
-**UC36 hoàn thành và được chốt nghiệm thu trong phạm vi TV3 theo quyết định owner trên chat.** Tích hợp Booking production TV2 được hoãn riêng: TV2 còn phát triển và chưa đưa nhánh về kiến trúc mới; hiện không lấy/merge code nhánh đó.
+Cập nhật hồ sơ: 2026-11-20; runtime lịch sử 2026-11-17 (Asia/Bangkok), theo [phân công TV3](../stayhub-team-work-assignment.md). Baseline `feature/tv3-uc36-payment-status`, HEAD `6bd6838` cộng working tree đã nghiệm thu; không dùng HEAD riêng thay source.
+**UC36 hoàn thành và được chốt nghiệm thu trong phạm vi TV3 theo quyết định owner trên chat.** Tích hợp Booking production TV2 được hoãn riêng: chưa có evidence integration theo T01–T03; không nhận PR TV2 trong task này. Nhận định source bên dưới chỉ đúng pinned SHA lịch sử.
 Hồ sơ này gộp QA và khảo sát tích hợp; [workflow](INVOICE_PAYMENT_WORKFLOW.md) giữ contract, [checklist](TV3_CHECKLIST.md) giữ tiến độ. Không mở rộng nghiệm thu sang các UC Invoice khác.
+
 
 ## 1. Phạm vi nghiệm thu
 
@@ -130,38 +131,11 @@ UC36-QA02A-F01/F02 hiện **CLOSED / FIX-01 ACCEPTED**. Các PARTIAL cũ giữ n
 - No-op giữ paid_at/updated_at/items/log; success chỉ sau outer commit. Fixtures so money/header/items/Booking trước/sau, không dùng số tiền client hoặc catalog mới.
 - Mỗi lượt kiểm target/effective config/UUID và ownership trước write; scoped user không đọc được stayhub,27demo tables/counts/hashes/payment columns giữ nguyên. Chỉ drop schema/user owned khi0connection;fixture processes/browser đã dọn và password metadata loại bỏ. Datadir XAMPP/backup/Docker volume/env được giữ. Đây là bằng chứng bảo toàn/cleanup của lượt gốc, không phải kiểm SQL mới ở lượt tài liệu.
 
-## 5. Dependency TV2 đang hoãn
+## 5. TV2 — PREPARED / NOT SENT / ACK PENDING
 
-Tất cả các mục dưới **OPEN / chưa xác nhận bởi TV2**. Owner ở bảng là phân công đề nghị phối hợp, không phải xác nhận TV2 đã nhận việc.
+UC36-INT-PREP-01 chỉ khảo sát source TECHNICAL PASS, acceptance riêng PENDING; PREP-02/INT-01 chưa thực hiện. Khảo sát2026-11-17: candidate `feature/member-2-booking` SHA `dca536024bfe1c6915818b5088db83721dc78c53`, merge-base `951f62efc70127a3719c840ae529f8d311842a49`, TV3/dev `6bd6838a685be8173d3da3e7edba8e5df89d06c7` cộng working tree. Không phải trạng thái PR TV2 hiện tại hoặc bàn giao chính thức.
 
-| ID | Nội dung cần xác nhận | Owner phối hợp |
-| --- | --- | --- |
-| UC36-TV2-D01 | Workflow Booking thật, route/role và điều kiện check-out → COMPLETED, không bắt buộc PAID trước khi TV3 được tạo Invoice UNPAID | TV2 chính; TV3 đối chiếu consumer |
-| UC36-TV2-D02 | Ghi và giữ snapshot nights/price/room_total, dịch vụ quantity/unit_price/amount, rounding; quy tắc bất biến khi Invoice đã tạo | TV2 chính, TV3 xác nhận tương thích |
-| UC36-TV2-D03 | Dữ liệu Customer/Room/Property đủ cho snapshot và ownership; thay đổi chủ/lifecycle nếu có phải chốt writer/lock tương ứng với TV1 | TV2/TV1 theo domain, TV3 kiểm scope Invoice |
-| UC36-TV2-D04 | Booking detail cung cấp liên kết Invoice theo shape thống nhất; Host có điểm vào create/detail thật; không coi frontend expectation là API đã chốt | TV2 consumer Booking + TV3 Invoice, integrator nếu shared router cần đổi |
-| UC36-TV2-D05 | Thực thi end-to-end trên MySQL Docker/schema riêng khi workflow TV2 sẵn sàng, lưu evidence rồi xin nghiệm thu chung | TV2+TV3; owner nghiệm thu |
-
-Điểm cần TV2 xác nhận từ source: bookingService gắn hint COMPLETED là “Kỳ nghỉ đã hoàn tất thanh toán”, nhưng use case hiện mô tả COMPLETED → tạo Invoice UNPAID. COMPLETED của Booking không tự chứng minh Invoice PAID. Đây là khác biệt diễn đạt cần thống nhất trước tích hợp; CLOSE-01 không sửa Booking status, copy UI hoặc payment policy của TV2.
-
-### Khảo sát source UC36-INT-PREP-01
-
-Khảo sát ngày2026-11-17, local candidate `feature/member-2-booking` tại `dca536024bfe1c6915818b5088db83721dc78c53`; merge-base `951f62efc70127a3719c840ae529f8d311842a49`; TV3 HEAD/dev `6bd6838a685be8173d3da3e7edba8e5df89d06c7` cộng accepted working tree.
-Đọc git show/diff/ls-tree,không fetch/checkout/merge/merge-tree/runtime. Đây là kết quả tại SHA cũ, không phải trạng thái nhánh đang được TV2 phát triển hôm nay hoặc bàn giao chính thức.
-
-Inventory normalizeCRLF để phân loại:262TV3-only cần giữ,105TV2-only và7both-differ (112candidate paths). Không gọi bảy đường dẫn là bảy merge conflicts đã tái hiện hoặc112file được phép nhập. Exact inventory/quyết định đề nghị nằm ở artifact PREP-01: `three-side-inventory.json`, `candidate-decisions.json`, `refs.json`, `baseline.json`, `final-verification.json`.
-
-Bảy đường dẫn both-differ: backend/bootstrap/app.php; backend/routes/api.php; backend/tests/Feature/Auth/AuthenticationTest.php; frontend/src/pages/customer/CustomerCheckoutPage.jsx; frontend/src/pages/public/PropertyDetailPage.jsx; frontend/src/routes/AppRouter.jsx; frontend/src/services/propertyService.js.
-
-- Giữ baseline stateful/account/GlobalExceptionHandler/Catalog routes và UI Catalog; candidate bootstrap/router cũ có thể làm mất chúng nếu ghi đè. Role alias/HostLayout/Booking routes chỉ xem xét sau scope chung được duyệt.
-- Candidate có duplicate GET /api/host/properties; cả hai source trả array id/name, không có finding pagination mismatch. Giữ API TV1, tránh nhập stub trùng. Model/factory shared cần owner tương ứng xác nhận.
-- TV2 composer/lock,Frontend manifests,phpunit,migrations/seeders và BookingStatus không delta so merge-base. Giữ Symfony dependencies TV3; không downgrade. Binary backend/stayhub là SQLite data,không nhập; .vscode preferences không nhập,context docs chỉ tham khảo.
-- Candidate suites dùng RefreshDatabase,không owned MySQL guards; không chạy trên stayhub. Khi được tiếp tục cần runner schema/user riêng,giữ legacy SQLite guards.
-- BookingResource/HostBookingResource chưa invoice projection; Customer UI đang kỳ vọng invoice_id hoặc invoice.id,Host chưa action Invoice. Đây là nhu cầu contract,chưa shape được TV2 xác nhận.
-
-### Contract cần TV2 xác nhận khi tiếp tục
-
-Tất cả **PENDING TV2 CONFIRMATION**; owner trong bảng là đầu mối đề nghị, không phải người đã nhận việc. Không gửi câu hỏi qua công cụ trong task này.
+Inventory262TV3-only/105TV2-only/7both-differ (112candidate paths), không phải7conflicts đã tái hiện. Artifact INT-PREP-01 ở bảng run giữ three-side-inventory/candidate-decisions/refs/baseline/final-verification. Bảy shared paths: bootstrap/app.php, routes/api.php, AuthenticationTest.php, CustomerCheckoutPage.jsx, PropertyDetailPage.jsx, AppRouter.jsx, propertyService.js. Giữ Auth/renderer/Catalog/Symfony/shared Axios; không nhập binary backend/stayhub/.vscode hoặc chạy RefreshDatabase trên dev.
 
 | ID | Source/câu hỏi cụ thể | Owner và điều kiện đóng |
 | --- | --- | --- |
@@ -173,14 +147,14 @@ Tất cả **PENDING TV2 CONFIRMATION**; owner trong bảng là đầu mối đ�
 | UC36-PREP-C06 | role alias/renderer/trait envelopes và duplicate GET Host Properties; UI catalog/routes hiện hành phải giữ | TV2+TV1/integrator chốt exact shared files và preserve contract; không thay Auth/shared Axios/config toàn cục |
 | UC36-PREP-C07 | TV2 composer/package/migrations không delta so merge-base, fixtures/tests mới có RefreshDatabase, binary backend/stayhub | TV2 xác nhận required files/dependencies/test engine; bỏ binary khỏi candidate, MySQL runner owned schema trước test; không giảm baseline Symfony dependencies |
 
-### 3.1. Rủi ro source cần TV2 xử lý/xác nhận trước runtime
-
 | ID | Quan sát đã thấy | Ảnh hưởng/kiểm chứng cần làm |
 | --- | --- | --- |
 | UC36-PREP-R01 | Nhận định ban đầu thiếu booking_id đã bị loại khi tái đọc đầy đủ source pinned SHA: create có booking_id=$currentBooking->id | Không còn source finding thiếu FK. Vẫn kiểm create service mới/persisted booking_id trong runtime integration như đối chứng, không coi là bug cần TV2 sửa |
 | UC36-PREP-R02 | updateQuantity/remove không re-read status dưới Booking lock cùng checkOut/create Invoice | Có thể ghi dịch vụ qua cửa sổ chuyển trạng thái từ model cũ; cần2writer race, bảo toàn snapshot/Invoice; không sửa TV2 trong PREP |
 | UC36-PREP-R03 | Float pricing và BCMath validation khác triển khai | Chưa chứng minh sai tiền; test quantity0.01/0.05/1.005 input theo precision allowed, unit_price0.10/0.15/2.55, half-cent products, gần giới hạn DECIMAL12,2 và nhiều dòng; expected độc lập decimal, reject overflow rõ. Không truyền quantity3digits nếu request contract chỉ cho2digits rồi coi đó là case hợp lệ |
 | UC36-PREP-R04 | Ghi đè API/bootstrap/router theo tree TV2 cũ có thể bỏ Catalog/renderer/UC36 working files | Cần combined snapshot và regression chéo; không merge ở working tree bẩn hoặc dùng HEAD-only snapshot |
+
+Các C01–C07 đều PENDING TV2 CONFIRMATION; R01 thiếu booking_id đã bị loại sau đọc lại SHA, không nhắc như bug. Float/lock risks chưa là runtime FAIL. COMPLETED là kết thúc lưu trú, không tự chứng minh Invoice PAID. Chưa chốt invoice_id hay invoice projection tùy tiện. TV2 không phải triển khai lại Invoice payment.
 
 ## 6. Checklist tích hợp khi TV2 sẵn sàng
 
@@ -200,3 +174,5 @@ Toàn bộ case dưới **NOT VERIFIED trên workflow Booking production**, khô
 TV2 không phải tái triển khai Invoice payment. TV3 không tự triển khai Booking/check-in/check-out, availability hoặc sửa module TV1 để hoàn tất checklist trên.
 
 PREP-02 và INT-01 chưa thực hiện; các bước ghép/triển khai từng đề xuất không còn là kế hoạch đang chạy. Khi owner yêu cầu tiếp phải kiểm lại Git/SHA/accepted working tree/kiến trúc/contract và lập Mini Plan mới. Không tự tạo nguồn ghép, lấy code TV2 hoặc sửa nghiệp vụ TV1/TV2.
+
+Dependency hiện hành **T01–T03 BLOCKED TV2** theo [ma trận](TV3_FUNCTIONAL_ACCEPTANCE_MATRIX.md); không mở lại UC36 CLOSED TV3 hoặc suy integration PASS từ fixture. Chỉ lập scope tích hợp mới khi owner giao.

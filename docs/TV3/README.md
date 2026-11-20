@@ -1,25 +1,34 @@
 # Tài liệu TV3
 
-Tiến độ theo UC nằm trong checklist; contract, nghiệm thu và bàn giao nằm ở các hồ sơ chuyên biệt.
+**13/18 UC CLOSED phạm vi TV3**, không phải end-to-end toàn hệ thống. Đọc checklist để biết tiến độ, ma trận để truy evidence/fixture/UI; contract riêng ở hồ sơ tương ứng.
 
-| Tài liệu | Nội dung |
+| File giữ lại | Nội dung |
 | --- | --- |
-| [TV3_CHECKLIST.md](TV3_CHECKLIST.md) | 18 UC, FAQ/History, kết quả đã hoàn thành và phần còn thiếu |
-| [BASELINE_HANDOVER.md](BASELINE_HANDOVER.md) | Baseline kiến trúc đã nghiệm thu, bàn giao TV1/TV2 và evidence refactor |
-| [INVOICE_PAYMENT_WORKFLOW.md](INVOICE_PAYMENT_WORKFLOW.md) | Quy tắc và contract UC36 đang được triển khai trong source |
-| [UC36_TV2_HANDOVER.md](UC36_TV2_HANDOVER.md) | Nghiệm thu UC36 phạm vi TV3, evidence và dependency TV2 đang hoãn |
-| [UC45_ACCEPTANCE_HANDOVER.md](UC45_ACCEPTANCE_HANDOVER.md) | UC45 đã nghiệm thu phạm vi TV3; contract Admin invoice, kết quả API/UI, baseline, giới hạn và cách tái kiểm |
+| [TV3_CHECKLIST.md](TV3_CHECKLIST.md) | 18UC, FAQ/History, trạng thái hiện hành, việc còn lại và T01–T03 |
+| [TV3_FUNCTIONAL_ACCEPTANCE_MATRIX.md](TV3_FUNCTIONAL_ACCEPTANCE_MATRIX.md) | Nghiệm thu10UC; AC, run ledger,74UIchecks,fixture/oracle và hướng dẫn QA chung |
+| [BASELINE_HANDOVER.md](BASELINE_HANDOVER.md) | Refactor đã nghiệm thu, ranh giới owner/tương thích, evidenceindex lịch sử |
+| [INVOICE_PAYMENT_WORKFLOW.md](INVOICE_PAYMENT_WORKFLOW.md) | Contract UC36 đang dùng; giữ nguyên |
+| [UC36_TV2_HANDOVER.md](UC36_TV2_HANDOVER.md) | UC36 CLOSED TV3; gates/evidence/PREP/tích hợp TV2 hoãn |
+| [UC45_ACCEPTANCE_HANDOVER.md](UC45_ACCEPTANCE_HANDOVER.md) | UC45 đã nghiệm thu; giữ nguyên |
+| [UC47_ACCEPTANCE_HANDOVER.md](UC47_ACCEPTANCE_HANDOVER.md) | DashboardAdmin đã nghiệm thu, contract/evidence và ngoại lệ screenreader |
+| [UC48_STATISTICS_CONTRACT.md](UC48_STATISTICS_CONTRACT.md) | ContractV1 đã nghiệm thu; giữ nguyên, chưa có API/UI |
 
-## Cách sử dụng
+Bảng trên có8hồ sơ cộng README này: **9file**. Checklist chỉ lưu kết quả/việc còn lại; MiniPlan và TaskResult ở chat, chờ duyệt exactscope trước triển khai.
 
-- Đọc [AGENTS.md](../../AGENTS.md), [kiến trúc](../../ARCHITECTURE.md), [phân công](../stayhub-team-work-assignment.md) và kiểm tra code/Git hiện tại trước task. AGENTS.local.md là hướng dẫn bổ sung local, không tự đi theo clone.
-- Dùng [skills dự án](../../.agents/skills) theo nhu cầu: planning, Laravel, React, database, verification.
-- Mini Plan và Task Result trình bày trên chat, chờ duyệt scope trước triển khai. Checklist chỉ ghi kết quả và việc còn thiếu.
-- `[x]` triển khai khác `[x]` nghiệm thu chức năng. Refactor ACCEPTED không tự chứng minh end-to-end.
-- UC36 đã nghiệm thu phạm vi TV3; tích hợp Booking TV2 hoãn đến khi nhánh phù hợp kiến trúc và có bàn giao được xác nhận.
-- Evidence phải ghi ngày/engine/giới hạn. Artifact local ngoài Git cần được cung cấp riêng khi bàn giao; không tự coi log cũ là test vừa chạy.
-- Nhánh dùng tiền tố `feature/`. Giữ dữ liệu, env và accepted working tree; không tự commit/push/merge.
+## Evidence và bảo toàn
 
-## Hồ sơ đã gộp
+- UI01–16/CUI01–18/RUI01–20/RCUI01–20 PASS theo owner; audit đúng lượt manual PARTIAL/NOTVERIFIED độc lập đã được chấp nhận. Không dùng run01A/SQLite/Node/SSR thay browsermanual.
+- T01–T03 vẫn **BLOCKED TV2**. Refactor/fixture/synthetic Review entry không chứng minh Bookingproduction hoặc integrationPASS.
+- Artifacts local/ignored không đi theo Git; giữ ngày/engine/verdict/nguồn gốc, không coi log cũ là QA mới. Backup dọn hồ sơ: `.agent-workspace/tv3/doc-cleanup-01/`.
+- Đọc [AGENTS.md](../../AGENTS.md), [kiến trúc](../../ARCHITECTURE.md), [phân công](../stayhub-team-work-assignment.md) và [skills](../../.agents/skills). Giữ accepted tracked/untracked/env/data; không tự commit/push/merge.
 
-BASELINE_PR_CHECKLIST được gộp vào BASELINE_HANDOVER; UC36_BROWSER_QA và UC36_INTEGRATION_PREPARATION được gộp vào UC36_TV2_HANDOVER. Các tên cũ không còn là tài liệu độc lập.
+## Hồ sơ đã gom
+
+| File không còn độc lập | Nơi tra cứu hiện hành |
+| --- | --- |
+| INVOICE_READ_UI_ACCEPTANCE.md | [Ma trận](TV3_FUNCTIONAL_ACCEPTANCE_MATRIX.md#9-invoice-read--uc153537), nhóm Invoice read: fixture/oracle, UI01–UI16, evidence01A/01B |
+| INVOICE_CREATE_UI_ACCEPTANCE.md | [Ma trận](TV3_FUNCTIONAL_ACCEPTANCE_MATRIX.md#10-invoice-create--uc34565758), nhóm Invoice create: fixture/oracle, CUI01–CUI18, mutation/recovery/evidence |
+| REVIEW_READ_UI_ACCEPTANCE.md | [Ma trận](TV3_FUNCTIONAL_ACCEPTANCE_MATRIX.md#11-review-read--uc38), nhóm Review read: summaryoracle, RUI01–RUI20, evidence |
+| REVIEW_CREATE_UI_ACCEPTANCE.md | [Ma trận](TV3_FUNCTIONAL_ACCEPTANCE_MATRIX.md#12-review-create--uc1660), nhóm Review create: syntheticentry, RCUI01–RCUI20, UNKNOWN/evidence |
+
+Các đợt trước: BASELINE_PR_CHECKLIST đã gom vào BASELINE_HANDOVER; UC36_BROWSER_QA/UC36_INTEGRATION_PREPARATION đã gom vào UC36_TV2_HANDOVER. Không khôi phục thành hồ sơ lặp.
