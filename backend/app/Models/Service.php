@@ -2,24 +2,16 @@
 
 namespace App\Models;
 
+use Database\Factories\ServiceFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Service extends Model
 {
-    /**
-     * The table associated with the model.
-     *
-     * @var string
-     */
-    protected $table = 'services';
-
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var list<string>
-     */
+    /** @use HasFactory<ServiceFactory> */
+    use HasFactory;
     protected $fillable = [
         'property_id',
         'name',
@@ -29,11 +21,6 @@ class Service extends Model
         'status',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
@@ -42,17 +29,11 @@ class Service extends Model
         ];
     }
 
-    /**
-     * Get the property that offers this service.
-     */
     public function property(): BelongsTo
     {
         return $this->belongsTo(Property::class, 'property_id');
     }
 
-    /**
-     * Get the booking service records for this service.
-     */
     public function bookingServices(): HasMany
     {
         return $this->hasMany(BookingService::class, 'service_id');

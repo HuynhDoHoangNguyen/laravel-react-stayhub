@@ -15,12 +15,18 @@ import { BookingStats } from '@/components/bookings/BookingStats';
 import { BookingCard } from '@/components/bookings/BookingCard';
 import { QuickPicks } from '@/components/bookings/QuickPicks';
 import { bookingService } from '@/services/bookingService';
+import { bookingDisplayError } from '@/utils/bookingDisplayError';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const TABS = [
+  { key: 'PENDING', label: 'Chờ xác nhận' },
   { key: 'UPCOMING', label: 'Sắp tới' },
   { key: 'CHECKED_IN', label: 'Đang lưu trú' },
   { key: 'COMPLETED', label: 'Hoàn thành' },
   { key: 'CANCELLED', label: 'Đã hủy' },
+  { key: 'REJECTED', label: 'Bị từ chối' },
   { key: 'ALL', label: 'Tất cả' },
 ];
 
@@ -51,6 +57,7 @@ export default function CustomerBookingsPage() {
   const [isMockData, setIsMockData] = useState(false);
 
   useEffect(() => {
+    const controller = new AbortController();
     let ignore = false;
 
     async function load() {
@@ -60,26 +67,26 @@ export default function CustomerBookingsPage() {
           sort,
           page,
           perPage: PAGE_SIZE,
-        });
+        }, { signal: controller.signal });
 
         if (!ignore) {
           setBookings(res.data || []);
           setAllBookings(res.all || []);
           setStats(res.stats || null);
           setTotalCount(res.meta?.total || 0);
-          setTotalPages(res.meta?.total_pages || 1);
+          setTotalPages(res.meta?.total_pages || res.meta?.last_page || 1);
           setIsMockData(Boolean(res.isMock));
           setErrorMessage(null);
           setIsLoading(false);
         }
       } catch (err) {
-        if (!ignore) {
+        if (!ignore && !controller.signal.aborted) {
           setBookings([]);
           setAllBookings([]);
           setStats(null);
           setTotalCount(0);
           setTotalPages(1);
-          setErrorMessage(err.message || 'Không thể tải danh sách đơn đặt phòng.');
+          setErrorMessage(bookingDisplayError(err, 'Không thể tải danh sách đơn đặt phòng.'));
           setIsLoading(false);
         }
       }
@@ -89,6 +96,7 @@ export default function CustomerBookingsPage() {
 
     return () => {
       ignore = true;
+      controller.abort();
     };
   }, [tab, sort, page, reloadTrigger]);
 
@@ -118,6 +126,12 @@ export default function CustomerBookingsPage() {
   // Thông tin trạng thái Empty tùy biến theo từng tab
   const emptyInfo = useMemo(() => {
     switch (tab) {
+      case 'PENDING':
+        return {
+          title: 'Chưa có đơn chờ xác nhận',
+          desc: 'Các đơn đang chờ cơ sở lưu trú phản hồi sẽ hiển thị tại đây.',
+          showExplore: false,
+        };
       case 'UPCOMING':
         return {
           title: 'Chưa có kỳ nghỉ nào sắp diễn ra',
@@ -142,6 +156,12 @@ export default function CustomerBookingsPage() {
           desc: 'Mọi đơn đặt phòng bị hủy hoặc bị cơ sở từ chối tiếp nhận sẽ hiển thị tại đây để bạn tiện theo dõi.',
           showExplore: false,
         };
+      case 'REJECTED':
+        return {
+          title: 'Chưa có đơn bị từ chối',
+          desc: 'Các đơn không được cơ sở lưu trú tiếp nhận sẽ hiển thị tại đây.',
+          showExplore: false,
+        };
       case 'ALL':
       default:
         return {
@@ -155,7 +175,7 @@ export default function CustomerBookingsPage() {
   const pageStart = (page - 1) * PAGE_SIZE;
 
   return (
-    <div className="mx-auto max-w-[1360px] pb-20 pt-2 text-left">
+    <div className="mx-auto max-w-[1360px] space-y-8 pb-20 pt-2 text-left">
       {/* Breadcrumb Navigation */}
       <div className="mb-4">
         <Link
@@ -168,7 +188,7 @@ export default function CustomerBookingsPage() {
       </div>
 
       {/* Header Section */}
-      <section className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+      <section className="flex flex-col gap-5 rounded-3xl border border-border/60 bg-gradient-to-br from-white to-surface/60 p-5 shadow-xs sm:p-8 md:flex-row md:items-end md:justify-between">
         <div>
           <div className="flex items-center gap-2">
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-accent">
@@ -222,12 +242,12 @@ export default function CustomerBookingsPage() {
       )}
 
       {/* Main Grid Content: Booking List (Left) + QuickPicks (Right) */}
-      <section className="mt-10 grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <section className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-8">
         <div className="min-w-0">
           {/* Tabs Filter + Sort Dropdown */}
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             {/* Tabs */}
-            <div className="relative flex flex-wrap items-center gap-1 border-b border-border/60">
+            <div className="relative flex gap-1 overflow-x-auto border-b border-border/60" role="group" aria-label="Lọc đơn đặt phòng theo trạng thái">
               {TABS.map((t) => {
                 const active = tab === t.key;
                 return (
@@ -235,7 +255,8 @@ export default function CustomerBookingsPage() {
                     key={t.key}
                     type="button"
                     onClick={() => handleTabChange(t.key)}
-                    className={`relative cursor-pointer px-4 py-3 text-[13px] transition-colors ${
+                    aria-pressed={active}
+                    className={`relative shrink-0 cursor-pointer px-3 py-3 text-xs transition-colors sm:px-4 sm:text-[13px] ${
                       active
                         ? 'font-bold text-primary'
                         : 'font-medium text-muted-foreground hover:text-ink'
@@ -253,8 +274,8 @@ export default function CustomerBookingsPage() {
               })}
             </div>
 
-            {/* Sort Dropdown */}
-            <div className="relative self-end sm:self-auto">
+            {/* API chỉ hỗ trợ sắp xếp theo thời gian tạo; tùy chọn sort chỉ dành cho mock local. */}
+            {isMockData && <div className="relative self-end sm:self-auto">
               <button
                 type="button"
                 onClick={() => setSortOpen((v) => !v)}
@@ -294,41 +315,42 @@ export default function CustomerBookingsPage() {
                   </motion.div>
                 )}
               </AnimatePresence>
-            </div>
+            </div>}
           </div>
 
           {/* Booking List Container */}
           <div className="mt-6 space-y-5">
             {/* Loading State */}
             {isLoading && (
-              <div className="space-y-4">
+              <div className="space-y-4" aria-label="Đang tải đơn đặt phòng" aria-busy="true">
                 {Array.from({ length: 2 }).map((_, i) => (
-                  <div key={i} className="h-56 animate-pulse rounded-2xl bg-white/70" />
+                  <Skeleton key={i} className="h-56 rounded-2xl" />
                 ))}
               </div>
             )}
 
             {/* Error State */}
             {!isLoading && errorMessage && (
-              <div className="rounded-2xl border border-border/70 bg-white p-10 text-center shadow-xs">
+              <Card role="alert" className="rounded-2xl border-rose-200 bg-rose-50/40 p-8 text-center shadow-xs sm:p-10">
                 <p className="font-display text-lg font-bold text-primary">
                   Không thể kết nối danh sách đơn đặt phòng
                 </p>
                 <p className="mt-2 text-xs text-muted-foreground">{errorMessage}</p>
-                <button
+                <Button
+                  variant="outline"
                   type="button"
                   onClick={handleRetry}
                   className="mt-5 inline-flex cursor-pointer items-center gap-2 rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary-mid"
                 >
                   <RefreshCw className="h-3.5 w-3.5" />
                   <span>Thử lại</span>
-                </button>
-              </div>
+                </Button>
+              </Card>
             )}
 
             {/* Empty State */}
             {!isLoading && !errorMessage && bookings.length === 0 && (
-              <div className="rounded-2xl border border-border/60 bg-white p-12 text-center shadow-xs">
+              <Card className="rounded-2xl border-border/60 p-8 text-center shadow-xs sm:p-12">
                 <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-surface text-accent">
                   <Sparkles className="h-6 w-6" aria-hidden="true" />
                 </div>
@@ -349,7 +371,7 @@ export default function CustomerBookingsPage() {
                     </Link>
                   </div>
                 )}
-              </div>
+              </Card>
             )}
 
             {/* Cards List */}

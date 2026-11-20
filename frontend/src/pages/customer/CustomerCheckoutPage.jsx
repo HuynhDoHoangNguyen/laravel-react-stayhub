@@ -1,13 +1,16 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, AlertCircle, Compass, BedDouble } from 'lucide-react';
+import { ArrowLeft, AlertCircle, Compass, BedDouble, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { propertyService } from '@/services/propertyService';
-import { nightsBetween } from '@/services/bookingService';
+import { bookingService, nightsBetween } from '@/services/bookingService';
 import { CheckoutStepper } from '@/components/checkout/CheckoutStepper';
 import { CheckoutGuestsStep } from '@/components/checkout/CheckoutGuestsStep';
 import { CheckoutReviewStep } from '@/components/checkout/CheckoutReviewStep';
 import { CheckoutPriceSummary } from '@/components/checkout/CheckoutPriceSummary';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function CustomerCheckoutPage() {
   const [searchParams] = useSearchParams();
@@ -27,11 +30,27 @@ export default function CustomerCheckoutPage() {
   const [adults, setAdults] = useState(urlAdults);
   const [children, setChildren] = useState(urlChildren);
   const [note, setNote] = useState('');
-  const [customPhone, setCustomPhone] = useState(null);
-  const contactPhone = customPhone !== null ? customPhone : (user?.phone || '');
+  const [preview, setPreview] = useState(null);
+  const [previewSnapshot, setPreviewSnapshot] = useState(null);
+  const [previewError, setPreviewError] = useState('');
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  const [createError, setCreateError] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+  const [createdBooking, setCreatedBooking] = useState(null);
+  const createLock = useRef(false);
+  const previewRequestIdRef = useRef(0);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // 3. Tải thông tin cơ sở lưu trú và hạng phòng thật
   const [property, setProperty] = useState(null);
+  const [propertySource, setPropertySource] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState(null);
 
@@ -47,8 +66,14 @@ export default function CustomerCheckoutPage() {
 
       setIsLoading(true);
       try {
-        const res = await propertyService.getPropertyById(propertyId);
+        const res = await propertyService.getBookableProperty(propertyId, {
+          startDate,
+          endDate,
+          adults: urlAdults,
+          children: urlChildren,
+        });
         if (!ignore) {
+          setPropertySource(res?.source || null);
           if (res?.source === 'api') {
             setProperty(null);
             setErrorMsg('Hiện chưa thể đặt phòng trực tuyến từ danh mục này. Giá phòng chỉ để tham khảo.');
@@ -76,7 +101,7 @@ export default function CustomerCheckoutPage() {
     return () => {
       ignore = true;
     };
-  }, [propertyId]);
+  }, [propertyId, startDate, endDate, urlAdults, urlChildren]);
 
   // 4. Tìm hạng phòng tương ứng trong danh sách phòng của cơ sở
   const selectedRoom = useMemo(() => {
@@ -96,30 +121,150 @@ export default function CustomerCheckoutPage() {
     return nightsBetween(startDate, endDate);
   }, [startDate, endDate, isValidDateRange]);
 
-  // 6. Tính toán tiền phòng chính xác (Integer Scaled Arithmetic)
-  const roomTotal = useMemo(() => {
-    if (!selectedRoom || nights <= 0) return 0;
-    const nightlyPrice = Math.round(Number(selectedRoom.price || selectedRoom.price_per_night || 0));
-    return nightlyPrice * nights; // 1 phòng theo quy định nghiệp vụ
-  }, [selectedRoom, nights]);
-
   // Đường dẫn quay lại chi tiết chỗ nghỉ
   const backToPropertyUrl = propertyId
     ? `/properties/${propertyId}?checkIn=${startDate || ''}&checkOut=${endDate || ''}&adults=${adults}`
     : '/search';
 
+  const bookingPayload = useMemo(() => ({
+    room_id: Number(roomId),
+    check_in_date: startDate,
+    check_out_date: endDate,
+    guest_count: (Number(adults) || 1) + (Number(children) || 0),
+    note: note.trim() || null,
+  }), [roomId, startDate, endDate, adults, children, note]);
+
+  // R03: Pure derived active preview; invalidates automatically whenever booking parameters change
+  const isPreviewCurrent = useMemo(() => {
+    if (!preview || !previewSnapshot) return false;
+    return (
+      previewSnapshot.room_id === bookingPayload.room_id &&
+      previewSnapshot.check_in_date === bookingPayload.check_in_date &&
+      previewSnapshot.check_out_date === bookingPayload.check_out_date &&
+      previewSnapshot.guest_count === bookingPayload.guest_count
+    );
+  }, [preview, previewSnapshot, bookingPayload]);
+
+  const activePreview = isPreviewCurrent ? preview : null;
+
+  const handlePreviewBooking = async () => {
+    // R01: Block mutation if source is not verified real room-search
+    if (propertySource !== 'room-search') {
+      setPreview(null);
+      setPreviewSnapshot(null);
+      setPreviewError(
+        propertySource === 'mock'
+          ? 'Chỗ nghỉ này đang ở chế độ xem thử (mock), không thể tính giá hoặc đặt phòng từ hệ thống thực tế.'
+          : 'Nguồn dữ liệu chỗ nghỉ không hợp lệ để tính giá.'
+      );
+      return;
+    }
+
+    const currentReqId = ++previewRequestIdRef.current;
+    const requestedPayload = {
+      room_id: bookingPayload.room_id,
+      check_in_date: bookingPayload.check_in_date,
+      check_out_date: bookingPayload.check_out_date,
+      guest_count: bookingPayload.guest_count,
+    };
+
+    setPreview(null);
+    setPreviewSnapshot(null);
+    setPreviewError('');
+    setCreateError('');
+    setIsPreviewing(true);
+    try {
+      const result = await bookingService.previewBooking(requestedPayload);
+      if (!isMountedRef.current) return;
+      // R03: Only set preview if this request is still current
+      if (currentReqId === previewRequestIdRef.current) {
+        setPreview(result);
+        setPreviewSnapshot(requestedPayload);
+      }
+    } catch (error) {
+      if (!isMountedRef.current) return;
+      if (currentReqId === previewRequestIdRef.current) {
+        setPreviewError(error.message);
+      }
+    } finally {
+      if (isMountedRef.current && currentReqId === previewRequestIdRef.current) {
+        setIsPreviewing(false);
+      }
+    }
+  };
+
+  const updateGuestCount = (setter, value) => {
+    setter(value);
+    setPreview(null);
+    setPreviewSnapshot(null);
+    setPreviewError('');
+    setCreateError('');
+    setIsPreviewing(false);
+    previewRequestIdRef.current += 1;
+  };
+
+  const handleCreateBooking = async () => {
+    if (createLock.current) return;
+
+    // R01: Block mutation if data source is mock
+    if (propertySource !== 'room-search') {
+      setCreateError(
+        propertySource === 'mock'
+          ? 'Không thể tạo đặt phòng thật từ chỗ nghỉ xem thử (mock).'
+          : 'Nguồn dữ liệu chỗ nghỉ không hợp lệ để đặt phòng.'
+      );
+      return;
+    }
+
+    // R03: Validate that preview exists and matches the exact current payload
+    const isPreviewCurrent =
+      preview &&
+      previewSnapshot &&
+      previewSnapshot.room_id === bookingPayload.room_id &&
+      previewSnapshot.check_in_date === bookingPayload.check_in_date &&
+      previewSnapshot.check_out_date === bookingPayload.check_out_date &&
+      previewSnapshot.guest_count === bookingPayload.guest_count &&
+      preview.availability?.available;
+
+    if (!isPreviewCurrent) {
+      setCreateError('Thông tin đặt phòng đã thay đổi hoặc chưa có báo giá hợp lệ. Quý khách vui lòng kiểm tra lại giá trước khi xác nhận.');
+      return;
+    }
+
+    createLock.current = true;
+    setCreateError('');
+    setIsCreating(true);
+    try {
+      const result = await bookingService.createBooking(bookingPayload);
+      if (!isMountedRef.current) return;
+      setCreatedBooking(result);
+    } catch (error) {
+      if (!isMountedRef.current) return;
+      setCreateError(error.message);
+      if (error.status === 409 || error.status === 422) {
+        setPreview(null);
+        setPreviewSnapshot(null);
+      }
+    } finally {
+      if (isMountedRef.current) {
+        createLock.current = false;
+        setIsCreating(false);
+      }
+    }
+  };
+
   // State: Loading Skeleton
   if (isLoading) {
     return (
       <div className="mx-auto max-w-[1240px] px-4 pt-2 pb-20 text-left sm:px-6">
-        <div className="h-4 w-36 animate-pulse rounded bg-surface" />
+        <Skeleton aria-hidden="true" className="h-4 w-36 bg-surface" />
         <div className="mt-6 flex justify-between">
-          <div className="h-10 w-64 animate-pulse rounded-xl bg-surface" />
-          <div className="h-8 w-48 animate-pulse rounded-xl bg-surface" />
+          <Skeleton aria-hidden="true" className="h-10 w-64 rounded-xl bg-surface" />
+          <Skeleton aria-hidden="true" className="h-8 w-48 rounded-xl bg-surface" />
         </div>
         <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_380px]">
-          <div className="h-[460px] animate-pulse rounded-3xl bg-white/70" />
-          <div className="h-[360px] animate-pulse rounded-3xl bg-white/70" />
+          <Skeleton aria-hidden="true" className="h-[460px] rounded-3xl bg-white/70" />
+          <Skeleton aria-hidden="true" className="h-[360px] rounded-3xl bg-white/70" />
         </div>
       </div>
     );
@@ -132,13 +277,15 @@ export default function CustomerCheckoutPage() {
       if (!isValidDateRange) {
         message = 'Khoảng thời gian nhận phòng và trả phòng không hợp lệ. Quý khách vui lòng chọn lại ngày lưu trú.';
       } else if (!selectedRoom) {
-        message = 'Không tìm thấy hạng phòng yêu cầu hoặc hạng phòng không còn thuộc cơ sở này.';
+        message = property?.hasMoreRooms
+          ? 'Không tìm thấy hạng phòng yêu cầu trong danh sách phòng đã tải. Quý khách vui lòng chọn lại phòng từ trang tìm kiếm.'
+          : 'Không tìm thấy hạng phòng yêu cầu hoặc hạng phòng không còn thuộc cơ sở này.';
       }
     }
 
     return (
       <div className="mx-auto max-w-xl py-16 text-center">
-        <div className="rounded-3xl border border-border/70 bg-white p-8 shadow-xs sm:p-12">
+        <Card className="rounded-3xl border-border/70 bg-white p-8 shadow-xs sm:p-12">
           <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-amber-50 text-amber-700">
             <AlertCircle className="h-7 w-7" />
           </div>
@@ -152,22 +299,40 @@ export default function CustomerCheckoutPage() {
             {message}
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <Link
-              to={backToPropertyUrl}
-              className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-xs font-semibold text-primary-foreground shadow-xs hover:bg-primary-mid"
-            >
-              <BedDouble className="h-4 w-4" />
-              <span>Quay lại chọn phòng</span>
-            </Link>
-            <Link
-              to="/search"
-              className="inline-flex items-center gap-2 rounded-xl border border-border/80 bg-white px-5 py-2.5 text-xs font-semibold text-ink hover:border-primary/40"
-            >
-              <Compass className="h-4 w-4" />
-              <span>Khám phá chỗ nghỉ khác</span>
-            </Link>
+            <Button asChild className="h-11 rounded-xl px-5 text-xs font-semibold">
+              <Link to={backToPropertyUrl}>
+                <BedDouble className="h-4 w-4" />
+                <span>Quay lại chọn phòng</span>
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="h-11 rounded-xl px-5 text-xs font-semibold">
+              <Link to="/search">
+                <Compass className="h-4 w-4" />
+                <span>Khám phá chỗ nghỉ khác</span>
+              </Link>
+            </Button>
           </div>
-        </div>
+        </Card>
+      </div>
+    );
+  }
+
+  if (createdBooking) {
+    return (
+      <div className="mx-auto max-w-xl px-4 py-16 text-center sm:px-6">
+        <Card className="rounded-3xl border-emerald-200 bg-white p-8 shadow-xs sm:p-12">
+          <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-emerald-50 text-emerald-700">
+            <CheckCircle2 className="h-7 w-7" />
+          </div>
+          <p className="mt-6 text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-700">Đặt phòng thành công</p>
+          <h1 className="mt-2 font-display text-2xl font-bold text-primary sm:text-3xl">StayHub đã nhận booking của bạn</h1>
+          <p className="mt-3 text-sm text-muted-foreground">Mã booking</p>
+          <p className="mt-1 font-mono text-xl font-bold text-ink">{createdBooking.booking_code}</p>
+          <p className="mt-4 text-sm text-muted-foreground">Đơn đang chờ cơ sở lưu trú xác nhận.</p>
+          <Button asChild className="mt-8 h-12 rounded-xl px-6 text-sm font-semibold">
+            <Link to="/customer/bookings">Xem đơn đặt phòng</Link>
+          </Button>
+        </Card>
       </div>
     );
   }
@@ -205,6 +370,19 @@ export default function CustomerCheckoutPage() {
         </div>
       </div>
 
+      {/* R01: Mock Data Warning Banner */}
+      {propertySource === 'mock' && (
+        <div role="status" className="mt-6 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-xs text-amber-900 shadow-xs">
+          <div className="flex items-center gap-2 font-semibold">
+            <AlertCircle className="h-4 w-4 text-amber-700" />
+            <span>Chế độ xem thử (Mock data)</span>
+          </div>
+          <p className="mt-1 text-amber-800">
+            Chỗ nghỉ này đang được hiển thị từ dữ liệu mẫu phát triển. Chức năng tính giá thực tế và tạo đặt phòng trên hệ thống bị khóa để tránh ảnh hưởng đến cơ sở dữ liệu.
+          </p>
+        </div>
+      )}
+
       {/* Main 2-Column Content Layout (Content + Sticky Price Summary) */}
       <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_380px]">
         {/* Left Column: Form Steps */}
@@ -216,11 +394,9 @@ export default function CustomerCheckoutPage() {
               adults={adults}
               children={children}
               note={note}
-              contactPhone={contactPhone}
-              onAdultsChange={setAdults}
-              onChildrenChange={setChildren}
+              onAdultsChange={(value) => updateGuestCount(setAdults, value)}
+              onChildrenChange={(value) => updateGuestCount(setChildren, value)}
               onNoteChange={setNote}
-              onContactPhoneChange={setCustomPhone}
               onContinue={() => setStep('review')}
             />
           ) : (
@@ -233,10 +409,17 @@ export default function CustomerCheckoutPage() {
               adults={adults}
               children={children}
               note={note}
-              contactPhone={contactPhone}
               user={user}
               onEditGuests={() => setStep('guests')}
               onBackToProperty={() => navigate(backToPropertyUrl)}
+              preview={activePreview}
+              previewError={previewError}
+              createError={createError}
+              isPreviewing={isPreviewing}
+              isCreating={isCreating}
+              isMock={propertySource === 'mock'}
+              onRequestPreview={handlePreviewBooking}
+              onCreateBooking={handleCreateBooking}
             />
           )}
         </div>
@@ -246,7 +429,7 @@ export default function CustomerCheckoutPage() {
           <CheckoutPriceSummary
             room={selectedRoom}
             nights={nights}
-            roomTotal={roomTotal}
+            quote={activePreview}
           />
         </div>
       </div>

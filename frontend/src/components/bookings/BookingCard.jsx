@@ -15,6 +15,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import {
   BOOKING_STATUS_CONFIG,
   formatVnd,
@@ -62,13 +64,14 @@ export function BookingCard({ booking, index = 0 }) {
   const validInvoiceId = booking.invoice_id || booking.invoice?.id;
 
   return (
-    <motion.article
+    <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.98 }}
       transition={{ duration: 0.35, delay: index * 0.04, ease: [0.16, 1, 0.3, 1] }}
-      className="group overflow-hidden rounded-2xl border border-border/60 bg-white shadow-[0_1px_2px_rgba(17,26,19,0.04)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_40px_-20px_rgba(17,26,19,0.22)]"
+      className="group"
     >
+    <Card className="overflow-hidden rounded-2xl border-border/60 p-0 shadow-xs transition-shadow hover:shadow-md">
       <div className="flex flex-col md:flex-row">
         {/* Thumbnail Image */}
         <Link
@@ -97,12 +100,10 @@ export function BookingCard({ booking, index = 0 }) {
             </Link>
 
             <div className="flex shrink-0 items-center gap-2">
-              <span
-                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-wide ${statusConfig.bg} ${statusConfig.text}`}
-              >
+              <Badge variant="outline" className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-wide ${statusConfig.bg} ${statusConfig.text}`}>
                 <span className={`h-1.5 w-1.5 rounded-full ${statusConfig.dot}`} aria-hidden="true" />
                 {statusConfig.label}
-              </span>
+              </Badge>
 
               {/* Action Popover Menu */}
               <Popover>
@@ -222,7 +223,8 @@ export function BookingCard({ booking, index = 0 }) {
           </div>
         </div>
       </div>
-    </motion.article>
+    </Card>
+    </motion.div>
   );
 }
 

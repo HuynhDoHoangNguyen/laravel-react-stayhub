@@ -2,23 +2,15 @@
 
 namespace App\Models;
 
+use Database\Factories\BookingServiceFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class BookingService extends Model
 {
-    /**
-     * The table associated with the model.
-     *
-     * @var string
-     */
-    protected $table = 'booking_services';
-
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var list<string>
-     */
+    /** @use HasFactory<BookingServiceFactory> */
+    use HasFactory;
     protected $fillable = [
         'booking_id',
         'service_id',
@@ -29,11 +21,6 @@ class BookingService extends Model
         'amount',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
@@ -43,17 +30,11 @@ class BookingService extends Model
         ];
     }
 
-    /**
-     * Get the booking that this service line belongs to.
-     */
     public function booking(): BelongsTo
     {
         return $this->belongsTo(Booking::class, 'booking_id');
     }
 
-    /**
-     * Get the source service.
-     */
     public function service(): BelongsTo
     {
         return $this->belongsTo(Service::class, 'service_id');

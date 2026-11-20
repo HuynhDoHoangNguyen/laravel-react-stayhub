@@ -8,29 +8,8 @@ const SUGGESTIONS = [
     apply: (setFilters, filters) => setFilters({ ...filters, sortBy: "PRICE_ASC" }),
   },
   {
-    label: "Resort 5 sao",
-    apply: (setFilters, filters) =>
-      setFilters({
-        ...filters,
-        selectedPropertyTypes: ["Resort"],
-        minRating: 4.8,
-      }),
-  },
-  {
-    label: "Hồ bơi & Spa",
-    apply: (setFilters, filters) =>
-      setFilters({
-        ...filters,
-        selectedAmenities: ["pool", "spa"],
-      }),
-  },
-  {
-    label: "Khách sạn trung tâm",
-    apply: (setFilters, filters) =>
-      setFilters({
-        ...filters,
-        selectedPropertyTypes: ["Hotel"],
-      }),
+    label: "Giá cao nhất",
+    apply: (setFilters, filters) => setFilters({ ...filters, sortBy: "PRICE_DESC" }),
   },
 ];
 
