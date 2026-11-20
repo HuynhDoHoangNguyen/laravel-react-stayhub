@@ -39,6 +39,13 @@ export default function CustomerCheckoutPage() {
   const [createdBooking, setCreatedBooking] = useState(null);
   const createLock = useRef(false);
   const previewRequestIdRef = useRef(0);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // 3. Tải thông tin cơ sở lưu trú và hạng phòng thật
   const [property, setProperty] = useState(null);
@@ -167,17 +174,19 @@ export default function CustomerCheckoutPage() {
     setIsPreviewing(true);
     try {
       const result = await bookingService.previewBooking(requestedPayload);
+      if (!isMountedRef.current) return;
       // R03: Only set preview if this request is still current
       if (currentReqId === previewRequestIdRef.current) {
         setPreview(result);
         setPreviewSnapshot(requestedPayload);
       }
     } catch (error) {
+      if (!isMountedRef.current) return;
       if (currentReqId === previewRequestIdRef.current) {
         setPreviewError(error.message);
       }
     } finally {
-      if (currentReqId === previewRequestIdRef.current) {
+      if (isMountedRef.current && currentReqId === previewRequestIdRef.current) {
         setIsPreviewing(false);
       }
     }
@@ -189,6 +198,7 @@ export default function CustomerCheckoutPage() {
     setPreviewSnapshot(null);
     setPreviewError('');
     setCreateError('');
+    setIsPreviewing(false);
     previewRequestIdRef.current += 1;
   };
 
@@ -225,16 +235,20 @@ export default function CustomerCheckoutPage() {
     setIsCreating(true);
     try {
       const result = await bookingService.createBooking(bookingPayload);
+      if (!isMountedRef.current) return;
       setCreatedBooking(result);
     } catch (error) {
+      if (!isMountedRef.current) return;
       setCreateError(error.message);
       if (error.status === 409 || error.status === 422) {
         setPreview(null);
         setPreviewSnapshot(null);
       }
     } finally {
-      createLock.current = false;
-      setIsCreating(false);
+      if (isMountedRef.current) {
+        createLock.current = false;
+        setIsCreating(false);
+      }
     }
   };
 

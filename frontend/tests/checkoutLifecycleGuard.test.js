@@ -82,3 +82,86 @@ test('R02: HostBookingServicesPage guards service mutations and reload against c
   assert.match(code, /const\s*targetBookingId\s*=\s*bookingId;/);
   assert.match(code, /if\s*\(!isMountedRef\.current\s*\|\|\s*activeBookingIdRef\.current\s*!==\s*targetBookingId\)\s*\{\s*return;\s*\}/);
 });
+
+test('PR10-04: Changing guest count while preview is pending cancels loading state and ignores subsequent resolve', async () => {
+  let isPreviewing = false;
+  let preview = null;
+  let previewSnapshot = null;
+  let previewError = '';
+  let previewRequestId = 0;
+  let isMounted = true;
+
+  let resolveApiPromise = null;
+  const deferredApiCall = () => new Promise((resolve) => { resolveApiPromise = resolve; });
+
+  const handlePreviewBooking = async () => {
+    const currentReqId = ++previewRequestId;
+    const requestedPayload = { room_id: 1, check_in_date: '2026-12-01', check_out_date: '2026-12-03', guest_count: 2 };
+    preview = null;
+    previewSnapshot = null;
+    previewError = '';
+    isPreviewing = true;
+
+    try {
+      const result = await deferredApiCall();
+      if (!isMounted) return;
+      if (currentReqId === previewRequestId) {
+        preview = result;
+        previewSnapshot = requestedPayload;
+      }
+    } catch (err) {
+      if (!isMounted) return;
+      if (currentReqId === previewRequestId) {
+        previewError = err.message;
+      }
+    } finally {
+      if (isMounted && currentReqId === previewRequestId) {
+        isPreviewing = false;
+      }
+    }
+  };
+
+  const updateGuestCount = () => {
+    preview = null;
+    previewSnapshot = null;
+    previewError = '';
+    isPreviewing = false; // PR10-04 fix
+    previewRequestId += 1;
+  };
+
+  // 1. User triggers preview -> request is in flight
+  const previewTask = handlePreviewBooking();
+  assert.equal(isPreviewing, true, 'isPreviewing should be true while request is in flight');
+
+  // 2. User changes guest count while preview is pending
+  updateGuestCount();
+  assert.equal(isPreviewing, false, 'PR10-04: isPreviewing must be reset to false so action button is not stuck locked');
+
+  // 3. Stale in-flight request finishes later
+  resolveApiPromise({
+    pricing: { total: '1000000.00' },
+    availability: { available: true },
+  });
+  await previewTask;
+
+  // 4. Stale response was rejected and isPreviewing remains false
+  assert.equal(isPreviewing, false, 'isPreviewing must remain false after stale request finishes');
+  assert.equal(preview, null, 'Stale preview data must not be written');
+  assert.equal(previewSnapshot, null, 'Stale snapshot must not be written');
+  assert.equal(previewError, '', 'No error should be set for cancelled request');
+});
+
+test('PR10-04: CustomerCheckoutPage source contains updateGuestCount reset and isMountedRef lifecycle guards', async () => {
+  const code = await readFile(checkoutPath, 'utf8');
+
+  // Verify updateGuestCount resets isPreviewing(false)
+  assert.match(code, /const\s*updateGuestCount\s*=\s*\([^)]*\)\s*=>\s*\{[^}]*setIsPreviewing\(false\);/s);
+
+  // Verify isMountedRef exists and unmount cleanup hook
+  assert.match(code, /const\s*isMountedRef\s*=\s*useRef\(true\);/);
+  assert.match(code, /isMountedRef\.current\s*=\s*false;/);
+
+  // Verify handlePreviewBooking and handleCreateBooking guard with isMountedRef
+  assert.match(code, /if\s*\(!isMountedRef\.current\)\s*return;/);
+  assert.match(code, /if\s*\(isMountedRef\.current\s*&&\s*currentReqId\s*===\s*previewRequestIdRef\.current\)/);
+});
