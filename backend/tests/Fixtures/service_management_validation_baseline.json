@@ -1,0 +1,215 @@
+{
+    "store_service_empty": {
+        "message": "The property id field is required. (and 3 more errors)",
+        "errors": {
+            "property_id": [
+                "The property id field is required."
+            ],
+            "name": [
+                "The name field is required."
+            ],
+            "unit": [
+                "The unit field is required."
+            ],
+            "price": [
+                "The price field is required."
+            ]
+        }
+    },
+    "store_service_non_existent_property": {
+        "message": "The selected property id is invalid.",
+        "errors": {
+            "property_id": [
+                "The selected property id is invalid."
+            ]
+        }
+    },
+    "store_service_missing_name_unit": {
+        "message": "The name field is required. (and 1 more error)",
+        "errors": {
+            "name": [
+                "The name field is required."
+            ],
+            "unit": [
+                "The unit field is required."
+            ]
+        }
+    },
+    "store_service_negative_price": {
+        "message": "The price field must be at least 0.",
+        "errors": {
+            "price": [
+                "The price field must be at least 0."
+            ]
+        }
+    },
+    "store_service_price_over_max": {
+        "message": "The price field must not be greater than 100000000.",
+        "errors": {
+            "price": [
+                "The price field must not be greater than 100000000."
+            ]
+        }
+    },
+    "store_service_non_numeric_price": {
+        "message": "The price field must be a number.",
+        "errors": {
+            "price": [
+                "The price field must be a number."
+            ]
+        }
+    },
+    "store_service_non_boolean_status": {
+        "message": "The status field must be true or false.",
+        "errors": {
+            "status": [
+                "The status field must be true or false."
+            ]
+        }
+    },
+    "update_service_empty": {
+        "message": "The name field is required. (and 2 more errors)",
+        "errors": {
+            "name": [
+                "The name field is required."
+            ],
+            "unit": [
+                "The unit field is required."
+            ],
+            "price": [
+                "The price field is required."
+            ]
+        }
+    },
+    "update_service_negative_price": {
+        "message": "The price field must be at least 0.",
+        "errors": {
+            "price": [
+                "The price field must be at least 0."
+            ]
+        }
+    },
+    "update_service_price_over_max": {
+        "message": "The price field must not be greater than 100000000.",
+        "errors": {
+            "price": [
+                "The price field must not be greater than 100000000."
+            ]
+        }
+    },
+    "update_service_non_numeric_price": {
+        "message": "The price field must be a number.",
+        "errors": {
+            "price": [
+                "The price field must be a number."
+            ]
+        }
+    },
+    "set_status_empty": {
+        "message": "The status field is required.",
+        "errors": {
+            "status": [
+                "The status field is required."
+            ]
+        }
+    },
+    "set_status_non_boolean": {
+        "message": "The status field must be true or false.",
+        "errors": {
+            "status": [
+                "The status field must be true or false."
+            ]
+        }
+    },
+    "add_booking_service_empty": {
+        "message": "The service id field is required. (and 1 more error)",
+        "errors": {
+            "service_id": [
+                "The service id field is required."
+            ],
+            "quantity": [
+                "The quantity field is required."
+            ]
+        }
+    },
+    "add_booking_service_non_existent_service": {
+        "message": "The selected service id is invalid.",
+        "errors": {
+            "service_id": [
+                "The selected service id is invalid."
+            ]
+        }
+    },
+    "add_booking_service_quantity_zero": {
+        "message": "The quantity field must be at least 0.01.",
+        "errors": {
+            "quantity": [
+                "The quantity field must be at least 0.01."
+            ]
+        }
+    },
+    "add_booking_service_quantity_negative": {
+        "message": "The quantity field must be at least 0.01.",
+        "errors": {
+            "quantity": [
+                "The quantity field must be at least 0.01."
+            ]
+        }
+    },
+    "add_booking_service_quantity_over_max": {
+        "message": "The quantity field must not be greater than 9999.99.",
+        "errors": {
+            "quantity": [
+                "The quantity field must not be greater than 9999.99."
+            ]
+        }
+    },
+    "add_booking_service_quantity_below_min": {
+        "message": "The quantity field must be at least 0.01.",
+        "errors": {
+            "quantity": [
+                "The quantity field must be at least 0.01."
+            ]
+        }
+    },
+    "update_booking_service_empty": {
+        "message": "The quantity field is required.",
+        "errors": {
+            "quantity": [
+                "The quantity field is required."
+            ]
+        }
+    },
+    "update_booking_service_quantity_zero": {
+        "message": "The quantity field must be at least 0.01.",
+        "errors": {
+            "quantity": [
+                "The quantity field must be at least 0.01."
+            ]
+        }
+    },
+    "update_booking_service_quantity_negative": {
+        "message": "The quantity field must be at least 0.01.",
+        "errors": {
+            "quantity": [
+                "The quantity field must be at least 0.01."
+            ]
+        }
+    },
+    "update_booking_service_quantity_over_max": {
+        "message": "The quantity field must not be greater than 9999.99.",
+        "errors": {
+            "quantity": [
+                "The quantity field must not be greater than 9999.99."
+            ]
+        }
+    },
+    "update_booking_service_quantity_below_min": {
+        "message": "The quantity field must be at least 0.01.",
+        "errors": {
+            "quantity": [
+                "The quantity field must be at least 0.01."
+            ]
+        }
+    }
+}

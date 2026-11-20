@@ -2,6 +2,8 @@ import { Heart, Star, Wifi, Waves, Coffee, Sparkles, MapPin } from "lucide-react
 import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 const vndCurrency = new Intl.NumberFormat("vi-VN", {
   style: "currency",
@@ -51,7 +53,15 @@ export function SearchPropertyCard({ property, context, view = "grid" }) {
     };
   }, [hovered, photos.length]);
 
-  const detailUrl = `/properties/${property.id}?startDate=${context?.startDate ?? ""}&endDate=${context?.endDate ?? ""}&roomsCount=${context?.roomsCount ?? 1}&adults=${context?.adults ?? 2}`;
+  const detailParams = new URLSearchParams({
+    startDate: context?.startDate ?? "",
+    endDate: context?.endDate ?? "",
+    roomsCount: String(context?.roomsCount ?? 1),
+    adults: String(context?.adults ?? 2),
+    children: String(context?.children ?? 0),
+  });
+  if (property.roomId) detailParams.set("roomId", String(property.roomId));
+  const detailUrl = `/properties/${property.id}?${detailParams.toString()}`;
 
   return (
     <motion.article
@@ -146,6 +156,14 @@ export function SearchPropertyCard({ property, context, view = "grid" }) {
           )}
         </div>
 
+        {property.roomName && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <Badge variant="secondary" className="max-w-full truncate rounded-full px-2.5 py-1 text-[11px]">
+              {property.roomName}{property.roomTypeName ? ` · ${property.roomTypeName}` : ""}
+            </Badge>
+          </div>
+        )}
+
         <p className="mt-1 inline-flex items-center gap-1 text-[13px] text-muted-foreground">
           <MapPin className="h-3.5 w-3.5" aria-hidden />
           {property.city}
@@ -154,10 +172,10 @@ export function SearchPropertyCard({ property, context, view = "grid" }) {
         {amenities.length > 0 && (
           <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12px] text-muted-foreground">
             {amenities.map((a, idx) => (
-              <span key={a} className="inline-flex items-center gap-1">
+              <Badge key={a} variant="outline" className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-normal">
                 <AmenityIcon id={property.amenityIds?.[idx] || "spa"} />
                 {a}
-              </span>
+              </Badge>
             ))}
           </div>
         )}
@@ -166,16 +184,13 @@ export function SearchPropertyCard({ property, context, view = "grid" }) {
         <div className="mt-auto flex items-center justify-between gap-3 border-t border-border/40 pt-4">
           <div className="min-w-0 flex-1">
             <div className="truncate text-[16px] font-semibold tracking-tight text-ink sm:text-[17px]">
-              {vndCurrency.format(property.price)}
+            {vndCurrency.format(Number(property.price) || 0)}
             </div>
             <div className="text-[11.5px] text-muted-foreground">/ đêm</div>
           </div>
-          <Link
-            to={detailUrl}
-            className="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-primary px-4 py-2 text-[12.5px] font-medium text-primary-foreground shadow-sm transition-all hover:bg-primary-mid active:scale-95"
-          >
-            Xem chi tiết
-          </Link>
+          <Button asChild className="h-10 shrink-0 rounded-full px-4 text-[12.5px] font-medium">
+            <Link to={detailUrl}>Xem chi tiết</Link>
+          </Button>
         </div>
       </div>
     </motion.article>

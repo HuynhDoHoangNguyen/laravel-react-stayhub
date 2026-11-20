@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export function Pagination({ currentPage, totalPages, onPageChange }) {
   if (totalPages <= 1) return null;
@@ -13,46 +14,48 @@ export function Pagination({ currentPage, totalPages, onPageChange }) {
       aria-label="Phân trang kết quả tìm kiếm"
       className="mt-12 flex items-center justify-center gap-2"
     >
-      <button
+      <Button
         type="button"
+        variant="outline"
+        aria-label="Trang trước"
         disabled={currentPage <= 1}
         onClick={() => onPageChange(currentPage - 1)}
-        className="inline-flex h-10 items-center gap-1.5 rounded-full border border-border bg-card px-4 text-xs font-medium text-ink transition-colors hover:border-primary hover:text-primary disabled:pointer-events-none disabled:opacity-40"
+        className="h-10 rounded-full px-4 text-xs font-medium"
       >
         <ChevronLeft className="h-4 w-4" />
         <span className="hidden sm:inline">Trang trước</span>
-      </button>
+      </Button>
 
       <div className="flex items-center gap-1.5">
         {pages.map((p) => {
           const isActive = p === currentPage;
           return (
-            <button
+            <Button
               key={p}
               type="button"
+              variant={isActive ? "default" : "outline"}
               onClick={() => onPageChange(p)}
-              className={[
-                "grid h-10 w-10 place-items-center rounded-full text-xs font-medium transition-all",
-                isActive
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "border border-border bg-card text-ink hover:border-primary hover:text-primary",
-              ].join(" ")}
+              aria-current={isActive ? "page" : undefined}
+              aria-label={`Trang ${p}`}
+              className="h-10 w-10 rounded-full p-0 text-xs font-medium"
             >
               {p}
-            </button>
+            </Button>
           );
         })}
       </div>
 
-      <button
+      <Button
         type="button"
+        variant="outline"
+        aria-label="Trang sau"
         disabled={currentPage >= totalPages}
         onClick={() => onPageChange(currentPage + 1)}
-        className="inline-flex h-10 items-center gap-1.5 rounded-full border border-border bg-card px-4 text-xs font-medium text-ink transition-colors hover:border-primary hover:text-primary disabled:pointer-events-none disabled:opacity-40"
+        className="h-10 rounded-full px-4 text-xs font-medium"
       >
         <span className="hidden sm:inline">Trang sau</span>
         <ChevronRight className="h-4 w-4" />
-      </button>
+      </Button>
     </nav>
   );
 }

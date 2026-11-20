@@ -1,5 +1,7 @@
 import api from '../api/axios.js';
 import { createPublicPropertyApi } from '../api/publicPropertyApi.js';
+import { roomSearchApi as defaultRoomSearchApi } from '../api/roomSearchApi.js';
+import { mapPropertyFromRooms, mapPropertyRooms } from '../mappers/propertyMapper.js';
 import { mapPropertySearchResponse } from '../mappers/catalogMapper.js';
 import { MOCK_PROPERTIES } from '../mocks/propertyMockData.js';
 import { createCatalogService } from './catalog.js';
@@ -11,7 +13,7 @@ import { createCatalogService } from './catalog.js';
  * - When mock is off or in production, attempts real API call.
  * - Does NOT silently fallback to mock if real API fails.
  */
-export function createPropertyService(propertyApi, { dev = false, enableMocks = 'false', properties = [] } = {}) {
+export function createPropertyService(propertyApi, { dev = false, enableMocks = 'false', properties = [], roomSearchApi = defaultRoomSearchApi } = {}) {
   const catalog = createCatalogService(propertyApi, { dev, enableMocks, properties });
   const isMockEnabled = dev === true && enableMocks === 'true';
   return {
@@ -116,6 +118,76 @@ export function createPropertyService(propertyApi, { dev = false, enableMocks = 
     },
 
     getPropertyById: catalog.getPropertyById,
+
+    /**
+     * TV2 checkout source: rooms that are bookable for the requested stay, from Room Search.
+     * Kept separate from getPropertyById (Catalog) so the Catalog delegate stays untouched.
+     */
+    async getBookableProperty(id, { startDate, endDate, adults = 2, children = 0 } = {}, options = {}) {
+      if (isMockEnabled) {
+        const found = properties.find((item) => String(item.id) === String(id));
+        return { data: found || null, source: 'mock' };
+      }
+
+      const allRooms = [];
+      let page = 1;
+      const perPage = 50;
+      const maxPages = 10; // R08: Bounded pagination up to 500 rooms
+      let serverTotal = null;
+      let hasMore = false;
+      let isTruncated = false;
+
+      while (page <= maxPages) {
+        const response = await roomSearchApi.search({
+          check_in_date: startDate,
+          check_out_date: endDate,
+          guest_count: Math.max(1, Number(adults) + Number(children)),
+          per_page: perPage,
+          page,
+          property_id: id,
+          sort: 'price_asc',
+        }, options);
+
+        const items = response.data?.data;
+        if (!Array.isArray(items)) {
+          throw new Error('Dữ liệu danh sách phòng từ Room Search không đúng định dạng.');
+        }
+        allRooms.push(...items);
+
+        const meta = response.data?.meta;
+        if (serverTotal === null && meta?.total !== undefined) {
+          serverTotal = Number(meta.total);
+        }
+
+        const lastPage = meta?.last_page ? Number(meta.last_page) : 1;
+        if (page >= lastPage || items.length < perPage) {
+          break;
+        }
+        if (page === maxPages && page < lastPage) {
+          hasMore = true;
+          isTruncated = true;
+          break;
+        }
+        page += 1;
+      }
+
+      const propertyData = mapPropertyFromRooms(mapPropertyRooms(allRooms));
+      if (propertyData) {
+        propertyData.hasMoreRooms = hasMore;
+        propertyData.totalRooms = serverTotal !== null ? serverTotal : allRooms.length;
+      }
+
+      const result = {
+        data: propertyData,
+        source: 'room-search',
+      };
+      if (serverTotal !== null || hasMore || isTruncated) {
+        result.total = serverTotal !== null ? serverTotal : allRooms.length;
+        result.hasMore = hasMore;
+        result.isTruncated = isTruncated;
+      }
+      return result;
+    },
   };
 }
 

@@ -1,0 +1,108 @@
+{
+    "preview_empty": {
+        "message": "The room id field is required. (and 3 more errors)",
+        "errors": {
+            "room_id": [
+                "The room id field is required."
+            ],
+            "check_in_date": [
+                "The check in date field is required."
+            ],
+            "check_out_date": [
+                "The check out date field is required."
+            ],
+            "guest_count": [
+                "The guest count field is required."
+            ]
+        }
+    },
+    "preview_non_existent_room": {
+        "message": "The selected room id is invalid.",
+        "errors": {
+            "room_id": [
+                "The selected room id is invalid."
+            ]
+        }
+    },
+    "preview_past_date": {
+        "message": "The check in date field must be a date after or equal to today.",
+        "errors": {
+            "check_in_date": [
+                "The check in date field must be a date after or equal to today."
+            ]
+        }
+    },
+    "preview_checkout_equal_checkin": {
+        "message": "The check out date field must be a date after check in date.",
+        "errors": {
+            "check_out_date": [
+                "The check out date field must be a date after check in date."
+            ]
+        }
+    },
+    "preview_guest_count_zero": {
+        "message": "The guest count field must be at least 1.",
+        "errors": {
+            "guest_count": [
+                "The guest count field must be at least 1."
+            ]
+        }
+    },
+    "preview_guest_count_string": {
+        "message": "The guest count field must be an integer.",
+        "errors": {
+            "guest_count": [
+                "The guest count field must be an integer."
+            ]
+        }
+    },
+    "store_empty": {
+        "message": "The room id field is required. (and 3 more errors)",
+        "errors": {
+            "room_id": [
+                "The room id field is required."
+            ],
+            "check_in_date": [
+                "The check in date field is required."
+            ],
+            "check_out_date": [
+                "The check out date field is required."
+            ],
+            "guest_count": [
+                "The guest count field is required."
+            ]
+        }
+    },
+    "store_non_existent_room": {
+        "message": "The selected room id is invalid.",
+        "errors": {
+            "room_id": [
+                "The selected room id is invalid."
+            ]
+        }
+    },
+    "store_past_date": {
+        "message": "The check in date field must be a date after or equal to today.",
+        "errors": {
+            "check_in_date": [
+                "The check in date field must be a date after or equal to today."
+            ]
+        }
+    },
+    "store_checkout_equal_checkin": {
+        "message": "The check out date field must be a date after check in date.",
+        "errors": {
+            "check_out_date": [
+                "The check out date field must be a date after check in date."
+            ]
+        }
+    },
+    "store_note_over_limit": {
+        "message": "The note field must not be greater than 1000 characters.",
+        "errors": {
+            "note": [
+                "The note field must not be greater than 1000 characters."
+            ]
+        }
+    }
+}

@@ -1,0 +1,110 @@
+{
+    "search_empty": {
+        "message": "The check in date field is required. (and 2 more errors)",
+        "errors": {
+            "check_in_date": [
+                "The check in date field is required."
+            ],
+            "check_out_date": [
+                "The check out date field is required."
+            ],
+            "guest_count": [
+                "The guest count field is required."
+            ]
+        }
+    },
+    "search_past_date": {
+        "message": "The check in date field must be a date after or equal to today.",
+        "errors": {
+            "check_in_date": [
+                "The check in date field must be a date after or equal to today."
+            ]
+        }
+    },
+    "search_checkout_equal_checkin": {
+        "message": "The check out date field must be a date after check in date.",
+        "errors": {
+            "check_out_date": [
+                "The check out date field must be a date after check in date."
+            ]
+        }
+    },
+    "search_guest_count_zero": {
+        "message": "The guest count field must be at least 1.",
+        "errors": {
+            "guest_count": [
+                "The guest count field must be at least 1."
+            ]
+        }
+    },
+    "search_guest_count_string": {
+        "message": "The guest count field must be an integer.",
+        "errors": {
+            "guest_count": [
+                "The guest count field must be an integer."
+            ]
+        }
+    },
+    "search_min_price_negative": {
+        "message": "The min price field must be at least 0.",
+        "errors": {
+            "min_price": [
+                "The min price field must be at least 0."
+            ]
+        }
+    },
+    "search_max_price_less_than_min": {
+        "message": "The max price field must be greater than or equal to min price.",
+        "errors": {
+            "max_price": [
+                "The max price field must be greater than or equal to min price."
+            ]
+        }
+    },
+    "search_invalid_sort": {
+        "message": "The selected sort is invalid.",
+        "errors": {
+            "sort": [
+                "The selected sort is invalid."
+            ]
+        }
+    },
+    "search_per_page_over_limit": {
+        "message": "The per page field must not be greater than 50.",
+        "errors": {
+            "per_page": [
+                "The per page field must not be greater than 50."
+            ]
+        }
+    },
+    "search_non_existent_property": {
+        "message": "The selected property id is invalid.",
+        "errors": {
+            "property_id": [
+                "The selected property id is invalid."
+            ]
+        }
+    },
+    "availability_empty": {
+        "message": "The check in date field is required. (and 2 more errors)",
+        "errors": {
+            "check_in_date": [
+                "The check in date field is required."
+            ],
+            "check_out_date": [
+                "The check out date field is required."
+            ],
+            "guest_count": [
+                "The guest count field is required."
+            ]
+        }
+    },
+    "availability_checkout_equal_checkin": {
+        "message": "The check out date field must be a date after check in date.",
+        "errors": {
+            "check_out_date": [
+                "The check out date field must be a date after check in date."
+            ]
+        }
+    }
+}
