@@ -11,8 +11,11 @@ import {
   Info,
   ExternalLink,
   X,
+  Loader2,
 } from 'lucide-react';
 import { formatLongDateVi } from '@/services/bookingService';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 export function CheckoutReviewStep({
   property,
@@ -23,10 +26,17 @@ export function CheckoutReviewStep({
   adults,
   children,
   note,
-  contactPhone,
   user,
   onEditGuests,
   onBackToProperty,
+  preview,
+  previewError,
+  createError,
+  isPreviewing,
+  isCreating,
+  isMock = false,
+  onRequestPreview,
+  onCreateBooking,
 }) {
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
 
@@ -44,6 +54,7 @@ export function CheckoutReviewStep({
 
   const handleOpenPreview = () => {
     setPreviewModalOpen(true);
+    onRequestPreview();
   };
 
   return (
@@ -59,14 +70,15 @@ export function CheckoutReviewStep({
               Chi tiết chỗ nghỉ & thời gian
             </h2>
           </div>
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            className="h-9 px-2 text-xs font-medium"
             onClick={onBackToProperty}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
           >
             <span>Đổi chỗ nghỉ</span>
             <ExternalLink className="h-3 w-3" />
-          </button>
+          </Button>
         </div>
 
         {/* Property & Room Media Row */}
@@ -84,11 +96,11 @@ export function CheckoutReviewStep({
               <MapPin className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">{property?.address || 'Việt Nam'}</span>
             </p>
-            <div className="mt-2 inline-flex items-center gap-2 rounded-xl bg-surface px-2.5 py-1 text-xs font-semibold text-ink">
+            <Badge variant="secondary" className="mt-2 inline-flex items-center gap-2 rounded-xl px-2.5 py-1 text-xs font-semibold text-ink">
               <BedDouble className="h-3.5 w-3.5 text-primary" />
               <span>{room?.name || 'Hạng phòng nghỉ'}</span>
               <span className="text-muted-foreground font-normal">({room?.room_type_name || 'Tiêu chuẩn'})</span>
-            </div>
+            </Badge>
           </div>
         </div>
 
@@ -133,14 +145,15 @@ export function CheckoutReviewStep({
               Thông tin đón tiếp
             </h2>
           </div>
-          <button
+          <Button
             type="button"
+            variant="outline"
+            className="h-8 rounded-xl px-3 py-1.5 text-xs font-semibold"
             onClick={onEditGuests}
-            className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-border/80 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-surface"
           >
             <Edit2 className="h-3.5 w-3.5" />
             <span>Chỉnh sửa</span>
-          </button>
+          </Button>
         </div>
 
         <div className="mt-6 divide-y divide-border/60 text-xs">
@@ -150,10 +163,10 @@ export function CheckoutReviewStep({
           </div>
           <div className="flex items-center justify-between py-2.5">
             <div>
-              <span className="text-muted-foreground">Số điện thoại liên hệ</span>
+              <span className="text-muted-foreground">Số điện thoại trong hồ sơ</span>
               <span className="block text-[10px] text-muted-foreground/70">Thông tin tham khảo</span>
             </div>
-            <span className="font-semibold text-ink">{contactPhone || '—'}</span>
+            <span className="font-semibold text-ink">{user?.phone || '—'}</span>
           </div>
           <div className="flex items-center justify-between py-2.5">
             <span className="text-muted-foreground">Hòm thư điện tử</span>
@@ -219,28 +232,30 @@ export function CheckoutReviewStep({
               Xem lại thông tin đặt phòng
             </div>
             <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-              Quý khách vui lòng rà soát lại thông tin lưu trú và dự toán chi phí. Hệ thống hiện cung cấp bản xem trước chi tiết để tham khảo trước khi liên hệ hoặc hoàn tất thủ tục lưu trú.
+              Kiểm tra tình trạng phòng và báo giá mới nhất từ hệ thống trước khi xác nhận đặt phòng.
             </p>
           </div>
         </div>
 
         <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-border/60 pt-6">
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            className="h-auto px-1 py-1 text-xs font-semibold"
             onClick={onEditGuests}
-            className="cursor-pointer text-xs font-semibold text-muted-foreground hover:text-ink transition-colors"
           >
             ← Quay lại bước thông tin khách
-          </button>
+          </Button>
 
-          <button
+          <Button
             type="button"
+            disabled={isMock || isPreviewing || isCreating}
             onClick={handleOpenPreview}
-            className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary px-7 py-3 text-xs font-semibold text-primary-foreground shadow-xs transition-all hover:bg-primary-mid active:scale-95"
+            className="h-11 rounded-xl px-7 text-xs font-semibold"
           >
             <Info className="h-4 w-4" />
-            <span>Xem lại thông tin dự kiến</span>
-          </button>
+            <span>{isMock ? 'Chế độ xem thử (Khóa đặt phòng)' : 'Kiểm tra và đặt phòng'}</span>
+          </Button>
         </div>
       </div>
 
@@ -260,64 +275,94 @@ export function CheckoutReviewStep({
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="checkout-preview-title"
               className="relative z-10 w-full max-w-md overflow-hidden rounded-3xl border border-border/70 bg-white p-6 sm:p-8 shadow-2xl"
             >
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="Đóng cửa sổ xem trước"
                 onClick={() => setPreviewModalOpen(false)}
-                className="absolute right-4 top-4 grid h-8 w-8 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-surface hover:text-ink transition-colors"
+                className="absolute right-4 top-4 h-8 w-8 rounded-full"
               >
                 <X className="h-4 w-4" />
-              </button>
+              </Button>
 
               <div className="grid h-12 w-12 place-items-center rounded-2xl bg-primary/[0.08] text-primary mb-3">
                 <Info className="h-6 w-6" />
               </div>
 
-              <h4 className="font-display text-2xl font-bold text-primary">
+              <h4 id="checkout-preview-title" className="font-display text-2xl font-bold text-primary">
                 Bản xem trước thông tin lưu trú
               </h4>
               <p className="text-xs text-muted-foreground leading-relaxed pt-2">
-                Hệ thống tiếp nhận đơn trực tuyến đang trong giai đoạn hoàn tất kết nối. Quý khách có thể sử dụng thông tin tóm tắt bên dưới để tham khảo và chủ động liên hệ lễ tân cơ sở lưu trú nếu cần tìm hiểu thêm:
+                Báo giá và tình trạng phòng được lấy trực tiếp từ StayHub. Giá cuối cùng do hệ thống xác nhận khi tạo booking.
               </p>
 
-              <div className="my-4 rounded-2xl bg-surface/80 p-4 border border-border/60 text-xs space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Chỗ nghỉ:</span>
-                  <span className="font-bold text-ink">{property?.name}</span>
+              {isPreviewing ? (
+                <div className="my-5 flex items-center gap-2 rounded-xl bg-surface p-4 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Đang kiểm tra giá và tình trạng phòng…
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Hạng phòng:</span>
-                  <span className="font-semibold text-ink">{room?.name}</span>
+              ) : previewError ? (
+                <div role="alert" className="my-5 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+                  {previewError}
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Thời gian:</span>
-                  <span className="font-semibold text-ink">{nights} đêm ({startDate} → {endDate})</span>
-                </div>
-                {property?.phone && (
-                  <div className="flex justify-between border-t border-border/60 pt-2 text-primary">
-                    <span className="font-semibold">Hotline hỗ trợ:</span>
-                    <span className="font-bold font-mono text-sm">{property.phone}</span>
+              ) : preview ? (
+                <div className="my-4 space-y-3 rounded-2xl border border-border/60 bg-surface/80 p-4 text-xs">
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Chỗ nghỉ</span>
+                    <span className="text-right font-bold text-ink">{property?.name}</span>
                   </div>
-                )}
-              </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Phòng</span>
+                    <span className="text-right font-semibold text-ink">{room?.name}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Thời gian</span>
+                    <span className="text-right font-semibold text-ink">{preview.number_of_nights} đêm ({startDate} → {endDate})</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Giá mỗi đêm</span>
+                    <span className="font-semibold text-ink">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(Number(preview.price_per_night))}</span>
+                  </div>
+                  <div className="flex justify-between gap-3 border-t border-border/60 pt-3">
+                    <span className="font-semibold text-ink">Tổng tiền phòng</span>
+                    <span className="font-bold text-primary">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(Number(preview.room_total))}</span>
+                  </div>
+                  <p className={preview.availability?.available ? 'text-emerald-700' : 'text-destructive'}>
+                    {preview.availability?.available ? 'Phòng còn trống trong khoảng ngày đã chọn.' : 'Phòng hiện không còn trống trong khoảng ngày đã chọn.'}
+                  </p>
+                </div>
+              ) : null}
 
-              <div className="flex flex-col-reverse sm:flex-row gap-2.5 pt-2">
-                <button
+              {createError && (
+                <div role="alert" className="mb-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
+                  {createError}
+                </div>
+              )}
+
+              <div className="flex flex-col-reverse gap-2.5 pt-2 sm:flex-row">
+                <Button
                   type="button"
+                  variant="outline"
                   onClick={() => setPreviewModalOpen(false)}
-                  className="w-full sm:w-auto cursor-pointer rounded-xl border border-border/80 bg-white px-4 py-2.5 text-xs font-semibold text-ink hover:bg-surface transition-colors"
+                  className="h-10 w-full rounded-xl px-4 text-xs font-semibold sm:w-auto"
                 >
-                  Đóng xem lại
-                </button>
-                {property?.phone && (
-                  <a
-                    href={`tel:${property.phone}`}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-xs font-semibold text-primary-foreground hover:bg-primary-mid transition-all"
+                  Đóng
+                </Button>
+                {preview?.availability?.available && (
+                  <Button
+                    type="button"
+                    onClick={onCreateBooking}
+                    disabled={isCreating || isPreviewing}
+                    className="h-10 w-full rounded-xl px-5 text-xs font-semibold sm:w-auto"
                   >
-                    <Phone className="h-3.5 w-3.5" />
-                    <span>Hotline lễ tân</span>
-                  </a>
+                    {isCreating && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    <span>{isCreating ? 'Đang tạo booking…' : 'Xác nhận đặt phòng'}</span>
+                  </Button>
                 )}
               </div>
             </motion.div>

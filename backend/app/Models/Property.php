@@ -4,12 +4,15 @@ namespace App\Models;
 
 use App\Enums\PropertyStatus;
 use App\Enums\PropertyType;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Property extends Model
 {
+    use HasFactory;
+
     /**
      * The table associated with the model.
      *

@@ -67,6 +67,11 @@ export function SearchBar() {
       return;
     }
 
+    if (!checkIn || !checkOut) {
+      toast.error("Vui lòng chọn ngày nhận phòng và trả phòng.");
+      return;
+    }
+
     if (checkIn && checkOut && checkOut <= checkIn) {
       toast.error("Ngày trả phòng phải sau ngày nhận phòng ít nhất 1 đêm.");
       return;

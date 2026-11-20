@@ -326,3 +326,36 @@ test('property header hides unsupported sorting and grid selects the correct car
     assert.ok(grid.includes('Property without rooms'));
     assert.ok(!grid.includes('khách / phòng'));
 });
+
+test('availability cards forward selected room, dates and guests to checkout while catalog cards stay informational', async () => {
+    const room = mapRoomSearchPage(page).data[0];
+    const query = 'startDate=2026-12-01&endDate=2026-12-03&adults=2&children=1';
+    const html = await renderSearch('ResultsGrid', { rooms: [room], isLoading: false, isAvailableDate: true, searchParams: query });
+    assert.ok(html.includes('Đặt ngay'));
+    const href = html.match(/href="(\/customer\/checkout\?[^"]+)"/)[1].replaceAll('&amp;', '&');
+    const url = new URL(href, 'https://example.test');
+    assert.equal(url.searchParams.get('roomId'), '3');
+    assert.equal(url.searchParams.get('propertyId'), '2');
+    for (const [key, value] of new URLSearchParams(query)) assert.equal(url.searchParams.get(key), value);
+    assert.ok(!html.includes('Chưa kiểm tra phòng trống'));
+    const catalog = await renderSearch('ResultsGrid', { rooms: [room], isLoading: false, searchParams: query });
+    assert.ok(!catalog.includes('/customer/checkout'));
+    assert.ok(catalog.includes('Chưa kiểm tra phòng trống'));
+    const loading = await renderSearch('ResultsGrid', { rooms: [room], isLoading: true, isAvailableDate: true, searchParams: query });
+    assert.ok(!loading.includes('/customer/checkout'));
+});
+
+test('newest sorting is offered consistently only for availability and metadata tolerates missing from/to', async () => {
+    for (const component of ['ResultsHeader', 'AssistantPanel']) {
+        const props = { params: { sort: 'newest' }, sortBy: 'newest', availability: true,
+            meta: { total: 25, current_page: 2, last_page: 3 }, view: 'grid', onViewChange() {}, onApply() {} };
+        const html = await renderSearch(component, props);
+        assert.match(html, /value="newest" selected/);
+        assert.ok(html.includes('Mới nhất'));
+        assert.ok(!html.includes('Giá trị không hợp lệ'));
+        assert.ok(!html.includes('undefined'));
+        const catalog = await renderSearch(component, { ...props, availability: false });
+        assert.ok(catalog.includes('Giá trị không hợp lệ'));
+        assert.ok(!catalog.includes('Mới nhất'));
+    }
+});

@@ -1,4 +1,5 @@
 import { CalendarCheck, BadgeCheck, Luggage, XCircle } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
 
 /**
  * Hiển thị 4 thẻ thống kê trạng thái kỳ nghỉ của khách hàng theo phong cách StayNest Quiet Luxury.
@@ -65,25 +66,25 @@ export function BookingStats({ stats, bookings = [] }) {
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {cards.map((c) => {
         const Icon = c.icon;
         return (
-          <div
+          <Card
             key={c.title}
-            className="group rounded-2xl border border-border/60 bg-white p-5 shadow-[0_1px_2px_rgba(17,26,19,0.04)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_30px_-16px_rgba(17,26,19,0.18)]"
+            className="group rounded-2xl border-border/60 shadow-xs transition-shadow hover:shadow-md"
           >
-            <div className="flex items-start gap-4">
-              <div className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl ${c.tint}`}>
+            <CardContent className="flex items-start gap-4 p-5">
+              <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${c.tint}`}>
                 <Icon className={`h-5 w-5 ${c.iconColor}`} aria-hidden="true" />
               </div>
               <div className="min-w-0">
                 <div className="font-display text-3xl leading-none text-primary">{c.count}</div>
-                <div className="mt-1.5 text-[13px] font-semibold text-ink">{c.title}</div>
-                <div className="mt-0.5 text-[11.5px] text-muted-foreground truncate">{c.hint}</div>
+                <div className="mt-1.5 text-sm font-semibold text-ink">{c.title}</div>
+                <div className="mt-0.5 truncate text-xs text-muted-foreground">{c.hint}</div>
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         );
       })}
     </div>

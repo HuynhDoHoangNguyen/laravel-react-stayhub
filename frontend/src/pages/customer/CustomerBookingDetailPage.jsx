@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -27,6 +27,7 @@ import {
 } from '@/services/bookingService';
 import { reviewService } from '@/services/reviewService';
 import { ReviewCreateModal } from '@/components/reviews/ReviewCreateModal';
+import { bookingDisplayError } from '@/utils/bookingDisplayError';
 
 function FieldItem({ icon: Icon, label, value }) {
   return (
@@ -48,10 +49,81 @@ export default function CustomerBookingDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState(null);
   const [isMockData, setIsMockData] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState('');
+  const cancelLock = useRef(false);
+  const activeBookingIdRef = useRef(bookingId);
+  const isMountedRef = useRef(true);
+  const cancelRequestIdRef = useRef(0);
+  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
+
+  const [prevBookingId, setPrevBookingId] = useState(bookingId);
+  if (bookingId !== prevBookingId) {
+    setPrevBookingId(bookingId);
+    setIsCancelling(false);
+    setIsCancelDialogOpen(false);
+    setCancelError('');
+  }
+
+  useEffect(() => {
+    activeBookingIdRef.current = bookingId;
+    cancelLock.current = false;
+    cancelRequestIdRef.current += 1;
+  }, [bookingId]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+  const cancelTriggerRef = useRef(null);
+  const cancelDialogRef = useRef(null);
+  const cancelDialogActionRef = useRef(null);
+  const detailHeadingRef = useRef(null);
 
   // Review data fetched from API
   const [fetchedReviewState, setFetchedReviewState] = useState(null);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isCancelDialogOpen) return undefined;
+
+    const cancelTrigger = cancelTriggerRef.current;
+    const detailHeading = detailHeadingRef.current;
+    cancelDialogActionRef.current?.focus();
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape' && !cancelLock.current) {
+        setIsCancelDialogOpen(false);
+        return;
+      }
+      if (event.key === 'Tab') {
+        const focusable = cancelDialogRef.current?.querySelectorAll(
+          'button:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])'
+        );
+        if (!focusable?.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      if (cancelTrigger?.isConnected) {
+        cancelTrigger.focus();
+      } else {
+        detailHeading?.focus();
+      }
+    };
+  }, [isCancelDialogOpen]);
 
   // Derive trạng thái review: tránh cascading render theo React 19
   const reviewState = useMemo(() => {
@@ -111,12 +183,43 @@ export default function CustomerBookingDetailPage() {
     }
   };
 
+  const handleCancelBooking = async () => {
+    if (cancelLock.current) return;
+    const targetBookingId = String(booking?.id ?? bookingId ?? '');
+    const currentRequestId = ++cancelRequestIdRef.current;
+
+    cancelLock.current = true;
+    setIsCancelling(true);
+    setCancelError('');
+    try {
+      const updatedBooking = await bookingService.cancelBooking(targetBookingId);
+      if (!isMountedRef.current || String(activeBookingIdRef.current) !== targetBookingId || currentRequestId !== cancelRequestIdRef.current) {
+        return;
+      }
+      setBooking((current) => ({ ...current, ...updatedBooking }));
+      setIsCancelDialogOpen(false);
+    } catch (error) {
+      if (!isMountedRef.current || String(activeBookingIdRef.current) !== targetBookingId || currentRequestId !== cancelRequestIdRef.current) {
+        return;
+      }
+      setCancelError(bookingDisplayError(error, 'Không thể hủy đơn đặt phòng. Vui lòng thử lại.'));
+    } finally {
+      if (currentRequestId === cancelRequestIdRef.current && String(activeBookingIdRef.current) === targetBookingId) {
+        cancelLock.current = false;
+        if (isMountedRef.current) {
+          setIsCancelling(false);
+        }
+      }
+    }
+  };
+
   useEffect(() => {
+    const controller = new AbortController();
     let ignore = false;
 
     async function load() {
       try {
-        const res = await bookingService.getBookingDetail(bookingId);
+        const res = await bookingService.getBookingDetail(bookingId, { signal: controller.signal });
         if (!ignore) {
           setBooking(res.data);
           setIsMockData(Boolean(res.isMock));
@@ -124,9 +227,12 @@ export default function CustomerBookingDetailPage() {
           setIsLoading(false);
         }
       } catch (err) {
-        if (!ignore) {
+        if (!ignore && !controller.signal.aborted) {
           setBooking(null);
-          setErrorMessage(err.message || 'Không tìm thấy thông tin đơn đặt phòng.');
+          setErrorMessage(bookingDisplayError(err, 'Không thể tải chi tiết đơn đặt phòng.', {
+            notFoundMessage: 'Không tìm thấy thông tin đơn đặt phòng này.',
+            useStatusMessages: false,
+          }));
           setIsLoading(false);
         }
       }
@@ -138,6 +244,7 @@ export default function CustomerBookingDetailPage() {
 
     return () => {
       ignore = true;
+      controller.abort();
     };
   }, [bookingId]);
 
@@ -164,7 +271,7 @@ export default function CustomerBookingDetailPage() {
           <p className="mt-6 text-[11px] font-semibold uppercase tracking-[0.24em] text-accent">
             ✦ Đơn đặt phòng
           </p>
-          <h1 className="mt-2 font-display text-2xl font-bold text-primary sm:text-3xl">
+        <h1 ref={detailHeadingRef} tabIndex={-1} className="mt-2 font-display text-2xl font-bold text-primary outline-none sm:text-3xl">
             Không tìm thấy thông tin đơn đặt phòng
           </h1>
           <p className="mx-auto mt-3 max-w-md text-xs leading-relaxed text-muted-foreground">
@@ -212,7 +319,7 @@ export default function CustomerBookingDetailPage() {
   );
 
   return (
-    <div className="mx-auto max-w-[1180px] pb-24 pt-2 text-left">
+      <div className="mx-auto max-w-[1180px] space-y-6 pb-24 pt-2 text-left">
       {/* Top Back Action */}
       <div className="mb-4 flex items-center justify-between">
         <button
@@ -236,7 +343,7 @@ export default function CustomerBookingDetailPage() {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-        className="overflow-hidden rounded-3xl border border-border/60 bg-white shadow-[0_1px_2px_rgba(17,26,19,0.04)]"
+        className="overflow-hidden rounded-3xl border border-border/60 bg-white shadow-sm"
       >
         <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
           {/* Cover Photo */}
@@ -255,7 +362,7 @@ export default function CustomerBookingDetailPage() {
                 <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-accent">
                   Mã đơn #{booking.booking_code || `BK${booking.id}`}
                 </p>
-                <h1 className="mt-1 font-display text-2xl font-bold leading-tight text-primary sm:text-3xl md:text-4xl">
+                <h1 ref={detailHeadingRef} tabIndex={-1} className="mt-1 font-display text-2xl font-bold leading-tight text-primary outline-none sm:text-3xl md:text-4xl">
                   {property.name || 'Cơ sở lưu trú StayHub'}
                 </h1>
                 <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -313,6 +420,18 @@ export default function CustomerBookingDetailPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2.5">
+                {!isMockData && ['PENDING', 'CONFIRMED'].includes(effectiveStatus) && (
+                  <button
+                    type="button"
+                    ref={cancelTriggerRef}
+                    onClick={() => setIsCancelDialogOpen(true)}
+                    disabled={isCancelling}
+                    aria-label="Hủy đơn đặt phòng"
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-semibold text-rose-800 transition-colors hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isCancelling ? 'Đang hủy…' : 'Hủy đơn'}
+                  </button>
+                )}
                 {property.id && (
                   <Link
                     to={`/properties/${property.id}`}
@@ -353,6 +472,11 @@ export default function CustomerBookingDetailPage() {
                 )}
               </div>
             </div>
+            {cancelError && (
+              <p role="alert" className="mt-3 text-xs font-medium text-rose-700">
+                {cancelError}
+              </p>
+            )}
           </div>
         </div>
       </motion.div>
@@ -651,6 +775,45 @@ export default function CustomerBookingDetailPage() {
           )}
         </aside>
       </div>
+
+      {isCancelDialogOpen && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4" onMouseDown={(event) => {
+          if (event.target === event.currentTarget && !isCancelling) setIsCancelDialogOpen(false);
+        }}>
+          <section
+            ref={cancelDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cancel-booking-title"
+            aria-describedby="cancel-booking-description"
+            className="w-full max-w-md rounded-2xl border border-border bg-white p-6 shadow-xl"
+          >
+            <h2 id="cancel-booking-title" className="font-display text-xl font-bold text-primary">Xác nhận hủy đơn</h2>
+            <p id="cancel-booking-description" className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              Bạn có chắc chắn muốn hủy đơn đặt phòng này?
+            </p>
+            <div className="mt-6 flex flex-col-reverse justify-end gap-2 sm:flex-row">
+              <button
+                type="button"
+                ref={cancelDialogActionRef}
+                disabled={isCancelling}
+                onClick={() => setIsCancelDialogOpen(false)}
+                className="rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-ink hover:bg-surface disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Giữ đặt phòng
+              </button>
+              <button
+                type="button"
+                disabled={isCancelling}
+                onClick={handleCancelBooking}
+                className="rounded-xl bg-rose-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isCancelling ? 'Đang hủy…' : 'Xác nhận hủy'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {/* Review Create Modal */}
       {booking && (

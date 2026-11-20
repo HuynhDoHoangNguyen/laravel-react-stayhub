@@ -9,7 +9,7 @@ function CardSkeleton({ view }) {
     </div>;
 }
 
-export function ResultsGrid({ rooms = [], properties, isLoading, view = 'grid' }) {
+export function ResultsGrid({ rooms = [], properties, isLoading, view = 'grid', searchParams = '', isAvailableDate = false }) {
     const reducedMotion = useReducedMotion();
     const layout = view === 'list' ? 'flex flex-col gap-5' : 'grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2';
     return <div className={layout} aria-busy={isLoading}>
@@ -17,7 +17,7 @@ export function ResultsGrid({ rooms = [], properties, isLoading, view = 'grid' }
             : (properties ?? rooms).map((item, index) => <motion.div key={item.id} className="min-w-0"
                 initial={reducedMotion ? false : { opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: reducedMotion ? 0 : 0.45, delay: reducedMotion ? 0 : Math.min(index * 0.05, 0.3), ease: [0.16, 1, 0.3, 1] }}>
-                {properties ? <SearchPropertyCard property={item} view={view} /> : <SearchRoomCard room={item} view={view} />}
+                {properties ? <SearchPropertyCard property={item} view={view} /> : <SearchRoomCard room={item} view={view} searchParams={searchParams} isAvailableDate={isAvailableDate} />}
             </motion.div>)}
     </div>;
 }

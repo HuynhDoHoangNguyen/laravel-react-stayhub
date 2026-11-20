@@ -1,5 +1,6 @@
 import { ChevronRight, FileText, UserRound, Compass, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { Card, CardContent } from '@/components/ui/card';
 
 const ITEMS = [
   {
@@ -32,7 +33,8 @@ export function QuickPicks() {
   return (
     <aside className="space-y-6">
       {/* Quick Links Card */}
-      <div className="rounded-2xl border border-border/60 bg-white p-4 shadow-[0_1px_2px_rgba(17,26,19,0.04)]">
+      <Card className="rounded-2xl border-border/60 shadow-xs">
+        <CardContent className="p-4">
         <div className="flex items-center gap-2 px-2 pb-3 pt-1">
           <span aria-hidden="true" className="text-primary text-sm">✦</span>
           <h3 className="font-display text-xl font-bold text-primary">Tiện ích nhanh</h3>
@@ -65,10 +67,12 @@ export function QuickPicks() {
             );
           })}
         </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Luxury Inspiration Banner */}
-      <div className="relative overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-br from-[#f8f5ee] via-[#f1ebe0] to-[#e7decb] p-6 shadow-[0_1px_2px_rgba(17,26,19,0.04)]">
+      <Card className="relative overflow-hidden rounded-2xl border-border/60 bg-gradient-to-br from-[#f8f5ee] via-[#f1ebe0] to-[#e7decb] shadow-xs">
+        <CardContent className="p-6">
         <div className="relative z-10">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-white/80 px-2.5 py-1 text-[10.5px] font-semibold text-primary backdrop-blur-xs">
             <Sparkles className="h-3 w-3 text-accent" />
@@ -88,7 +92,8 @@ export function QuickPicks() {
             <span aria-hidden="true">✦</span>
           </Link>
         </div>
-      </div>
+        </CardContent>
+      </Card>
     </aside>
   );
 }

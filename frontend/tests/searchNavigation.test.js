@@ -72,6 +72,20 @@ test('untrusted backlink values never become an external route or bypass tab val
     assert.equal(searchBackLink({ catalogPage: '?page=0' }), '/search?tab=properties');
 });
 
+test('availability context survives tab switching and detail backlinks without leaking into property API params', () => {
+    const query = 'startDate=2026-12-01&endDate=2026-12-03&city=Hue&adults=2&children=1&guest_count=3&room_type_ids[]=2&sort=newest&page=3';
+    const properties = readSearchNavigation(changeSearchTab(query, 'properties'));
+    assert.deepEqual(properties.propertyParams, { page: 1, per_page: 12 });
+    const rooms = new URLSearchParams(changeSearchTab('tab=properties&' + query, 'rooms'));
+    for (const key of ['startDate', 'endDate', 'city', 'adults', 'children', 'guest_count', 'sort']) {
+        assert.equal(rooms.get(key), new URLSearchParams(query).get(key));
+    }
+    assert.equal(rooms.has('page'), false);
+    assert.equal(searchBackLink({ searchPage: '?' + query }), '/search?' + query);
+    const aliases = '?check_in_date=2026-12-01&check_out_date=2026-12-03&keyword=Hue&room_type_id=2';
+    assert.equal(searchBackLink({ searchPage: aliases }), '/search' + aliases);
+});
+
 test('production property service sends only active pagination and preserves null/zero prices and metadata', async () => {
     const rows = [null, '0.00'].map((price, index) => ({ id: index + 1, name: 'Property ' + index,
         type: 'HOTEL', address: 'Address', starting_price: price, rating: null, review_count: 0 }));

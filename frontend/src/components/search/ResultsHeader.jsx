@@ -1,6 +1,6 @@
 import { LayoutGrid, List } from 'lucide-react';
 
-export function ResultsHeader({ meta, sortBy, onSortChange, view, onViewChange, kind = 'rooms' }) {
+export function ResultsHeader({ meta, sortBy, onSortChange, view, onViewChange, kind = 'rooms', availability = false }) {
     const unit = kind === 'properties' ? 'cơ sở lưu trú' : 'phòng phù hợp';
     return <div id="results-header" className="mb-6 flex scroll-mt-28 flex-wrap items-end justify-between gap-4">
         <div aria-live="polite">
@@ -11,8 +11,9 @@ export function ResultsHeader({ meta, sortBy, onSortChange, view, onViewChange, 
             {kind === 'rooms' && <label className="inline-flex items-center gap-2 text-[12.5px] text-muted-foreground">Sắp xếp
                 <span className="relative">
                     <select value={sortBy} onChange={event => onSortChange(event.target.value)} className="max-w-full appearance-none rounded-xl border border-border bg-card py-2 pl-3 pr-9 text-[13px] font-medium text-ink focus:border-primary focus:outline-primary">
-                        {!['price_asc', 'price_desc'].includes(sortBy) && <option value={sortBy}>Giá trị không hợp lệ</option>}
+                        {!(availability ? ['price_asc', 'price_desc', 'newest'] : ['price_asc', 'price_desc']).includes(sortBy) && <option value={sortBy}>Giá trị không hợp lệ</option>}
                         <option value="price_asc">Giá: Thấp đến Cao</option><option value="price_desc">Giá: Cao đến Thấp</option>
+                        {availability && <option value="newest">Mới nhất</option>}
                     </select>
                     <span aria-hidden className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">▾</span>
                 </span>

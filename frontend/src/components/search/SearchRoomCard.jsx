@@ -6,13 +6,15 @@ import CatalogImage from '../catalog/CatalogImage';
 
 const currency = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 2 });
 
-export function SearchRoomCard({ room, view = 'grid' }) {
+export function SearchRoomCard({ room, view = 'grid', searchParams = '', isAvailableDate = false }) {
     const location = useLocation();
     const [photoIndex, setPhotoIndex] = useState(0);
     const [hovered, setHovered] = useState(false);
     const reducedMotion = useReducedMotion();
     const photos = room.images;
     const activePhoto = photoIndex % Math.max(photos.length, 1);
+    const checkoutHref = `/customer/checkout?propertyId=${room.property.id}&roomId=${room.id}${searchParams ? `&${searchParams}` : ''}`;
+    const propertyHref = '/properties/' + room.property.id + (isAvailableDate && searchParams ? '?' + searchParams : '');
     useEffect(() => {
         if (!hovered || reducedMotion || photos.length <= 1) return;
         const interval = setInterval(() => setPhotoIndex(index => (index + 1) % photos.length), 1400);
@@ -49,10 +51,13 @@ export function SearchRoomCard({ room, view = 'grid' }) {
                 <li key={item.id} className="inline-flex min-w-0 max-w-full items-start gap-1"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden /><span className="break-words">{item.name}</span></li>)}</ul>}
             <div className="mt-auto pt-4">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/40 pt-4">
-                    <div className="min-w-0"><p className="break-words text-[16px] font-semibold tracking-tight text-ink sm:text-[17px]">{currency.format(room.price_per_night)}</p><p className="text-[11.5px] text-muted-foreground">/ đêm · tham khảo</p></div>
-                    <Link to={'/properties/' + room.property.id} state={{ searchPage: location.search }} className="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-primary px-4 py-2 text-[12.5px] font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary-mid">Xem cơ sở</Link>
+                    <div className="min-w-0"><p className="break-words text-[16px] font-semibold tracking-tight text-ink sm:text-[17px]">{currency.format(room.price_per_night)}</p><p className="text-[11.5px] text-muted-foreground">{isAvailableDate ? '/ đêm' : '/ đêm · tham khảo'}</p></div>
+                    {isAvailableDate ? <>
+                        <Link to={checkoutHref} className="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-primary px-4 py-2 text-[12.5px] font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary-mid">Đặt ngay</Link>
+                        <Link to={propertyHref} state={{ searchPage: location.search }} className="text-[12.5px] font-medium text-primary underline">Xem cơ sở</Link>
+                    </> : <Link to={propertyHref} state={{ searchPage: location.search }} className="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-primary px-4 py-2 text-[12.5px] font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary-mid">Xem cơ sở lưu trú</Link>}
                 </div>
-                <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">Chưa kiểm tra phòng trống theo ngày.</p>
+                <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">{isAvailableDate ? 'Có phòng trống trong khoảng ngày đã chọn. Giá cuối cùng được xác nhận khi đặt phòng.' : 'Chưa kiểm tra phòng trống theo ngày.'}</p>
             </div>
         </div>
     </motion.article>;

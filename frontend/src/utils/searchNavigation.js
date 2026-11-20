@@ -1,6 +1,7 @@
 import { catalogParams } from '../services/catalog.js';
 
-const keys = new Set(['tab', 'min_price', 'max_price', 'guest_count', 'min_rating', 'sort', 'page', 'per_page', 'room_type_ids[]', 'amenity_ids[]']);
+const keys = new Set(['tab', 'min_price', 'max_price', 'guest_count', 'min_rating', 'sort', 'page', 'per_page', 'room_type_ids[]', 'amenity_ids[]',
+    'startDate', 'endDate', 'check_in_date', 'check_out_date', 'adults', 'children', 'roomsCount', 'city', 'keyword', 'q', 'room_type_id', 'room_type_ids', 'amenity_ids']);
 
 export function readSearchNavigation(search = '') {
     const url = new URLSearchParams(search);

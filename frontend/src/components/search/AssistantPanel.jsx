@@ -9,7 +9,7 @@ const suggestions = [
 ];
 
 // The result view is keyed by URL, keeping applied values consistent with the sidebar.
-export function AssistantPanel({ params, onApply, errors = {} }) {
+export function AssistantPanel({ params, onApply, errors = {}, availability = false }) {
     const [prices, setPrices] = useState(() => ({ min_price: params.min_price ?? '', max_price: params.max_price ?? '' }));
     const fieldErrors = key => Array.isArray(errors[key]) ? errors[key] : [];
     const sort = params.sort ?? 'price_asc';
@@ -26,8 +26,9 @@ export function AssistantPanel({ params, onApply, errors = {} }) {
                 <select id="assistant-sort" value={sort} onChange={event => onApply({ sort: event.target.value })}
                     aria-invalid={fieldErrors('sort').length > 0} aria-describedby={fieldErrors('sort').length ? 'assistant-sort-error' : undefined}
                     className="mt-1.5 w-full rounded-xl border border-border bg-card px-3 py-2 text-[13px] text-ink focus:border-primary focus:outline-primary">
-                    {!['price_asc', 'price_desc'].includes(sort) && <option value={sort}>Giá trị không hợp lệ</option>}
+                    {!(availability ? ['price_asc', 'price_desc', 'newest'] : ['price_asc', 'price_desc']).includes(sort) && <option value={sort}>Giá trị không hợp lệ</option>}
                     <option value="price_asc">Giá: Thấp đến Cao</option><option value="price_desc">Giá: Cao đến Thấp</option>
+                    {availability && <option value="newest">Mới nhất</option>}
                 </select>
                 {fieldErrors('sort').length > 0 && <p id="assistant-sort-error" className="mt-2 text-xs text-red-600">{fieldErrors('sort').join(' ')}</p>}
                 <div className="mt-3 grid grid-cols-2 gap-2">
@@ -48,7 +49,7 @@ export function AssistantPanel({ params, onApply, errors = {} }) {
                 <div className="flex flex-wrap gap-2">{suggestions.map(item => <button key={item.label} type="button" onClick={() => onApply(item.patch)}
                     className="rounded-full border border-border bg-background px-3 py-1.5 text-[11.5px] text-ink transition-colors hover:border-primary hover:text-primary">{item.label}</button>)}</div>
             </div>
-            <p className="text-[11.5px] leading-relaxed text-muted-foreground">Đánh giá tính theo cơ sở. Giá hiển thị là giá tham khảo; danh sách chưa kiểm tra phòng trống theo ngày.</p>
+            <p className="text-[11.5px] leading-relaxed text-muted-foreground">{availability ? 'Đánh giá tính theo cơ sở. Phòng trống được kiểm tra theo ngày đã chọn; giá cuối cùng được xác nhận khi đặt phòng.' : 'Đánh giá tính theo cơ sở. Giá hiển thị là giá tham khảo; danh sách chưa kiểm tra phòng trống theo ngày.'}</p>
         </div>
     </aside>;
 }
