@@ -5,9 +5,9 @@ namespace App\Services\Auth;
 use App\DTOs\Auth\Requests\LoginRequest;
 use App\Enums\UserRole;
 use App\Enums\UserStatus;
+use App\Exceptions\Auth\LoginThrottledException;
 use App\Models\User;
 use Illuminate\Contracts\Session\Session;
-use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
@@ -27,10 +27,7 @@ class AuthService
 
         if (RateLimiter::tooManyAttempts($key, self::MAX_FAILURES)) {
             $retryAfter = max(1, RateLimiter::availableIn($key));
-            throw new HttpResponseException(response()->json([
-                'message' => 'Bạn đã thử đăng nhập quá nhiều lần. Vui lòng thử lại sau.',
-                'retry_after' => $retryAfter,
-            ], 429, ['Retry-After' => (string) $retryAfter]));
+            throw new LoginThrottledException($retryAfter);
         }
 
         // Login context can restrict access; it never grants or changes a user's role.

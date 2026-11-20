@@ -14,7 +14,7 @@ use App\Repositories\Catalog\CatalogRepository;
 use App\Services\Catalog\HostRoomQueryService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\TestCase;
-use Illuminate\Http\Exceptions\HttpResponseException;
+use App\Exceptions\AppException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -193,8 +193,8 @@ final class HostRoomDetailTest extends TestCase
         try {
             $this->app->make(HostRoomQueryService::class)->detail($actor, new HostRoomDetailQuery(1));
             $this->fail('Expected role denial.');
-        } catch (HttpResponseException $error) {
-            $this->assertSame(403, $error->getResponse()->getStatusCode());
+        } catch (AppException $error) {
+            $this->assertSame(403, $error->status);
         }
     }
 

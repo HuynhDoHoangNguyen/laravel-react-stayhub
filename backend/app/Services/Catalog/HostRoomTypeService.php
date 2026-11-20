@@ -11,7 +11,7 @@ use App\Mappers\Catalog\CatalogMapper;
 use App\Models\User;
 use App\Repositories\Catalog\CatalogRepository;
 use App\Validators\Catalog\CatalogValidator;
-use Illuminate\Http\Exceptions\HttpResponseException;
+use App\Exceptions\AppException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -35,7 +35,7 @@ final class HostRoomTypeService
                 return null;
             }
             if ($this->repository->roomTypeHasReferences($roomType)) {
-                throw new HttpResponseException(response()->json(['message' => 'Loại phòng đang được sử dụng và không thể xóa.'], 409));
+                throw new AppException('CATALOG_ROOM_TYPE_IN_USE', 'Loại phòng đang được sử dụng và không thể xóa.', 409);
             }
 
             $this->repository->deleteHostRoomType($roomType);
@@ -60,7 +60,7 @@ final class HostRoomTypeService
                 return null;
             }
             if ($roomType->name !== $input->name && $this->repository->hostRoomTypeNameExists($property, $input->name, $input->roomTypeId)) {
-                throw new HttpResponseException(response()->json(['message' => 'Cơ sở đã có loại phòng cùng tên.'], 409));
+                throw new AppException('CATALOG_ROOM_TYPE_NAME_CONFLICT', 'Cơ sở đã có loại phòng cùng tên.', 409);
             }
 
             $changed = $this->repository->updateHostRoomType($roomType, $input->name, $input->description);
@@ -86,7 +86,7 @@ final class HostRoomTypeService
                 return null;
             }
             if ($this->repository->hostRoomTypeNameExists($property, $input->name)) {
-                throw new HttpResponseException(response()->json(['message' => 'Cơ sở đã có loại phòng cùng tên.'], 409));
+                throw new AppException('CATALOG_ROOM_TYPE_NAME_CONFLICT', 'Cơ sở đã có loại phòng cùng tên.', 409);
             }
 
             $roomType = $this->repository->createHostRoomType($property, $input->name, $input->description);

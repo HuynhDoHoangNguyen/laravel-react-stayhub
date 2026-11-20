@@ -2,7 +2,6 @@
 
 namespace App\Validators\Auth;
 
-use App\Services\Auth\RegistrationService;
 use Closure;
 
 /** Shared credential policy for registration and self-profile updates. */
@@ -48,7 +47,6 @@ final class CredentialRules
             'email.email' => 'Email phải đúng định dạng, ví dụ: ten@example.com.',
             'email.regex' => 'Email phải đúng định dạng, ví dụ: ten@example.com.',
             'email.max' => 'Địa chỉ email không được vượt quá 254 ký tự.',
-            'email.unique' => RegistrationService::DUPLICATE_EMAIL,
             'password.required' => 'Vui lòng nhập mật khẩu.',
             'password.string' => 'Mật khẩu phải là chuỗi ký tự.',
             'password.min' => 'Mật khẩu phải có ít nhất 8 ký tự.',
