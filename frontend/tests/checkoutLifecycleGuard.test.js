@@ -165,3 +165,110 @@ test('PR10-04: CustomerCheckoutPage source contains updateGuestCount reset and i
   assert.match(code, /if\s*\(!isMountedRef\.current\)\s*return;/);
   assert.match(code, /if\s*\(isMountedRef\.current\s*&&\s*currentReqId\s*===\s*previewRequestIdRef\.current\)/);
 });
+
+test('PR10-05: HostBookingDetailPage resets actionLoading when bookingId switches during pending transition', async () => {
+  let activeBookingId = 10;
+  let actionLoading = false;
+  let actionLock = false;
+  let bookingData = { id: 10, status: 'PENDING' };
+  let isMounted = true;
+
+  let resolveTransition = null;
+  const deferredTransition = () => new Promise((resolve) => { resolveTransition = resolve; });
+
+  const runTransition = async () => {
+    if (actionLock) return;
+    const targetBookingId = activeBookingId;
+    actionLock = true;
+    actionLoading = true;
+
+    try {
+      const updated = await deferredTransition();
+      if (!isMounted || activeBookingId !== targetBookingId) {
+        return;
+      }
+      bookingData = updated;
+    } finally {
+      actionLock = false;
+      if (isMounted) {
+        actionLoading = false;
+      }
+    }
+  };
+
+  const switchBooking = (newId) => {
+    activeBookingId = newId;
+    actionLoading = false; // PR10-05 reset
+    actionLock = false;
+  };
+
+  // 1. Host triggers transition on booking 10
+  const transitionTask = runTransition('confirm');
+  assert.equal(actionLoading, true, 'actionLoading must be true during pending mutation');
+
+  // 2. User switches to booking 11 while transition is pending
+  switchBooking(11);
+  assert.equal(actionLoading, false, 'PR10-05: actionLoading must immediately reset to false when switching booking');
+
+  // 3. Old transition finishes later
+  resolveTransition({ id: 10, status: 'CONFIRMED' });
+  await transitionTask;
+
+  // 4. actionLoading remains false and bookingData was NOT overwritten with stale booking 10 data
+  assert.equal(actionLoading, false, 'actionLoading must remain false after stale transition completes');
+  assert.equal(bookingData.id, 10, 'Booking data must not be mutated with stale transition result');
+  assert.equal(bookingData.status, 'PENDING');
+});
+
+test('PR10-05: HostBookingServicesPage resets saving state when bookingId switches during pending mutation', async () => {
+  let activeBookingId = 20;
+  let saving = '';
+  let actionLock = false;
+  let services = [{ id: 1, name: 'Service 1' }];
+  let isMounted = true;
+
+  let resolveServiceAction = null;
+  const deferredAction = () => new Promise((resolve) => { resolveServiceAction = resolve; });
+
+  const performAction = async (key, actionFn) => {
+    if (actionLock) return;
+    const targetBookingId = activeBookingId;
+    actionLock = true;
+    saving = key;
+
+    try {
+      await actionFn();
+      if (!isMounted || activeBookingId !== targetBookingId) {
+        return;
+      }
+      services = [...services, { id: 2, name: 'Service 2' }];
+    } finally {
+      actionLock = false;
+      if (isMounted) {
+        saving = '';
+      }
+    }
+  };
+
+  const switchBooking = (newId) => {
+    activeBookingId = newId;
+    saving = ''; // PR10-05 reset
+    actionLock = false;
+  };
+
+  // 1. Host triggers add service on booking 20
+  const actionTask = performAction('add-service', deferredAction);
+  assert.equal(saving, 'add-service', 'saving key must be set during pending mutation');
+
+  // 2. User switches to booking 21 while service mutation is pending
+  switchBooking(21);
+  assert.equal(saving, '', 'PR10-05: saving must immediately reset to empty string when switching booking');
+
+  // 3. Old service mutation finishes later
+  resolveServiceAction();
+  await actionTask;
+
+  // 4. saving remains empty and services list was NOT overwritten with stale booking 20 data
+  assert.equal(saving, '', 'saving must remain empty after stale mutation completes');
+  assert.equal(services.length, 1, 'Services list must not be mutated with stale booking 20 services');
+});

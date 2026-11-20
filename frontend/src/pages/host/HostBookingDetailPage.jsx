@@ -37,8 +37,15 @@ export default function HostBookingDetailPage() {
   const activeBookingIdRef = useRef(bookingId);
   const isMountedRef = useRef(true);
 
+  const [prevBookingId, setPrevBookingId] = useState(bookingId);
+  if (bookingId !== prevBookingId) {
+    setPrevBookingId(bookingId);
+    setActionLoading(false);
+  }
+
   useEffect(() => {
     activeBookingIdRef.current = bookingId;
+    actionLock.current = false;
   }, [bookingId]);
 
   useEffect(() => {
@@ -102,7 +109,7 @@ export default function HostBookingDetailPage() {
       toast.error(message);
     } finally {
       actionLock.current = false;
-      if (isMountedRef.current && activeBookingIdRef.current === targetBookingId) {
+      if (isMountedRef.current) {
         setActionLoading(false);
       }
     }
