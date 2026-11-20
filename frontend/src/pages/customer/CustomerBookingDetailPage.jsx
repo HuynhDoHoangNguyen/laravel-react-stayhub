@@ -52,7 +52,31 @@ export default function CustomerBookingDetailPage() {
   const [isCancelling, setIsCancelling] = useState(false);
   const [cancelError, setCancelError] = useState('');
   const cancelLock = useRef(false);
+  const activeBookingIdRef = useRef(bookingId);
+  const isMountedRef = useRef(true);
+  const cancelRequestIdRef = useRef(0);
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
+
+  const [prevBookingId, setPrevBookingId] = useState(bookingId);
+  if (bookingId !== prevBookingId) {
+    setPrevBookingId(bookingId);
+    setIsCancelling(false);
+    setIsCancelDialogOpen(false);
+    setCancelError('');
+  }
+
+  useEffect(() => {
+    activeBookingIdRef.current = bookingId;
+    cancelLock.current = false;
+    cancelRequestIdRef.current += 1;
+  }, [bookingId]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
   const cancelTriggerRef = useRef(null);
   const cancelDialogRef = useRef(null);
   const cancelDialogActionRef = useRef(null);
@@ -161,19 +185,31 @@ export default function CustomerBookingDetailPage() {
 
   const handleCancelBooking = async () => {
     if (cancelLock.current) return;
+    const targetBookingId = booking?.id || bookingId;
+    const currentRequestId = ++cancelRequestIdRef.current;
 
     cancelLock.current = true;
     setIsCancelling(true);
     setCancelError('');
     try {
-      const updatedBooking = await bookingService.cancelBooking(booking.id);
+      const updatedBooking = await bookingService.cancelBooking(targetBookingId);
+      if (!isMountedRef.current || activeBookingIdRef.current !== targetBookingId || currentRequestId !== cancelRequestIdRef.current) {
+        return;
+      }
       setBooking((current) => ({ ...current, ...updatedBooking }));
+      setIsCancelDialogOpen(false);
     } catch (error) {
+      if (!isMountedRef.current || activeBookingIdRef.current !== targetBookingId || currentRequestId !== cancelRequestIdRef.current) {
+        return;
+      }
       setCancelError(bookingDisplayError(error, 'Không thể hủy đơn đặt phòng. Vui lòng thử lại.'));
     } finally {
-      cancelLock.current = false;
-      setIsCancelling(false);
-      setIsCancelDialogOpen(false);
+      if (currentRequestId === cancelRequestIdRef.current && activeBookingIdRef.current === targetBookingId) {
+        cancelLock.current = false;
+        if (isMountedRef.current) {
+          setIsCancelling(false);
+        }
+      }
     }
   };
 

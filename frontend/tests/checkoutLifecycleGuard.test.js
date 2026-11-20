@@ -68,7 +68,7 @@ test('R02: HostBookingDetailPage guards transitions against unmount and booking 
 
   // Verify runTransition captures targetBookingId and guards state update
   assert.match(code, /const\s*targetBookingId\s*=\s*bookingId;/);
-  assert.match(code, /if\s*\(!isMountedRef\.current\s*\|\|\s*activeBookingIdRef\.current\s*!==\s*targetBookingId\)\s*\{\s*return;\s*\}/);
+  assert.match(code, /if\s*\(!isMountedRef\.current\s*\|\|\s*activeBookingIdRef\.current\s*!==\s*targetBookingId/);
 });
 
 test('R02: HostBookingServicesPage guards service mutations and reload against context switches', async () => {
@@ -80,7 +80,7 @@ test('R02: HostBookingServicesPage guards service mutations and reload against c
 
   // Verify reloadServices and performAction guard against stale context
   assert.match(code, /const\s*targetBookingId\s*=\s*bookingId;/);
-  assert.match(code, /if\s*\(!isMountedRef\.current\s*\|\|\s*activeBookingIdRef\.current\s*!==\s*targetBookingId\)\s*\{\s*return;\s*\}/);
+  assert.match(code, /if\s*\(!isMountedRef\.current\s*\|\|\s*activeBookingIdRef\.current\s*!==\s*targetBookingId/);
 });
 
 test('PR10-04: Changing guest count while preview is pending cancels loading state and ignores subsequent resolve', async () => {
@@ -271,4 +271,156 @@ test('PR10-05: HostBookingServicesPage resets saving state when bookingId switch
   // 4. saving remains empty and services list was NOT overwritten with stale booking 20 data
   assert.equal(saving, '', 'saving must remain empty after stale mutation completes');
   assert.equal(services.length, 1, 'Services list must not be mutated with stale booking 20 services');
+});
+
+test('PR12-01: CustomerCheckoutPage setup sets isMountedRef to true, surviving StrictMode cleanup-remount cycle', async () => {
+  const code = await readFile(checkoutPath, 'utf8');
+
+  // StrictMode: useEffect setup must explicitly set isMountedRef.current = true
+  assert.match(code, /useEffect\(\(\)\s*=>\s*\{\s*isMountedRef\.current\s*=\s*true;\s*return\s*\(\)\s*=>\s*\{\s*isMountedRef\.current\s*=\s*false;\s*\};\s*\},/);
+});
+
+test('PR12-04: Host mutations on booking B are not unlocked or corrupted by late-resolving mutation from booking A', async () => {
+  let activeBookingId = 100;
+  let actionLock = false;
+  let saving = '';
+  let mutationRequestId = 0;
+  let isMounted = true;
+  let bMutationFinished = false;
+
+  let resolveA = null;
+  const deferredA = () => new Promise((resolve) => { resolveA = resolve; });
+
+  let resolveB = null;
+  const deferredB = () => new Promise((resolve) => { resolveB = resolve; });
+
+  const performAction = async (key, actionFn) => {
+    if (actionLock) return false;
+    const targetBookingId = activeBookingId;
+    const currentRequestId = ++mutationRequestId;
+    actionLock = true;
+    saving = key;
+
+    try {
+      await actionFn();
+      if (!isMounted || activeBookingId !== targetBookingId || currentRequestId !== mutationRequestId) {
+        return false;
+      }
+      return true;
+    } finally {
+      if (currentRequestId === mutationRequestId && activeBookingId === targetBookingId) {
+        actionLock = false;
+        if (isMounted) {
+          saving = '';
+        }
+      }
+    }
+  };
+
+  const switchBooking = (newId) => {
+    activeBookingId = newId;
+    actionLock = false;
+    mutationRequestId += 1;
+    saving = '';
+  };
+
+  // 1. Start mutation on A
+  const taskA = performAction('mutation-A', deferredA);
+  assert.equal(actionLock, true);
+  assert.equal(saving, 'mutation-A');
+
+  // 2. Switch to B while A is pending
+  switchBooking(200);
+  assert.equal(actionLock, false);
+  assert.equal(saving, '');
+
+  // 3. Start mutation on B
+  const taskB = performAction('mutation-B', async () => {
+    await deferredB();
+    bMutationFinished = true;
+  });
+  assert.equal(actionLock, true);
+  assert.equal(saving, 'mutation-B');
+
+  // 4. A resolves while B is still pending. It MUST NOT unlock B or clear saving!
+  resolveA();
+  await taskA;
+  assert.equal(actionLock, true, 'Late A resolution must NOT unlock actionLock while B is pending');
+  assert.equal(saving, 'mutation-B', 'Late A resolution must NOT clear saving while B is pending');
+
+  // 5. B finishes normally
+  resolveB();
+  await taskB;
+  assert.equal(bMutationFinished, true);
+  assert.equal(actionLock, false, 'B resolution releases lock');
+  assert.equal(saving, '', 'B resolution clears saving');
+});
+
+test('PR12-07: CustomerBookingDetailPage cancel mutation on booking A does not overwrite booking B on late response', async () => {
+  let activeBookingId = 'BK_A';
+  let cancelLock = false;
+  let isCancelling = false;
+  let isCancelDialogOpen = true;
+  let bookingState = { id: 'BK_A', status: 'CONFIRMED' };
+  let cancelRequestId = 0;
+  let isMounted = true;
+
+  let resolveCancelA = null;
+  const deferredCancelA = () => new Promise((resolve) => { resolveCancelA = resolve; });
+
+  const handleCancelBooking = async () => {
+    if (cancelLock) return;
+    const targetBookingId = activeBookingId;
+    const currentRequestId = ++cancelRequestId;
+
+    cancelLock = true;
+    isCancelling = true;
+
+    try {
+      const updated = await deferredCancelA();
+      if (!isMounted || activeBookingId !== targetBookingId || currentRequestId !== cancelRequestId) {
+        return;
+      }
+      bookingState = { ...bookingState, ...updated };
+      isCancelDialogOpen = false;
+    } finally {
+      if (currentRequestId === cancelRequestId && activeBookingId === targetBookingId) {
+        cancelLock = false;
+        if (isMounted) {
+          isCancelling = false;
+        }
+      }
+    }
+  };
+
+  const switchBooking = (newId) => {
+    activeBookingId = newId;
+    cancelLock = false;
+    cancelRequestId += 1;
+    isCancelling = false;
+    isCancelDialogOpen = false;
+    bookingState = { id: newId, status: 'PENDING' };
+  };
+
+  // 1. User opens dialog and cancels booking A
+  const cancelTask = handleCancelBooking();
+  assert.equal(isCancelling, true);
+  assert.equal(cancelLock, true);
+
+  // 2. User switches to booking B while cancel is in flight
+  switchBooking('BK_B');
+  assert.equal(activeBookingId, 'BK_B');
+  assert.equal(bookingState.id, 'BK_B');
+  assert.equal(isCancelling, false);
+  assert.equal(isCancelDialogOpen, false);
+
+  // 3. Old cancel A resolves later with CANCELLED status
+  resolveCancelA({ id: 'BK_A', status: 'CANCELLED' });
+  await cancelTask;
+
+  // 4. Booking B state was NOT overwritten by A's late response
+  assert.equal(bookingState.id, 'BK_B', 'Booking B ID must not be overwritten');
+  assert.equal(bookingState.status, 'PENDING', 'Booking B status must remain PENDING');
+  assert.equal(isCancelling, false);
+  assert.equal(isCancelDialogOpen, false);
 });

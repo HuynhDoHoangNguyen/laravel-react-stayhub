@@ -36,6 +36,7 @@ export default function HostBookingDetailPage() {
   const actionLock = useRef(false);
   const activeBookingIdRef = useRef(bookingId);
   const isMountedRef = useRef(true);
+  const mutationRequestIdRef = useRef(0);
 
   const [prevBookingId, setPrevBookingId] = useState(bookingId);
   if (bookingId !== prevBookingId) {
@@ -46,6 +47,7 @@ export default function HostBookingDetailPage() {
   useEffect(() => {
     activeBookingIdRef.current = bookingId;
     actionLock.current = false;
+    mutationRequestIdRef.current += 1;
   }, [bookingId]);
 
   useEffect(() => {
@@ -87,13 +89,14 @@ export default function HostBookingDetailPage() {
   const runTransition = async (action, payload = {}) => {
     if (actionLock.current) return;
     const targetBookingId = bookingId;
+    const currentRequestId = ++mutationRequestIdRef.current;
     actionLock.current = true;
     setActionLoading(true);
     setActionError('');
     try {
       const updated = await hostBookingService.transition(targetBookingId, action, payload);
       // R02: Stale response guard - do not overwrite if booking changed or unmounted
-      if (!isMountedRef.current || activeBookingIdRef.current !== targetBookingId) {
+      if (!isMountedRef.current || activeBookingIdRef.current !== targetBookingId || currentRequestId !== mutationRequestIdRef.current) {
         return;
       }
       setBooking(updated);
@@ -101,16 +104,18 @@ export default function HostBookingDetailPage() {
       setRejectReason('');
       toast.success('Đã cập nhật trạng thái booking.');
     } catch (transitionError) {
-      if (!isMountedRef.current || activeBookingIdRef.current !== targetBookingId) {
+      if (!isMountedRef.current || activeBookingIdRef.current !== targetBookingId || currentRequestId !== mutationRequestIdRef.current) {
         return;
       }
       const message = bookingDisplayError(transitionError, 'Không thể cập nhật booking.');
       setActionError(message);
       toast.error(message);
     } finally {
-      actionLock.current = false;
-      if (isMountedRef.current) {
-        setActionLoading(false);
+      if (currentRequestId === mutationRequestIdRef.current && activeBookingIdRef.current === targetBookingId) {
+        actionLock.current = false;
+        if (isMountedRef.current) {
+          setActionLoading(false);
+        }
       }
     }
   };

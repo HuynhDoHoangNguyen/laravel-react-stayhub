@@ -26,6 +26,7 @@ export default function HostBookingServicesPage() {
   const actionLock = useRef(false);
   const activeBookingIdRef = useRef(bookingId);
   const isMountedRef = useRef(true);
+  const mutationRequestIdRef = useRef(0);
 
   const [prevBookingId, setPrevBookingId] = useState(bookingId);
   if (bookingId !== prevBookingId) {
@@ -36,6 +37,7 @@ export default function HostBookingServicesPage() {
   useEffect(() => {
     activeBookingIdRef.current = bookingId;
     actionLock.current = false;
+    mutationRequestIdRef.current += 1;
   }, [bookingId]);
 
   useEffect(() => {
@@ -101,30 +103,33 @@ export default function HostBookingServicesPage() {
   const performAction = async (key, action) => {
     if (actionLock.current) return;
     const targetBookingId = bookingId;
+    const currentRequestId = ++mutationRequestIdRef.current;
     actionLock.current = true;
     setSaving(key);
     setError('');
     try {
       await action();
-      if (!isMountedRef.current || activeBookingIdRef.current !== targetBookingId) {
+      if (!isMountedRef.current || activeBookingIdRef.current !== targetBookingId || currentRequestId !== mutationRequestIdRef.current) {
         return;
       }
       await reloadServices();
-      if (!isMountedRef.current || activeBookingIdRef.current !== targetBookingId) {
+      if (!isMountedRef.current || activeBookingIdRef.current !== targetBookingId || currentRequestId !== mutationRequestIdRef.current) {
         return;
       }
       toast.success('Đã cập nhật dịch vụ booking.');
     } catch (actionError) {
-      if (!isMountedRef.current || activeBookingIdRef.current !== targetBookingId) {
+      if (!isMountedRef.current || activeBookingIdRef.current !== targetBookingId || currentRequestId !== mutationRequestIdRef.current) {
         return;
       }
       const message = bookingDisplayError(actionError, 'Không thể cập nhật dịch vụ booking.');
       setError(message);
       toast.error(message);
     } finally {
-      actionLock.current = false;
-      if (isMountedRef.current) {
-        setSaving('');
+      if (currentRequestId === mutationRequestIdRef.current && activeBookingIdRef.current === targetBookingId) {
+        actionLock.current = false;
+        if (isMountedRef.current) {
+          setSaving('');
+        }
       }
     }
   };
