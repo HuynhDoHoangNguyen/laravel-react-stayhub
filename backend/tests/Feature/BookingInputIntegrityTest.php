@@ -8,6 +8,7 @@ use App\Enums\RoomStatus;
 use App\Models\Amenity;
 use App\Models\Booking;
 use App\Models\Property;
+use App\Models\Review;
 use App\Models\Room;
 use App\Models\RoomType;
 use App\Models\User;
@@ -360,5 +361,108 @@ class BookingInputIntegrityTest extends TestCase
 
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['check_out_date']);
+    }
+
+    public function test_pr12_03_search_supports_uc07_room_type_ids_and_min_rating(): void
+    {
+        $propertyA = Property::factory()->create(['status' => PropertyStatus::ACTIVE]);
+        $propertyB = Property::factory()->create(['status' => PropertyStatus::ACTIVE]);
+
+        $customer = User::factory()->customer()->create();
+
+        $bookingA = Booking::factory()->create([
+            'customer_id' => $customer->id,
+            'status' => BookingStatus::COMPLETED,
+        ]);
+        $bookingB = Booking::factory()->create([
+            'customer_id' => $customer->id,
+            'status' => BookingStatus::COMPLETED,
+        ]);
+
+        Review::query()->create([
+            'booking_id' => $bookingA->id,
+            'customer_id' => $customer->id,
+            'property_id' => $propertyA->id,
+            'rating' => 5,
+            'comment' => 'Tuyệt vời',
+        ]);
+        Review::query()->create([
+            'booking_id' => $bookingB->id,
+            'customer_id' => $customer->id,
+            'property_id' => $propertyB->id,
+            'rating' => 3,
+            'comment' => 'Bình thường',
+        ]);
+
+        $type1 = RoomType::factory()->create(['property_id' => $propertyA->id]);
+        $type2 = RoomType::factory()->create(['property_id' => $propertyA->id]);
+        $type3 = RoomType::factory()->create(['property_id' => $propertyB->id]);
+
+        $room1 = Room::factory()->create([
+            'property_id' => $propertyA->id,
+            'room_type_id' => $type1->id,
+            'status' => RoomStatus::ACTIVE,
+            'capacity' => 4,
+            'price_per_night' => '500000.00',
+        ]);
+        $room2 = Room::factory()->create([
+            'property_id' => $propertyA->id,
+            'room_type_id' => $type2->id,
+            'status' => RoomStatus::ACTIVE,
+            'capacity' => 4,
+            'price_per_night' => '600000.00',
+        ]);
+        $room3 = Room::factory()->create([
+            'property_id' => $propertyB->id,
+            'room_type_id' => $type3->id,
+            'status' => RoomStatus::ACTIVE,
+            'capacity' => 4,
+            'price_per_night' => '400000.00',
+        ]);
+
+        $checkIn = now()->addDays(5)->format('Y-m-d');
+        $checkOut = now()->addDays(7)->format('Y-m-d');
+
+        // 1. Filter by room_type_ids array [type1, type2] -> rooms 1 and 2 returned
+        $resTypes = $this->getJson('/api/public/rooms/search?' . http_build_query([
+            'check_in_date' => $checkIn,
+            'check_out_date' => $checkOut,
+            'guest_count' => 2,
+            'room_type_ids' => [$type1->id, $type2->id],
+        ]));
+        $resTypes->assertOk()
+            ->assertJsonPath('meta.total', 2);
+
+        // 2. Filter by min_rating 4.0 -> only propertyA's rooms (rating 4.8 >= 4.0), propertyB (3.5) excluded
+        $resRating = $this->getJson('/api/public/rooms/search?' . http_build_query([
+            'check_in_date' => $checkIn,
+            'check_out_date' => $checkOut,
+            'guest_count' => 2,
+            'min_rating' => 4.0,
+        ]));
+        $resRating->assertOk()
+            ->assertJsonPath('meta.total', 2);
+
+        // 3. Filter combination: room_type_ids = [type1, type3] and min_rating = 4.0 -> only room1 (room3 excluded due to rating)
+        $resCombo = $this->getJson('/api/public/rooms/search?' . http_build_query([
+            'check_in_date' => $checkIn,
+            'check_out_date' => $checkOut,
+            'guest_count' => 2,
+            'room_type_ids' => [$type1->id, $type3->id],
+            'min_rating' => 4.0,
+        ]));
+        $resCombo->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.id', $room1->id);
+
+        // 4. Non-existent room_type_id in room_type_ids returns 422
+        $resInvalid = $this->getJson('/api/public/rooms/search?' . http_build_query([
+            'check_in_date' => $checkIn,
+            'check_out_date' => $checkOut,
+            'guest_count' => 2,
+            'room_type_ids' => [999999],
+        ]));
+        $resInvalid->assertStatus(422)
+            ->assertJsonValidationErrors(['room_type_ids.0']);
     }
 }

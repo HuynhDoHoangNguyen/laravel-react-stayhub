@@ -1,4 +1,8 @@
 import { roomSearchApi } from '../api/roomSearchApi.js';
+import {
+  mapRoomAvailabilitySearchResponse,
+  mapAvailabilityRoomItem,
+} from '../mappers/roomAvailabilitySearchMapper.js';
 
 export function isAvailabilitySearch(search) {
   if (!search) return false;
@@ -30,7 +34,16 @@ export function parseAvailabilitySearchParams(search) {
   if (url.has('sort') && url.get('sort') !== '') params.sort = url.get('sort');
   if (url.has('page') && url.get('page') !== '') params.page = Number(url.get('page'));
   if (url.has('per_page') && url.get('per_page') !== '') params.per_page = Number(url.get('per_page'));
-  if (url.has('room_type_id') && url.get('room_type_id') !== '') params.room_type_id = Number(url.get('room_type_id'));
+  if (url.has('min_rating') && url.get('min_rating') !== '') params.min_rating = Number(url.get('min_rating'));
+
+  const roomTypeIds = url.getAll('room_type_ids[]').length
+    ? url.getAll('room_type_ids[]')
+    : url.getAll('room_type_ids');
+  if (roomTypeIds.length > 0) {
+    params.room_type_ids = roomTypeIds.map(Number).filter((n) => Number.isInteger(n) && n > 0);
+  } else if (url.has('room_type_id') && url.get('room_type_id') !== '') {
+    params.room_type_id = Number(url.get('room_type_id'));
+  }
 
   const amenityIds = url.getAll('amenity_ids[]').length
     ? url.getAll('amenity_ids[]')
@@ -47,47 +60,18 @@ export function parseAvailabilitySearchParams(search) {
     adults,
     children,
     guests: params.guest_count,
+    room_type_ids: params.room_type_ids ?? (params.room_type_id ? [params.room_type_id] : []),
+    min_rating: params.min_rating ?? '',
   };
 }
 
 export function mapAvailabilityRooms(items) {
   if (!Array.isArray(items)) return [];
-  return items.map((room) => ({
-    id: room.id,
-    name: room.name,
-    capacity: room.capacity,
-    price_per_night: String(room.price_per_night ?? '0.00'),
-    property: {
-      id: room.property?.id,
-      name: room.property?.name ?? '',
-      address: room.property?.address ?? '',
-      rating: room.property?.rating ?? null,
-      review_count: room.property?.review_count ?? 0,
-    },
-    room_type: {
-      id: room.room_type?.id,
-      name: room.room_type?.name ?? '',
-    },
-    amenities: Array.isArray(room.amenities)
-      ? room.amenities.map((a) => ({ id: a.id, name: a.name }))
-      : [],
-    images: Array.isArray(room.images)
-      ? room.images.map((img) => (typeof img === 'string' ? img : (img.image_path || '')))
-      : [],
-  }));
+  return items.map(mapAvailabilityRoomItem);
 }
 
 export async function searchAvailableRooms(search, options = {}) {
   const { params } = parseAvailabilitySearchParams(search);
   const response = await roomSearchApi.search(params, options);
-  const payload = response.data;
-  return {
-    data: mapAvailabilityRooms(payload?.data || []),
-    meta: {
-      current_page: payload?.meta?.current_page ?? 1,
-      last_page: payload?.meta?.last_page ?? 1,
-      per_page: payload?.meta?.per_page ?? 15,
-      total: payload?.meta?.total ?? (payload?.data?.length || 0),
-    },
-  };
+  return mapRoomAvailabilitySearchResponse(response.data);
 }

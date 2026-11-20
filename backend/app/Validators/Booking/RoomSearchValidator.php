@@ -27,6 +27,9 @@ class RoomSearchValidator
             'property_id' => ['nullable', 'integer', 'min:1'],
             'keyword' => ['nullable', 'string'],
             'room_type_id' => ['nullable', 'integer', 'min:1'],
+            'room_type_ids' => ['nullable', 'array'],
+            'room_type_ids.*' => ['integer', 'min:1'],
+            'min_rating' => ['nullable', 'numeric', 'min:0', 'max:5'],
             'min_price' => [
                 'nullable',
                 'numeric',
@@ -107,6 +110,14 @@ class RoomSearchValidator
             ? array_values(array_unique(array_map('intval', $validated['amenity_ids'])))
             : null;
 
+        $roomTypeIds = isset($validated['room_type_ids']) && is_array($validated['room_type_ids'])
+            ? array_values(array_unique(array_map('intval', $validated['room_type_ids'])))
+            : null;
+
+        $minRating = isset($validated['min_rating']) && $validated['min_rating'] !== ''
+            ? (float) $validated['min_rating']
+            : null;
+
         return new SearchRoomsQuery(
             checkInDate: (string) $validated['check_in_date'],
             checkOutDate: (string) $validated['check_out_date'],
@@ -119,6 +130,8 @@ class RoomSearchValidator
             amenityIds: $amenityIds,
             sort: isset($validated['sort']) && $validated['sort'] !== '' ? (string) $validated['sort'] : null,
             perPage: isset($validated['per_page']) && $validated['per_page'] !== '' ? (int) $validated['per_page'] : null,
+            roomTypeIds: $roomTypeIds,
+            minRating: $minRating,
         );
     }
 

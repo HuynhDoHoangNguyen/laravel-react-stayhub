@@ -25,7 +25,7 @@ test('PR10-02: isAvailabilitySearch identifies availability search when dates ar
 });
 
 test('PR10-02: parseAvailabilitySearchParams normalizes search parameters from URL', () => {
-  const search = 'city=Nha Trang&startDate=2026-12-10&endDate=2026-12-15&adults=2&children=1&min_price=500000&max_price=2000000&sort=price_asc&amenity_ids[]=1&amenity_ids[]=3&page=2&per_page=10';
+  const search = 'city=Nha Trang&startDate=2026-12-10&endDate=2026-12-15&adults=2&children=1&min_price=500000&max_price=2000000&sort=price_asc&amenity_ids[]=1&amenity_ids[]=3&room_type_ids[]=2&room_type_ids[]=5&min_rating=4.5&page=2&per_page=10';
   const parsed = parseAvailabilitySearchParams(search);
 
   assert.equal(parsed.checkIn, '2026-12-10');
@@ -34,6 +34,8 @@ test('PR10-02: parseAvailabilitySearchParams normalizes search parameters from U
   assert.equal(parsed.adults, 2);
   assert.equal(parsed.children, 1);
   assert.equal(parsed.guests, 3);
+  assert.deepEqual(parsed.room_type_ids, [2, 5]);
+  assert.equal(parsed.min_rating, 4.5);
 
   assert.deepEqual(parsed.params, {
     check_in_date: '2026-12-10',
@@ -45,6 +47,8 @@ test('PR10-02: parseAvailabilitySearchParams normalizes search parameters from U
     sort: 'price_asc',
     page: 2,
     per_page: 10,
+    room_type_ids: [2, 5],
+    min_rating: 4.5,
     amenity_ids: [1, 3],
   });
 });

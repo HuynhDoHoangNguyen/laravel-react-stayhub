@@ -49,6 +49,16 @@ class SearchService
             $errors['room_type_id'] = [__('validation.exists', ['attribute' => 'room type id'])];
         }
 
+        if (! empty($input->roomTypeIds)) {
+            $existingRoomTypes = $this->repository->findExistingRoomTypeIds($input->roomTypeIds);
+            $existingLookup = array_flip($existingRoomTypes);
+            foreach ($input->roomTypeIds as $idx => $id) {
+                if (! isset($existingLookup[$id])) {
+                    $errors["room_type_ids.{$idx}"] = [__('validation.exists', ['attribute' => "room_type_ids.{$idx}"])];
+                }
+            }
+        }
+
         if (! empty($input->amenityIds)) {
             $existing = $this->repository->findExistingAmenityIds($input->amenityIds);
             $existingLookup = array_flip($existing);

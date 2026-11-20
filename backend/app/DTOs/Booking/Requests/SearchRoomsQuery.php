@@ -6,6 +6,7 @@ final readonly class SearchRoomsQuery
 {
     /**
      * @param list<int>|null $amenityIds
+     * @param list<int>|null $roomTypeIds
      */
     public function __construct(
         public string $checkInDate,
@@ -19,6 +20,8 @@ final readonly class SearchRoomsQuery
         public ?array $amenityIds = null,
         public ?string $sort = null,
         public ?int $perPage = null,
+        public ?array $roomTypeIds = null,
+        public ?float $minRating = null,
     ) {}
 
     /**
@@ -38,6 +41,8 @@ final readonly class SearchRoomsQuery
             'amenity_ids' => $this->amenityIds,
             'sort' => $this->sort,
             'per_page' => $this->perPage,
+            'room_type_ids' => $this->roomTypeIds,
+            'min_rating' => $this->minRating,
         ];
     }
 }

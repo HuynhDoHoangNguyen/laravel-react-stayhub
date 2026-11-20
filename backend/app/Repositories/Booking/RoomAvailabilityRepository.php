@@ -10,6 +10,7 @@ use App\Models\Amenity;
 use App\Models\Booking;
 use App\Models\Maintenance;
 use App\Models\Property;
+use App\Models\Review;
 use App\Models\Room;
 use App\Models\RoomType;
 use Carbon\Carbon;
@@ -34,6 +35,23 @@ class RoomAvailabilityRepository
     public function roomTypeExists(int $roomTypeId): bool
     {
         return RoomType::query()->where('id', $roomTypeId)->exists();
+    }
+
+    /**
+     * @param  array<int>  $roomTypeIds
+     * @return array<int>
+     */
+    public function findExistingRoomTypeIds(array $roomTypeIds): array
+    {
+        if (empty($roomTypeIds)) {
+            return [];
+        }
+
+        return RoomType::query()
+            ->whereIn('id', $roomTypeIds)
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
     }
 
     /**
@@ -125,8 +143,19 @@ class RoomAvailabilityRepository
             });
         }
 
-        if (! empty($filters['room_type_id'])) {
+        if (! empty($filters['room_type_ids']) && is_array($filters['room_type_ids'])) {
+            $roomTypeIds = array_values(array_unique(array_filter(array_map('intval', $filters['room_type_ids']))));
+            if (! empty($roomTypeIds)) {
+                $query->whereIn('room_type_id', $roomTypeIds);
+            }
+        } elseif (! empty($filters['room_type_id'])) {
             $query->where('room_type_id', $filters['room_type_id']);
+        }
+
+        if (isset($filters['min_rating']) && $filters['min_rating'] !== '' && $filters['min_rating'] !== null) {
+            $minRating = $filters['min_rating'];
+            $query->whereIn('rooms.property_id', Review::query()->select('property_id')->groupBy('property_id')
+                ->havingRaw('AVG(reviews.rating) >= CAST(? AS DECIMAL(3,1))', [$minRating]));
         }
 
         if (isset($filters['min_price']) && $filters['min_price'] !== '') {
