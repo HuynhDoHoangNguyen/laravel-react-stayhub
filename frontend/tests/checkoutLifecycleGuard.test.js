@@ -424,3 +424,20 @@ test('PR12-07: CustomerBookingDetailPage cancel mutation on booking A does not o
   assert.equal(isCancelling, false);
   assert.equal(isCancelDialogOpen, false);
 });
+
+test('PR12-02: SearchRoomCard wires "Đặt ngay" CTA directly to customer checkout with room and search parameters', async () => {
+  const searchCardPath = fileURLToPath(new URL('../src/components/search/SearchRoomCard.jsx', import.meta.url));
+  const code = await readFile(searchCardPath, 'utf8');
+
+  // Verify checkoutHref formation
+  assert.match(code, /const\s*checkoutHref\s*=\s*`\/customer\/checkout\?propertyId=\$\{room\.property\.id\}&roomId=\$\{room\.id\}\$\{searchParams\s*\?\s*`&/);
+
+  // Verify direct link to checkout for available dates
+  assert.match(code, /<Link\s+to=\{checkoutHref\}[^>]*>Đặt ngay<\/Link>/);
+
+  // Verify secondary link to property overview
+  assert.match(code, /<Link\s+to=\{propertyHref\}[^>]*>Xem cơ sở<\/Link>/);
+
+  // Verify fallback for non-availability search
+  assert.match(code, /<Link\s+to=\{propertyHref\}[^>]*>Xem cơ sở lưu trú<\/Link>/);
+});

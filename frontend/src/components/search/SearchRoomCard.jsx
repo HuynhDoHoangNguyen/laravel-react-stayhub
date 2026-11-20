@@ -4,6 +4,8 @@ import CatalogImage from '../catalog/CatalogImage';
 
 export function SearchRoomCard({ room, view, searchParams = '', isAvailableDate = false }) {
     const propertyHref = searchParams ? `/properties/${room.property.id}?${searchParams}` : `/properties/${room.property.id}`;
+    const checkoutHref = `/customer/checkout?propertyId=${room.property.id}&roomId=${room.id}${searchParams ? `&${searchParams}` : ''}`;
+
     return <article className={`overflow-hidden rounded-3xl border border-border bg-card ${view === 'list' ? 'sm:flex' : ''}`}>
         <div className={`aspect-[16/10] shrink-0 ${view === 'list' ? 'sm:w-64' : ''}`}><CatalogImage src={room.images[0]} alt={room.name} /></div>
         <div className="flex flex-1 flex-col gap-3 p-5">
@@ -19,7 +21,16 @@ export function SearchRoomCard({ room, view, searchParams = '', isAvailableDate 
             <div className="mt-auto border-t border-border pt-3">
                 <p><strong className="text-lg text-primary">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 2 }).format(room.price_per_night)}</strong><span className="text-sm text-muted-foreground"> / đêm</span></p>
                 <p className="mt-1 text-xs text-muted-foreground">{isAvailableDate ? 'Phòng còn trống cho các ngày đã chọn.' : 'Giá tham khảo, chưa kiểm tra khả dụng theo ngày.'}</p>
-                <Link to={propertyHref} className="mt-4 inline-block rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground">{isAvailableDate ? 'Đặt ngay' : 'Xem cơ sở lưu trú'}</Link>
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                    {isAvailableDate ? (
+                        <>
+                            <Link to={checkoutHref} className="inline-block rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">Đặt ngay</Link>
+                            <Link to={propertyHref} className="inline-block rounded-full border border-border px-4 py-2 text-sm font-medium text-muted-foreground hover:border-primary hover:text-primary">Xem cơ sở</Link>
+                        </>
+                    ) : (
+                        <Link to={propertyHref} className="inline-block rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">Xem cơ sở lưu trú</Link>
+                    )}
+                </div>
             </div>
         </div>
     </article>;

@@ -170,3 +170,105 @@ test('PR10-01: listActiveForProperty directly consumes API response body without
     propertyServiceCatalogApi.list = originalList;
   }
 });
+
+test('PR12-09: listActiveForProperty flags truncation and preserves server total when services exceed maxPages (5 pages = 250)', async () => {
+  const originalList = propertyServiceCatalogApi.list;
+  const requestedPages = [];
+
+  propertyServiceCatalogApi.list = async (params) => {
+    requestedPages.push(params.page);
+    const pageServices = Array.from({ length: 50 }, (_, i) => ({
+      id: (params.page - 1) * 50 + i + 1,
+      name: `Service ${(params.page - 1) * 50 + i + 1}`,
+      price: '50000.00',
+      is_active: true,
+    }));
+    return {
+      success: true,
+      data: pageServices,
+      meta: { current_page: params.page, last_page: 6, per_page: 50, total: 290 },
+    };
+  };
+
+  try {
+    const result = await propertyServiceCatalogService.listActiveForProperty(12);
+    assert.equal(result.success, true);
+    // Bounded to 5 pages
+    assert.deepEqual(requestedPages, [1, 2, 3, 4, 5]);
+    assert.equal(result.data.length, 250);
+    // Explicit truncation signals instead of pretending full load
+    assert.equal(result.total, 290);
+    assert.equal(result.hasMore, true);
+    assert.equal(result.isTruncated, true);
+  } finally {
+    propertyServiceCatalogApi.list = originalList;
+  }
+});
+
+test('PR12-09: getBookableProperty flags truncation and preserves server total when rooms exceed maxPages (10 pages = 500)', async () => {
+  const requestedPages = [];
+  const searchMock = async (params) => {
+    requestedPages.push(params.page);
+    const rooms = Array.from({ length: 50 }, (_, i) => ({
+      id: (params.page - 1) * 50 + i + 1,
+      property_id: 20,
+      name: `Room ${(params.page - 1) * 50 + i + 1}`,
+      capacity: 2,
+      price_per_night: '400000.00',
+      property: { id: 20, name: 'Resort Lớn' },
+      room_type: { id: 1, name: 'Standard' },
+    }));
+    return {
+      data: {
+        data: rooms,
+        meta: { current_page: params.page, last_page: 12, per_page: 50, total: 580 },
+      },
+    };
+  };
+
+  const service = createPropertyService({}, { roomSearchApi: { search: searchMock } });
+  const result = await service.getBookableProperty(20, { startDate: '2026-12-10', endDate: '2026-12-12' });
+
+  assert.equal(result.source, 'room-search');
+  assert.equal(requestedPages.length, 10);
+  assert.deepEqual(requestedPages, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  assert.equal(result.data.rooms.length, 500);
+  assert.equal(result.total, 580);
+  assert.equal(result.hasMore, true);
+  assert.equal(result.isTruncated, true);
+  assert.equal(result.data.hasMoreRooms, true);
+  assert.equal(result.data.totalRooms, 580);
+});
+
+test('PR12-09: listActiveForProperty passes options/signal and propagates errors on cancellation', async () => {
+  const originalList = propertyServiceCatalogApi.list;
+  let callCount = 0;
+  let passedSignal = null;
+
+  propertyServiceCatalogApi.list = async (_, options) => {
+    passedSignal = options?.signal;
+    callCount += 1;
+    if (callCount === 2) {
+      const err = new Error('Request aborted');
+      err.name = 'AbortError';
+      throw err;
+    }
+    return {
+      success: true,
+      data: Array.from({ length: 50 }, (__, i) => ({ id: i + 1, name: `S${i + 1}`, price: '10000.00' })),
+      meta: { current_page: 1, last_page: 3, per_page: 50, total: 150 },
+    };
+  };
+
+  const controller = new AbortController();
+  try {
+    await assert.rejects(
+      () => propertyServiceCatalogService.listActiveForProperty(15, { signal: controller.signal }),
+      /Request aborted/
+    );
+    assert.equal(callCount, 2);
+    assert.equal(passedSignal, controller.signal);
+  } finally {
+    propertyServiceCatalogApi.list = originalList;
+  }
+});

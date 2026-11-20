@@ -61,17 +61,20 @@ UC8 (chi tiết phòng) và UC23 (quản lý lịch bảo trì) thuộc Catalog/
 | **Lát C (PR10-04)** | Reset `isPreviewing` khi thay đổi `guest_count` và bảo vệ lifecycle component checkout | `fe9f6a1` | `checkoutLifecycleGuard.test.js`: 6/6 PASS; Frontend 228 tests PASS | Đã commit | Chờ nghiệm thu |
 | **Lát D (PR10-05)** | Reset `actionLoading` và `saving` khi chuyển booking context, bảo vệ deferred mutation | `ad9d54a` | `checkoutLifecycleGuard.test.js`: 8/8 PASS; Frontend 230 tests PASS | Đã commit | Chờ nghiệm thu |
 | **Lát E (PR10-02)** | Nối SearchBar với `roomAvailabilitySearchService` & `/api/public/rooms/search`, tách Availability vs Catalog | `e2dfa84` | `roomAvailabilitySearchService.test.js`: 4/4 PASS; Frontend 234 tests PASS | Đã commit | Chờ nghiệm thu |
-| **Lát F (Tài liệu)** | Chạy full test suite, lint/build, cập nhật evidence & checklist TV2 theo SHA mới | Đang thực hiện | Backend full 1868 PASS; Frontend 234 PASS; lint 0 lỗi; build PASS | Đang thực hiện | Chờ nghiệm thu |
+| **Lát 1 (PR12-06, PR12-08)** | An toàn DB test (fail-closed guard) & chặn tràn số tiền/số khoa học trả 422 thay vì 500 | Đã commit | `BookingInputIntegrityTest`: 15/15 PASS; `DatabaseSafetyTest` PASS; Backend full 1872 PASS | Đã commit | Chờ nghiệm thu |
+| **Lát 2 (PR12-03, PR12-05)** | Tách Availability Mapper vào `src/mappers/` & hỗ trợ bộ lọc UC07 (`room_type_ids[]`, `min_rating`) | Đã commit | `roomAvailabilitySearchMapper.test.js`: 6/6 PASS; Frontend 240 PASS | Đã commit | Chờ nghiệm thu |
+| **Lát 3 (PR12-01, PR12-04, PR12-07)** | React 19 StrictMode lifecycle guard & cô lập mutation context chống stale unlock/overwrite | Đã commit | `checkoutLifecycleGuard.test.js`: 12/12 PASS; Frontend 243 PASS | Đã commit | Chờ nghiệm thu |
+| **Lát 4 (PR12-02, PR12-09)** | Nối "Đặt ngay" trực tiếp vào checkout URL & minh bạch hóa cắt cụt phân trang (`hasMore`, `isTruncated`, `total`) | Đang hoàn thiện | `paginationSafety.test.js`: 7/7 PASS; Frontend full 247 PASS; lint 0 lỗi; build PASS | Đang hoàn thiện | Chờ nghiệm thu |
 
 ## Bằng chứng kiểm thử toàn nhánh
 
 | Lệnh ngày 2026-11-20 | Kết quả thực tế |
 | --- | --- |
-| `php artisan test` (backend full suite, không filter) | PASS: 1868 passed, 91 skipped (9688 assertions); 0 failed; exit 0 (57.79s) |
-| `php artisan test --filter=Booking` (backend TV2 filtered suite) | PASS: 230 passed, 882 assertions; 0 failed; exit 0 |
-| `node --experimental-test-module-mocks --test tests/**/*.test.js` (frontend full tests) | PASS: 234 passed, 0 failed; exit 0 (2.82s) |
+| `php artisan test` (backend full suite, không filter) | PASS: 1872 passed, 91 skipped (9700 assertions); 0 failed; exit 0 (54.99s) |
+| `php artisan test --filter=BookingInputIntegrityTest` (backend TV2 integrity suite) | PASS: 15 passed, 81 assertions; 0 failed; exit 0 (1.24s) |
+| `node --experimental-test-module-mocks --test tests/**/*.test.js` (frontend full tests) | PASS: 247 passed, 0 failed; exit 0 (2.25s) |
 | `npm run lint` | PASS: 0 errors (3 warnings giao diện có sẵn); exit 0 |
-| `npm run build` | PASS: Vite production build thành công (1.40s); exit 0 |
+| `npm run build` | PASS: Vite production build thành công (1.35s); exit 0 |
 | `git diff --check` | PASS: Không có lỗi whitespace; exit 0 |
 
 Kiểm thử full-suite xác nhận 100% độ tin cậy của code TV2 và sự tương thích hoàn hảo với mã nguồn mới nhất từ `dev` (sau khi merge PR #11 của TV1).

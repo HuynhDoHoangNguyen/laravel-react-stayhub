@@ -277,7 +277,9 @@ export default function CustomerCheckoutPage() {
       if (!isValidDateRange) {
         message = 'Khoảng thời gian nhận phòng và trả phòng không hợp lệ. Quý khách vui lòng chọn lại ngày lưu trú.';
       } else if (!selectedRoom) {
-        message = 'Không tìm thấy hạng phòng yêu cầu hoặc hạng phòng không còn thuộc cơ sở này.';
+        message = property?.hasMoreRooms
+          ? 'Không tìm thấy hạng phòng yêu cầu trong danh sách phòng đã tải. Quý khách vui lòng chọn lại phòng từ trang tìm kiếm.'
+          : 'Không tìm thấy hạng phòng yêu cầu hoặc hạng phòng không còn thuộc cơ sở này.';
       }
     }
 

@@ -129,25 +129,40 @@ Danh sách dưới đây lấy từ route list và phần endpoint trong handove
 | **PR10-04** | Lát C (`fe9f6a1`) | Thay đổi số khách khi preview pending làm kẹt `isPreviewing=true` | Gọi `setIsPreviewing(false)` ngay trong `updateGuestCount()`; bổ sung `isMountedRef` bảo vệ async resolve; request cũ resolve muộn bị bỏ qua không làm kẹt nút bấm. | `frontend/tests/checkoutLifecycleGuard.test.js`: Deferred promise test PASS (6/6 tests); Frontend full: 234/234 PASS |
 | **PR10-05** | Lát D (`ad9d54a`) | Đổi Booking khi mutation pending khiến `actionLoading`/`saving` kẹt | Reset `actionLoading = false` và `saving = ''` khi `bookingId` thay đổi qua render guard; reset vô điều kiện trong `finally` nếu component còn mounted. | `frontend/tests/checkoutLifecycleGuard.test.js`: Deferred promise tests cho cả HostBookingDetail và HostBookingServices PASS (8/8 tests); Frontend full: 234/234 PASS |
 
-## Bằng chứng kiểm thử toàn diện (Snapshot ngày 2026-11-20, HEAD e2dfa84)
+## Kết quả xử lý 9 Kiến trúc & Chức năng PR #12 (PR12-01 đến PR12-09)
 
-Lượt chạy nghiệm thu sau khi hoàn tất sửa 5 findings PR #10 và merge code từ `origin/dev` (PR #11 TV1):
+| Finding | Lát & Nhiệm vụ | Mô tả & Nguyên nhân | Giải pháp kỹ thuật | Bằng chứng kiểm thử thực tế |
+| --- | --- | --- | --- | --- |
+| **PR12-06** | Lát 1 | Thiếu guard bảo vệ DB test trước RefreshDatabase | `TestCase.php`: bổ sung hook `beforeRefreshingDatabase()` và `assertSafeTestDatabase()` bắt buộc DB name chứa `test` hoặc SQLite in-memory, fail-closed ngay lập tức. | `DatabaseSafetyTest.php` PASS; Backend full: 1872 PASS |
+| **PR12-08** | Lát 1 | Tràn số tiền và số khoa học (`1e101`, 101 đêm x 100tr) trả 500 | `RoomSearchValidator` chặn ký hiệu khoa học (`e`/`E`), chặn vượt `MAX_MONEY` (9.999.999.999,99) trả 422; `BookingService` và `BookingServiceManagementService` bắt `OverflowException` trả 422. | `BookingInputIntegrityTest`: 15/15 PASS; Backend full 1872 PASS |
+| **PR12-05** | Lát 2 | Mapper nằm lẫn trong service, response sai bị coi là rỗng | Tách `frontend/src/mappers/roomAvailabilitySearchMapper.js` thuần túy, phân biệt mảng rỗng hợp lệ với payload sai cấu trúc (ném `MapperError` kèm `isMapperError: true`). | `roomAvailabilitySearchMapper.test.js`: 6/6 PASS; Frontend 240 PASS |
+| **PR12-03** | Lát 2 | Bỏ qua bộ lọc UC07 `room_type_ids[]` và `min_rating` | Thống nhất URL → Service → Validator → DTO → Repository: tính rating trung bình thực tế từ bảng `reviews` qua `AVG(reviews.rating)` trong `having` clause; kiểm tra tồn tại của các room type IDs. | `BookingInputIntegrityTest`: 15/15 PASS; `roomAvailabilitySearchService.test.js` PASS |
+| **PR12-01** | Lát 3 | React 19 StrictMode double-mount làm tắt `isMountedRef` | Trong `CustomerCheckoutPage.jsx` `useEffect`, bật tường minh `isMountedRef.current = true;` ở setup phase, sống sót qua chu kỳ mount-unmount-remount. | `checkoutLifecycleGuard.test.js`: 12/12 PASS; Frontend 243 PASS |
+| **PR12-04** | Lát 3 | Request cũ mở khóa mutation context mới | Bổ sung `mutationRequestIdRef` trong `HostBookingServicesPage` và `HostBookingDetailPage`, guard `currentRequestId === mutationRequestIdRef.current` ở cả `finally`. | `checkoutLifecycleGuard.test.js`: 12/12 PASS; Frontend 243 PASS |
+| **PR12-07** | Lát 3 | Response hủy booking cũ ghi đè dữ liệu booking mới | `CustomerBookingDetailPage.jsx`: bổ sung `activeBookingIdRef`, `cancelRequestIdRef`, `isMountedRef`; reset state hủy khi đổi booking; guard cả context trong `finally`. | `checkoutLifecycleGuard.test.js`: 12/12 PASS; Frontend 243 PASS |
+| **PR12-02** | Lát 4 | Nút "Đặt ngay" tại SearchRoomCard chưa đưa vào checkout | Nối link "Đặt ngay" trực tiếp tới `/customer/checkout?propertyId=...&roomId=...` kèm toàn bộ search params ngày/khách khi `isAvailableDate === true`; nút phụ "Xem cơ sở". | `checkoutLifecycleGuard.test.js`: 13/13 PASS; Frontend 247 PASS |
+| **PR12-09** | Lát 4 | Collector phân trang dừng ở giới hạn nhưng báo đủ dữ liệu | `propertyServiceCatalogService` và `propertyService.getBookableProperty`: lấy đúng `total` từ server meta, gắn cờ `hasMore` và `isTruncated` khi chạm giới hạn an toàn (`maxPages`). | `paginationSafety.test.js`: 7/7 PASS; Frontend full 247 PASS |
+
+## Bằng chứng kiểm thử toàn diện (Snapshot ngày 2026-11-20, PR #12)
+
+Lượt chạy nghiệm thu sau khi hoàn tất 4 Tasks sửa triệt để 9 findings PR12-01 đến PR12-09:
 
 | Lệnh | Kết quả thực tế | Thời gian / Engine |
 | --- | --- | --- |
-| `php artisan test` (backend full suite, không filter) | PASS: 1868 passed, 91 skipped (9688 assertions); 0 failed; exit 0 | 57.79s (SQLite in-memory) |
-| `php artisan test --filter=Booking` (backend TV2 filtered suite) | PASS: 230 passed, 882 assertions; 0 failed; exit 0 | 4.88s (SQLite in-memory) |
-| `node --experimental-test-module-mocks --test tests/**/*.test.js` (frontend full suite) | PASS: 234 tests, 0 fail; exit 0 | 2.82s (Node.js test runner) |
+| `php artisan test` (backend full suite, không filter) | PASS: 1872 passed, 91 skipped (9700 assertions); 0 failed; exit 0 | 54.99s (SQLite in-memory) |
+| `php artisan test --filter=BookingInputIntegrityTest` (backend TV2 integrity suite) | PASS: 15 passed, 81 assertions; 0 failed; exit 0 | 1.24s (SQLite in-memory) |
+| `node --experimental-test-module-mocks --test tests/**/*.test.js` (frontend full suite) | PASS: 247 tests, 0 fail; exit 0 | 2.25s (Node.js test runner) |
 | `npm run lint` (frontend) | PASS: 0 errors (3 warnings giao diện có sẵn); exit 0 | ESLint 9 |
-| `npm run build` (frontend) | PASS: Vite production build thành công; exit 0 | 1.40s |
+| `npm run build` (frontend) | PASS: Vite production build thành công; exit 0 | 1.35s |
 | `git diff --check` | PASS: Không có lỗi whitespace; exit 0 | Git diff engine |
 
 ## Việc còn lại và kết luận
 
-- Đã khắc phục hoàn toàn 5 findings PR10-01 đến PR10-05, bổ sung các test hành vi thực tế (deferred promise tests, contract tests) bắt đúng lỗi thay vì chỉ kiểm tra regex.
-- Đã giải quyết triệt để merge conflict với PR #11 của TV1 từ `dev`, bảo toàn dynamic route protection test suite.
-- Backend full suite đạt 1868 passed / 91 skipped / 9688 assertions; Frontend full test đạt 234/234 passed; lint 0 lỗi; build thành công.
-- Nhánh `feature/member-2-booking` đạt 100% điều kiện kỹ thuật để Nhóm trưởng review lại PR #10 và merge vào `dev`.
+- Đã khắc phục hoàn toàn toàn bộ 9/9 findings từ PR12-01 đến PR12-09 theo kế hoạch kiến trúc & chức năng đã được phê duyệt.
+- Backend fail-closed bảo vệ database test, validation chặt chẽ trả 422 cho mọi trường hợp tràn số, số khoa học và reference ID không tồn tại.
+- Frontend mapper tách biệt hoàn toàn theo ARCHITECTURE.md; vòng đời React 19 StrictMode và cô lập mutation context được bảo đảm tuyệt đối bằng test deferred promises; phân trang an toàn minh bạch hóa việc cắt cụt dữ liệu (`hasMore`, `isTruncated`, `total`).
+- Backend full suite: 1872 passed / 91 skipped / 9700 assertions; Frontend full suite: 247/247 passed; lint 0 lỗi; build thành công.
+- Nhánh `feature/member-2-booking` sẵn sàng 100% để tạo PR #12.
 
 ## Nguồn đối chiếu
 

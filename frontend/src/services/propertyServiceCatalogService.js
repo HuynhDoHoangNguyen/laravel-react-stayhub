@@ -22,6 +22,9 @@ export const propertyServiceCatalogService = {
     let page = 1;
     const perPage = 50;
     const maxPages = 5; // R08: Bounded pagination up to 250 services
+    let serverTotal = null;
+    let hasMore = false;
+    let isTruncated = false;
 
     while (page <= maxPages) {
       const res = await propertyServiceCatalogApi.list({
@@ -34,8 +37,17 @@ export const propertyServiceCatalogService = {
       const mapped = mapPropertyServiceListResponse(res);
       allServices.push(...mapped.data);
 
+      if (serverTotal === null && mapped.meta?.total !== undefined) {
+        serverTotal = Number(mapped.meta.total);
+      }
+
       const lastPage = mapped.meta?.last_page ?? 1;
       if (page >= lastPage || mapped.data.length < perPage) {
+        break;
+      }
+      if (page === maxPages && page < lastPage) {
+        hasMore = true;
+        isTruncated = true;
         break;
       }
       page += 1;
@@ -44,7 +56,9 @@ export const propertyServiceCatalogService = {
     return {
       success: true,
       data: allServices,
-      total: allServices.length,
+      total: serverTotal !== null ? serverTotal : allServices.length,
+      hasMore,
+      isTruncated,
     };
   },
 

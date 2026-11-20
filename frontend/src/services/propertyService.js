@@ -133,6 +133,9 @@ export function createPropertyService(propertyApi, { dev = false, enableMocks = 
       let page = 1;
       const perPage = 50;
       const maxPages = 10; // R08: Bounded pagination up to 500 rooms
+      let serverTotal = null;
+      let hasMore = false;
+      let isTruncated = false;
 
       while (page <= maxPages) {
         const response = await roomSearchApi.search({
@@ -152,17 +155,38 @@ export function createPropertyService(propertyApi, { dev = false, enableMocks = 
         allRooms.push(...items);
 
         const meta = response.data?.meta;
+        if (serverTotal === null && meta?.total !== undefined) {
+          serverTotal = Number(meta.total);
+        }
+
         const lastPage = meta?.last_page ? Number(meta.last_page) : 1;
         if (page >= lastPage || items.length < perPage) {
+          break;
+        }
+        if (page === maxPages && page < lastPage) {
+          hasMore = true;
+          isTruncated = true;
           break;
         }
         page += 1;
       }
 
-      return {
-        data: mapPropertyFromRooms(mapPropertyRooms(allRooms)),
+      const propertyData = mapPropertyFromRooms(mapPropertyRooms(allRooms));
+      if (propertyData) {
+        propertyData.hasMoreRooms = hasMore;
+        propertyData.totalRooms = serverTotal !== null ? serverTotal : allRooms.length;
+      }
+
+      const result = {
+        data: propertyData,
         source: 'room-search',
       };
+      if (serverTotal !== null || hasMore || isTruncated) {
+        result.total = serverTotal !== null ? serverTotal : allRooms.length;
+        result.hasMore = hasMore;
+        result.isTruncated = isTruncated;
+      }
+      return result;
     },
   };
 }
