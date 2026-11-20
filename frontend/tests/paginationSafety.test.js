@@ -111,23 +111,19 @@ test('R08: listActiveForProperty iterates across pages and collects all active s
     requestedPages.push(params.page);
     if (params.page === 1) {
       return {
-        data: {
-          success: true,
-          data: page1Services,
-          meta: { current_page: 1, last_page: 2, per_page: 50, total: 65 },
-        },
+        success: true,
+        data: page1Services,
+        meta: { current_page: 1, last_page: 2, per_page: 50, total: 65 },
       };
     }
     if (params.page === 2) {
       return {
-        data: {
-          success: true,
-          data: page2Services,
-          meta: { current_page: 2, last_page: 2, per_page: 50, total: 65 },
-        },
+        success: true,
+        data: page2Services,
+        meta: { current_page: 2, last_page: 2, per_page: 50, total: 65 },
       };
     }
-    return { data: { success: true, data: [], meta: { current_page: params.page, last_page: 2, per_page: 50, total: 65 } } };
+    return { success: true, data: [], meta: { current_page: params.page, last_page: 2, per_page: 50, total: 65 } };
   };
 
   try {
@@ -137,6 +133,39 @@ test('R08: listActiveForProperty iterates across pages and collects all active s
     assert.equal(result.data.length, 65);
     assert.equal(result.data[0].id, 1);
     assert.equal(result.data[64].id, 65);
+  } finally {
+    propertyServiceCatalogApi.list = originalList;
+  }
+});
+
+test('PR10-01: listActiveForProperty directly consumes API response body without double-unwrapping data', async () => {
+  const originalList = propertyServiceCatalogApi.list;
+  const mockServices = [
+    { id: 101, name: 'Bữa sáng Buffet', price: '120000.00', is_active: true },
+    { id: 102, name: 'Đưa đón sân bay', price: '350000.00', is_active: true },
+  ];
+
+  let passedOptions = null;
+  propertyServiceCatalogApi.list = async (params, options) => {
+    passedOptions = options;
+    // Exactly matches real Laravel response shape returned by client.get(...).data
+    return {
+      success: true,
+      message: 'Lấy danh sách dịch vụ thành công.',
+      data: mockServices,
+      meta: { current_page: 1, last_page: 1, per_page: 50, total: 2 },
+    };
+  };
+
+  try {
+    const controller = new AbortController();
+    const result = await propertyServiceCatalogService.listActiveForProperty(8, { signal: controller.signal });
+    assert.equal(result.success, true);
+    assert.equal(result.total, 2);
+    assert.equal(result.data.length, 2);
+    assert.equal(result.data[0].id, 101);
+    assert.equal(result.data[1].id, 102);
+    assert.equal(passedOptions?.signal, controller.signal);
   } finally {
     propertyServiceCatalogApi.list = originalList;
   }

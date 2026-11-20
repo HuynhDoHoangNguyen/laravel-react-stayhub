@@ -31,7 +31,7 @@ export const propertyServiceCatalogService = {
         page,
       }, options);
 
-      const mapped = mapPropertyServiceListResponse(res.data || res);
+      const mapped = mapPropertyServiceListResponse(res);
       allServices.push(...mapped.data);
 
       const lastPage = mapped.meta?.last_page ?? 1;
