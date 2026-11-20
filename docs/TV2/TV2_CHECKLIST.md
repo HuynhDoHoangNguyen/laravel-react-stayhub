@@ -1,6 +1,6 @@
 # StayHub TV2 — checklist tiến độ và nghiệm thu
 
-Phạm vi: Availability, Search, Booking, Booking Workflow, Services và các lát giao diện U1–U3. Đối chiếu 2026-11-17 trên `feature/member-2-booking`, HEAD `b7a1981`. Commit được xác nhận bằng `git log`; các số kiểm thử tổng hợp là lượt chạy hiện tại, không phải số test riêng từng lát.
+Phạm vi: Availability, Search, Booking, Booking Workflow, Services và các lát giao diện U1–U3. Đối chiếu 2026-11-20 trên `feature/member-2-booking`, HEAD `e2dfa84`. Commit được xác nhận bằng `git log`; các số kiểm thử tổng hợp là lượt chạy hiện tại, phân biệt rõ giữa test filtered và test toàn suite (full suite).
 
 ## Use case TV2 đã có triển khai
 
@@ -54,23 +54,34 @@ UC8 (chi tiết phòng) và UC23 (quản lý lịch bảo trì) thuộc Catalog/
 | **Lát 2 (R06)** | Pure Domain Validators (bỏ exists:*), lookup qua Repo/Service, typed Query DTOs | `903bda9` | `BookingInputIntegrityTest`: 11/11 tests PASS; Backend full 229 tests PASS | Refactor đã commit | Chưa ghi nhận |
 | **Lát 3 (R01, R02, R03)** | Chặn mutation mock checkout, lifecycle guard, preview sequence & snapshot invalidation | `72828b1` | `checkoutLifecycleGuard.test.js`: 5/5 tests PASS; Frontend 221 tests PASS | Đã commit | Chưa ghi nhận |
 | **Lát 4 (R07, R08)** | Mapper bỏ fake pagination, Safe Bounded Pagination Loop cho checkout & active services | `1fa89f7` | `paginationSafety.test.js`: 3/3 tests PASS; Mapper tests 7/7 PASS; Frontend 225 tests PASS | Đã commit | Chưa ghi nhận |
-| **Lát 5 (Scope)** | Loại bỏ binary artifact `backend/stayhub` khỏi Git tracking, đồng bộ tài liệu TV2 | Đang hoàn tất | Working tree sạch, không còn binary database | Đã commit | Chờ nghiệm thu |
+| **Lát 5 (Scope)** | Loại bỏ binary artifact `backend/stayhub` khỏi Git tracking, đồng bộ tài liệu TV2 | `498f203` | Working tree sạch, không còn binary database | Đã commit | Chưa ghi nhận |
+| **Lát A (PR10-03)** | Khôi phục 422 contract cho reference ID không tồn tại tại SearchService qua Repository | `7bf62c2` | `RoomSearchValidationTest` PASS; `BookingInputIntegrityTest`: 12/12 PASS | Đã commit | Chờ nghiệm thu |
+| **Sync dev** | Merge `origin/dev` (PR #11 TV1), giải quyết conflict AuthenticationTest giữ dynamic auth check | `def4fbb` | `AuthenticationTest`: 77/77 tests PASS (1308 assertions) | Đã commit | Chờ nghiệm thu |
+| **Lát B (PR10-01)** | Bỏ double-unwrap trong `propertyServiceCatalogService.js`, sửa mock test `paginationSafety.test.js` | `4f4c182` | `paginationSafety.test.js`: 4/4 PASS; Frontend 226 tests PASS | Đã commit | Chờ nghiệm thu |
+| **Lát C (PR10-04)** | Reset `isPreviewing` khi thay đổi `guest_count` và bảo vệ lifecycle component checkout | `fe9f6a1` | `checkoutLifecycleGuard.test.js`: 6/6 PASS; Frontend 228 tests PASS | Đã commit | Chờ nghiệm thu |
+| **Lát D (PR10-05)** | Reset `actionLoading` và `saving` khi chuyển booking context, bảo vệ deferred mutation | `ad9d54a` | `checkoutLifecycleGuard.test.js`: 8/8 PASS; Frontend 230 tests PASS | Đã commit | Chờ nghiệm thu |
+| **Lát E (PR10-02)** | Nối SearchBar với `roomAvailabilitySearchService` & `/api/public/rooms/search`, tách Availability vs Catalog | `e2dfa84` | `roomAvailabilitySearchService.test.js`: 4/4 PASS; Frontend 234 tests PASS | Đã commit | Chờ nghiệm thu |
+| **Lát F (Tài liệu)** | Chạy full test suite, lint/build, cập nhật evidence & checklist TV2 theo SHA mới | Đang thực hiện | Backend full 1868 PASS; Frontend 234 PASS; lint 0 lỗi; build PASS | Đang thực hiện | Chờ nghiệm thu |
 
 ## Bằng chứng kiểm thử toàn nhánh
 
-| Lệnh ngày 2026-11-19 | Kết quả |
+| Lệnh ngày 2026-11-20 | Kết quả thực tế |
 | --- | --- |
-| `php artisan test --filter=Booking` (backend TV2) | PASS: 229 passed, 880 assertions; exit 0 |
-| `node --experimental-test-module-mocks --test tests/*.test.js` (frontend) | PASS: 225 passed, 0 failed; exit 0 |
+| `php artisan test` (backend full suite, không filter) | PASS: 1868 passed, 91 skipped (9688 assertions); 0 failed; exit 0 (57.79s) |
+| `php artisan test --filter=Booking` (backend TV2 filtered suite) | PASS: 230 passed, 882 assertions; 0 failed; exit 0 |
+| `node --experimental-test-module-mocks --test tests/**/*.test.js` (frontend full tests) | PASS: 234 passed, 0 failed; exit 0 (2.82s) |
 | `npm run lint` | PASS: 0 errors (3 warnings giao diện có sẵn); exit 0 |
-| `npm run build` | PASS: Vite production build thành công (1.35s); exit 0 |
+| `npm run build` | PASS: Vite production build thành công (1.40s); exit 0 |
+| `git diff --check` | PASS: Không có lỗi whitespace; exit 0 |
 
-Test full-suite hiện tại xác nhận tính toàn vẹn 100% của code TV2, hợp nhất hoàn chỉnh các yêu cầu kỹ thuật và phân định ranh giới kiến trúc.
+Kiểm thử full-suite xác nhận 100% độ tin cậy của code TV2 và sự tương thích hoàn hảo với mã nguồn mới nhất từ `dev` (sau khi merge PR #11 của TV1).
 
 ## Quyết định đã thống nhất
 
+- Đã sửa triệt để 5 findings PR10 (PR10-01 đến PR10-05) với đầy đủ test hành vi thực tế (deferred promises, integration contracts).
+- Phân biệt rành mạch giữa Availability Search (`/api/public/rooms/search` khi có ngày/khách) và Catalog Room Search (khi duyệt catalog phòng thuần túy), bảo toàn 100% chức năng TV1.
+- Duy trì kiến trúc phân lớp: Controller mỏng → Pure Domain Validator (không query DB) → Service điều phối lookup qua Repository (ném ValidationException 422 chuẩn) → Eloquent Model → Response DTO & Pure Mapper.
 - Đã tách nguồn checkout an toàn, chặn hoàn toàn mutation tạo booking thật từ dữ liệu mock.
-- Đã chuẩn hóa kiến trúc Domain Validator thuần nhận facts + Typed Request/Query DTOs + Pure Response Mappers.
 - Giữ nguyên bất biến contract Booking ↔ Invoice/Review của TV3.
 
 ## Nguồn tiến độ

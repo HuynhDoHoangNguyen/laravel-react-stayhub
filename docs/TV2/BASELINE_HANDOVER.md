@@ -1,6 +1,6 @@
 # Bàn giao baseline TV2 — Booking & Operations
 
-Ngày đối chiếu: 2026-11-17 (Asia/Saigon). Nhánh: `feature/member-2-booking`. HEAD hiện tại theo `git log`: `b7a1981` (tài liệu TV2); commit U3 Host bookings + services là `65b6e00`. Phạm vi là các commit đã có trong lịch sử nhánh; tài liệu này không xác nhận PR hoặc approval merge.
+Ngày đối chiếu: 2026-11-20 (Asia/Saigon). Nhánh: `feature/member-2-booking`. HEAD hiện tại theo `git log`: `e2dfa84` (kết thúc Lát E - sửa 5 findings PR #10). Đã giải quyết merge code mới từ `dev` (PR #11 TV1 tại commit `def4fbb`).
 
 Trước khi tạo tài liệu, `git status` ghi nhận `docs/handover-member2.md` và `frontend/.env` đang thay đổi. Hai thay đổi này nằm ngoài nội dung baseline TV2; không chép nội dung `.env`. Ba file mới trong thư mục này cần được đưa vào diff riêng khi người dùng chuẩn bị PR.
 
@@ -119,23 +119,35 @@ Danh sách dưới đây lấy từ route list và phần endpoint trong handove
 | **R09** | Amenity IDs lặp làm sai điều kiện AND | Deduplicate `amenity_ids` qua `array_values(array_unique(...))` trong cả Validator và Repository. | `backend/tests/Feature/BookingInputIntegrityTest.php` PASS |
 | **Scope** | File SQLite `backend/stayhub` còn trong PR | Xóa khỏi Git tracking, giữ scope PR sạch 100%. | `git status` xác nhận `D backend/stayhub` |
 
-## Bằng chứng và giới hạn
+## Kết quả xử lý 5 Findings PR #10 (Task TV2-PR10-FIX-01)
 
-Lượt chạy nghiệm thu sau khi hoàn tất refactor R01–R09:
+| Finding | Lát & Commit | Mô tả & Nguyên nhân | Giải pháp kỹ thuật | Bằng chứng kiểm thử thực tế |
+| --- | --- | --- | --- | --- |
+| **PR10-01** | Lát B (`4f4c182`) | Double-unwrap `res.data` làm mất `meta` phân trang khi tải dịch vụ host | `propertyServiceCatalogApi.list()` đã trả body `{success, data, meta}`. `listActiveForProperty()` truyền `res.data` khiến mapper coi là mảng và mất `meta`. Đã sửa truyền trực tiếp `res` tới mapper. Sửa mock test đúng contract. | `frontend/tests/paginationSafety.test.js`: 4/4 PASS; Frontend full suite: 234/234 PASS |
+| **PR10-02** | Lát E (`e2dfa84`) | Form `SearchBar` điều hướng ngày/khách nhưng `/search` dùng Catalog parser không hỗ trợ | Tạo `roomAvailabilitySearchService.js` và kết nối SearchBar tới `/api/public/rooms/search` khi có ngày lưu trú; phân biệt rành mạch với Catalog room filter; bảo toàn link Đặt ngay kèm ngày/khách. | `frontend/tests/roomAvailabilitySearchService.test.js`: 4/4 PASS; Catalog tests: 13/13 PASS; Frontend full: 234/234 PASS |
+| **PR10-03** | Lát A (`7bf62c2`) | Bỏ `exists:*` làm mất contract 422 cho `property_id` không tồn tại | Bổ sung phương thức lookup `propertyExists()`, `roomTypeExists()`, `findExistingAmenityIds()` vào `RoomAvailabilityRepository`. Tại `SearchService` ném `ValidationException` chuẩn 422, giữ Domain Validator thuần túy không query DB. | `backend/tests/Feature/BookingInputIntegrityTest.php`: 12/12 PASS; `RoomSearchValidationTest` PASS; Backend full suite: 1868 PASS |
+| **PR10-04** | Lát C (`fe9f6a1`) | Thay đổi số khách khi preview pending làm kẹt `isPreviewing=true` | Gọi `setIsPreviewing(false)` ngay trong `updateGuestCount()`; bổ sung `isMountedRef` bảo vệ async resolve; request cũ resolve muộn bị bỏ qua không làm kẹt nút bấm. | `frontend/tests/checkoutLifecycleGuard.test.js`: Deferred promise test PASS (6/6 tests); Frontend full: 234/234 PASS |
+| **PR10-05** | Lát D (`ad9d54a`) | Đổi Booking khi mutation pending khiến `actionLoading`/`saving` kẹt | Reset `actionLoading = false` và `saving = ''` khi `bookingId` thay đổi qua render guard; reset vô điều kiện trong `finally` nếu component còn mounted. | `frontend/tests/checkoutLifecycleGuard.test.js`: Deferred promise tests cho cả HostBookingDetail và HostBookingServices PASS (8/8 tests); Frontend full: 234/234 PASS |
 
-| Lệnh | Kết quả thực tế |
-| --- | --- |
-| `php artisan test --filter=Booking` trong `backend` | PASS: 229 tests, 880 assertions; exit 0 |
-| `node --experimental-test-module-mocks --test tests/*.test.js` trong `frontend` | PASS: 225 tests, 0 fail; exit 0 |
-| `npm run lint` trong `frontend` | PASS: 0 errors (3 warnings giao diện có sẵn); exit 0 |
-| `npm run build` trong `frontend` | PASS: Vite build production thành công; exit 0 |
+## Bằng chứng kiểm thử toàn diện (Snapshot ngày 2026-11-20, HEAD e2dfa84)
 
-Kiểm tra khóa đồng thời trên MySQL cần môi trường MySQL thực tế; PHPUnit dùng SQLite in-memory cho test suite. E2E browser cần chạy kiểm tra trực quan thủ công trước khi xin duyệt merge.
+Lượt chạy nghiệm thu sau khi hoàn tất sửa 5 findings PR #10 và merge code từ `origin/dev` (PR #11 TV1):
+
+| Lệnh | Kết quả thực tế | Thời gian / Engine |
+| --- | --- | --- |
+| `php artisan test` (backend full suite, không filter) | PASS: 1868 passed, 91 skipped (9688 assertions); 0 failed; exit 0 | 57.79s (SQLite in-memory) |
+| `php artisan test --filter=Booking` (backend TV2 filtered suite) | PASS: 230 passed, 882 assertions; 0 failed; exit 0 | 4.88s (SQLite in-memory) |
+| `node --experimental-test-module-mocks --test tests/**/*.test.js` (frontend full suite) | PASS: 234 tests, 0 fail; exit 0 | 2.82s (Node.js test runner) |
+| `npm run lint` (frontend) | PASS: 0 errors (3 warnings giao diện có sẵn); exit 0 | ESLint 9 |
+| `npm run build` (frontend) | PASS: Vite production build thành công; exit 0 | 1.40s |
+| `git diff --check` | PASS: Không có lỗi whitespace; exit 0 | Git diff engine |
 
 ## Việc còn lại và kết luận
 
-- Đã hoàn tất toàn bộ 9 finding R01–R09 và loại bỏ binary artifact `backend/stayhub`.
-- Nhóm trưởng review lại PR #9 và tiến hành merge vào dev.
+- Đã khắc phục hoàn toàn 5 findings PR10-01 đến PR10-05, bổ sung các test hành vi thực tế (deferred promise tests, contract tests) bắt đúng lỗi thay vì chỉ kiểm tra regex.
+- Đã giải quyết triệt để merge conflict với PR #11 của TV1 từ `dev`, bảo toàn dynamic route protection test suite.
+- Backend full suite đạt 1868 passed / 91 skipped / 9688 assertions; Frontend full test đạt 234/234 passed; lint 0 lỗi; build thành công.
+- Nhánh `feature/member-2-booking` đạt 100% điều kiện kỹ thuật để Nhóm trưởng review lại PR #10 và merge vào `dev`.
 
 ## Nguồn đối chiếu
 
