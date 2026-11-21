@@ -63,6 +63,14 @@ final class GlobalExceptionHandler
             return response()->json(['message' => $exception->getMessage()], $exception->status);
         }
 
+        if ($exception instanceof AppException && $exception->errorCode === ErrorCode::AGREEMENT_REQUIRED) {
+            return response()->json([
+                'success' => false,
+                'code' => $exception->errorCode,
+                'message' => $exception->getMessage(),
+            ], $exception->status);
+        }
+
         if (!$request->routeIs(...self::ROUTES)) {
             return null;
         }

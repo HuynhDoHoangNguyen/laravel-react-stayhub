@@ -7,6 +7,8 @@ use App\DTOs\Catalog\Requests\ChangeHostPropertyStatusRequest;
 use App\DTOs\Catalog\Requests\UpdateHostPropertyRequest;
 use App\DTOs\Catalog\Responses\HostPropertyDetailResponse;
 use App\Enums\PropertyStatus;
+use App\Exceptions\AppException;
+use App\Exceptions\ErrorCode;
 use App\Mappers\Catalog\CatalogMapper;
 use App\Models\User;
 use App\Repositories\Catalog\CatalogRepository;
@@ -75,11 +77,7 @@ class HostPropertyService
         $this->validator->authorizeHost($actor);
 
         if (!$this->agreementService->hasAcceptedCurrentAgreement($actor->getKey())) {
-            abort(response()->json([
-                'success' => false,
-                'code' => 'AGREEMENT_REQUIRED',
-                'message' => 'Bạn cần chấp thuận hợp đồng đối tác trước khi tạo cơ sở lưu trú.',
-            ], 403));
+            throw new AppException(ErrorCode::AGREEMENT_REQUIRED, 'Bạn cần chấp thuận hợp đồng đối tác trước khi tạo cơ sở lưu trú.', 403);
         }
 
         return DB::transaction(function () use ($actor, $input): HostPropertyDetailResponse {

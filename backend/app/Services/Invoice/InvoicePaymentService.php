@@ -16,12 +16,14 @@ use Psr\Log\LoggerInterface;
 
 final class InvoicePaymentService
 {
+    private readonly CommissionChargeService $commissionChargeService;
+
     public function __construct(
         private readonly InvoiceRepository $repository,
         private readonly InvoicePaymentValidator $validator,
         private readonly InvoiceMapper $mapper,
         private readonly LoggerInterface $logger,
-        private ?CommissionChargeService $commissionChargeService = null,
+        ?CommissionChargeService $commissionChargeService = null,
     ) {
         $this->commissionChargeService = $commissionChargeService ?? app(CommissionChargeService::class);
     }

@@ -50,20 +50,13 @@ class CommissionRemittanceService
             }
         }
 
-        $paginator = $query->orderByDesc('id')->paginate($perPage);
-
-        // Format items with computed display status and formatted properties
-        $paginator->getCollection()->transform(function (BookingCommission $item) {
-            return $this->formatCommissionListItem($item);
-        });
-
-        return $paginator;
+        return $query->orderByDesc('id')->paginate($perPage);
     }
 
     /**
      * Lấy chi tiết khoản hoa hồng kèm thông tin tài khoản chuyển khoản và lịch sử nộp tiền.
      */
-    public function findForHost(int $commissionId, int $hostId): array
+    public function findForHost(int $commissionId, int $hostId): BookingCommission
     {
         /** @var BookingCommission|null $commission */
         $commission = BookingCommission::query()
@@ -83,47 +76,7 @@ class CommissionRemittanceService
             throw new NotFoundHttpException('Không tìm thấy khoản hoa hồng.');
         }
 
-        $displayStatus = $this->computeDisplayStatus($commission);
-
-        return [
-            'commission' => [
-                'id' => $commission->id,
-                'reference_code' => $commission->reference_code,
-                'invoice_id' => $commission->invoice_id,
-                'invoice_code' => $commission->invoice?->invoice_code,
-                'booking_id' => $commission->booking_id,
-                'booking_code' => $commission->booking?->booking_code,
-                'property_name' => $commission->booking?->room?->property?->name,
-                'room_name' => $commission->booking?->room?->name,
-                'customer_name' => $commission->booking?->customer?->name,
-                'commission_base' => $commission->commission_base,
-                'commission_rate_bps' => $commission->commission_rate_bps,
-                'commission_amount' => $commission->commission_amount,
-                'currency' => $commission->currency,
-                'status' => $commission->status->value,
-                'display_status' => $displayStatus,
-                'due_at' => $commission->due_at?->toIso8601String(),
-                'settled_at' => $commission->settled_at?->toIso8601String(),
-                'created_at' => $commission->created_at?->toIso8601String(),
-            ],
-            'payment_instructions' => [
-                'bank_name' => config('commission.bank_info.bank_name', 'Vietcombank'),
-                'account_number' => config('commission.bank_info.account_number', '1029384756'),
-                'account_holder' => config('commission.bank_info.account_holder', 'STAYHUB'),
-                'amount' => $commission->commission_amount,
-                'reference_code' => $commission->reference_code,
-            ],
-            'remittances' => $commission->remittances->map(fn ($r) => [
-                'id' => $r->id,
-                'amount' => $r->amount,
-                'bank_transaction_reference' => $r->bank_transaction_reference,
-                'idempotency_key' => $r->idempotency_key,
-                'status' => $r->status->value,
-                'submitted_at' => $r->submitted_at?->toIso8601String(),
-                'reviewed_at' => $r->reviewed_at?->toIso8601String(),
-                'review_note' => $r->review_note,
-            ])->values()->all(),
-        ];
+        return $commission;
     }
 
     /**
@@ -211,54 +164,5 @@ class CommissionRemittanceService
                 'submitted_at' => now(),
             ]);
         });
-    }
-
-    /**
-     * Tính toán trạng thái hiển thị dẫn xuất (Derived Display Status).
-     */
-    public function computeDisplayStatus(BookingCommission $commission): string
-    {
-        if ($commission->status === CommissionStatus::DUE) {
-            $hasPending = $commission->remittances->contains(fn ($r) => $r->status === RemittanceStatus::SUBMITTED);
-            if ($hasPending) {
-                return 'UNDER_REVIEW'; // Đang đối soát
-            }
-
-            if ($commission->due_at !== null && now()->greaterThan($commission->due_at)) {
-                return 'OVERDUE'; // Quá hạn
-            }
-
-            return 'DUE'; // Chờ thanh toán
-        }
-
-        return $commission->status->value;
-    }
-
-    /**
-     * Chuẩn hóa phần tử danh sách trả về cho client.
-     */
-    protected function formatCommissionListItem(BookingCommission $item): array
-    {
-        $displayStatus = $this->computeDisplayStatus($item);
-
-        return [
-            'id' => $item->id,
-            'reference_code' => $item->reference_code,
-            'invoice_id' => $item->invoice_id,
-            'invoice_code' => $item->invoice?->invoice_code,
-            'booking_id' => $item->booking_id,
-            'booking_code' => $item->booking?->booking_code,
-            'property_name' => $item->booking?->room?->property?->name,
-            'room_name' => $item->booking?->room?->name,
-            'commission_base' => $item->commission_base,
-            'commission_rate_bps' => $item->commission_rate_bps,
-            'commission_amount' => $item->commission_amount,
-            'currency' => $item->currency,
-            'status' => $item->status->value,
-            'display_status' => $displayStatus,
-            'due_at' => $item->due_at?->toIso8601String(),
-            'settled_at' => $item->settled_at?->toIso8601String(),
-            'created_at' => $item->created_at?->toIso8601String(),
-        ];
     }
 }

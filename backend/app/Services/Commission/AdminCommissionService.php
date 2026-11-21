@@ -47,45 +47,7 @@ class AdminCommissionService
             }
         }
 
-        $paginator = $query->orderByDesc('id')->paginate($perPage);
-
-        $paginator->getCollection()->transform(function (BookingCommission $item) {
-            $hasPending = $item->remittances->contains(fn ($r) => $r->status === RemittanceStatus::SUBMITTED);
-            $displayStatus = $item->status->value;
-
-            if ($item->status === CommissionStatus::DUE) {
-                if ($hasPending) {
-                    $displayStatus = 'UNDER_REVIEW';
-                } elseif ($item->due_at !== null && now()->greaterThan($item->due_at)) {
-                    $displayStatus = 'OVERDUE';
-                } else {
-                    $displayStatus = 'DUE';
-                }
-            }
-
-            return [
-                'id' => $item->id,
-                'reference_code' => $item->reference_code,
-                'host_id' => $item->host_id,
-                'host_name' => $item->host?->name,
-                'host_phone' => $item->host?->phone,
-                'invoice_id' => $item->invoice_id,
-                'invoice_code' => $item->invoice?->invoice_code,
-                'booking_id' => $item->booking_id,
-                'booking_code' => $item->booking?->booking_code,
-                'property_name' => $item->booking?->room?->property?->name,
-                'commission_base' => $item->commission_base,
-                'commission_rate_bps' => $item->commission_rate_bps,
-                'commission_amount' => $item->commission_amount,
-                'status' => $item->status->value,
-                'display_status' => $displayStatus,
-                'due_at' => $item->due_at?->toIso8601String(),
-                'settled_at' => $item->settled_at?->toIso8601String(),
-                'created_at' => $item->created_at?->toIso8601String(),
-            ];
-        });
-
-        return $paginator;
+        return $query->orderByDesc('id')->paginate($perPage);
     }
 
     /**

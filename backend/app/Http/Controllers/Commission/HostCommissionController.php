@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Commission;
 
 use App\Http\Controllers\Controller;
+use App\Mappers\Commission\CommissionMapper;
 use App\Services\Commission\CommissionRemittanceService;
 use App\Services\Commission\CommissionReportService;
+use App\Validators\Commission\CommissionValidator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -12,6 +14,9 @@ class HostCommissionController extends Controller
 {
     public function __construct(
         protected readonly CommissionRemittanceService $service,
+        protected readonly CommissionReportService $reportService,
+        protected readonly CommissionValidator $validator,
+        protected readonly CommissionMapper $mapper,
     ) {}
 
     /**
@@ -19,28 +24,16 @@ class HostCommissionController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $actor = $request->user();
-        if ($actor->role?->value !== 'HOST' && $actor->role !== 'HOST') {
-            return response()->json(['message' => 'Chỉ tài khoản Host mới có quyền truy cập.'], 403);
-        }
+        $this->validator->authorizeHost($request->user());
 
-        $perPage = max(1, min(100, (int) $request->get('per_page', 15)));
+        $perPage = $this->validator->validatePerPage($request->get('per_page', 15));
         $paginator = $this->service->listForHost(
-            $actor->id,
+            $request->user()->id,
             $request->only(['status']),
             $perPage
         );
 
-        return response()->json([
-            'success' => true,
-            'data' => $paginator->items(),
-            'meta' => [
-                'current_page' => $paginator->currentPage(),
-                'last_page' => $paginator->lastPage(),
-                'per_page' => $paginator->perPage(),
-                'total' => $paginator->total(),
-            ],
-        ]);
+        return response()->json($this->mapper->toHostCommissionPaginatedResponse($paginator));
     }
 
     /**
@@ -48,17 +41,11 @@ class HostCommissionController extends Controller
      */
     public function show(Request $request, int|string $id): JsonResponse
     {
-        $actor = $request->user();
-        if ($actor->role?->value !== 'HOST' && $actor->role !== 'HOST') {
-            return response()->json(['message' => 'Chỉ tài khoản Host mới có quyền truy cập.'], 403);
-        }
+        $this->validator->authorizeHost($request->user());
 
-        $result = $this->service->findForHost((int) $id, $actor->id);
+        $commission = $this->service->findForHost((int) $id, $request->user()->id);
 
-        return response()->json([
-            'success' => true,
-            'data' => $result,
-        ]);
+        return response()->json($this->mapper->toHostCommissionDetailResponse($commission));
     }
 
     /**
@@ -66,53 +53,24 @@ class HostCommissionController extends Controller
      */
     public function submitRemittance(Request $request, int|string $id): JsonResponse
     {
-        $actor = $request->user();
-        if ($actor->role?->value !== 'HOST' && $actor->role !== 'HOST') {
-            return response()->json(['message' => 'Chỉ tài khoản Host mới có quyền truy cập.'], 403);
-        }
+        $this->validator->authorizeHost($request->user());
 
-        $validated = $request->validate([
-            'amount' => ['required', 'numeric', 'gt:0'],
-            'bank_transaction_reference' => ['nullable', 'string', 'max:128'],
-            'idempotency_key' => ['required', 'string', 'max:64'],
-        ], [
-            'amount.required' => 'Số tiền nộp là bắt buộc.',
-            'amount.numeric' => 'Số tiền nộp phải là một số hợp lệ.',
-            'amount.gt' => 'Số tiền nộp phải lớn hơn 0.',
-            'idempotency_key.required' => 'Khóa idempotency là bắt buộc để chống gửi trùng.',
-        ]);
+        $validated = $this->validator->validateSubmitRemittancePayload($request->all());
 
-        $remittance = $this->service->submitRemittance((int) $id, $actor->id, $validated);
+        $remittance = $this->service->submitRemittance((int) $id, $request->user()->id, $validated);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Đã gửi thông tin chuyển khoản đối soát. Vui lòng chờ Ban quản trị xác nhận.',
-            'data' => [
-                'id' => $remittance->id,
-                'booking_commission_id' => $remittance->booking_commission_id,
-                'amount' => $remittance->amount,
-                'bank_transaction_reference' => $remittance->bank_transaction_reference,
-                'status' => $remittance->status->value,
-                'submitted_at' => $remittance->submitted_at?->toIso8601String(),
-            ],
-        ], 201);
+        return response()->json($this->mapper->toRemittanceSubmissionResponse($remittance), 201);
     }
 
     /**
      * Báo cáo tổng hợp tài chính và hoa hồng dành cho Host (RPT-01).
      */
-    public function financialSummary(Request $request, CommissionReportService $reportService): JsonResponse
+    public function financialSummary(Request $request): JsonResponse
     {
-        $actor = $request->user();
-        if ($actor->role?->value !== 'HOST' && $actor->role !== 'HOST') {
-            return response()->json(['message' => 'Chỉ tài khoản Host mới có quyền truy cập.'], 403);
-        }
+        $this->validator->authorizeHost($request->user());
 
-        $summary = $reportService->getHostFinancialSummary($actor->id);
+        $summary = $this->reportService->getHostFinancialSummary($request->user()->id);
 
-        return response()->json([
-            'success' => true,
-            'data' => $summary,
-        ]);
+        return response()->json($this->mapper->toFinancialSummaryResponse($summary));
     }
 }
