@@ -534,7 +534,13 @@ test('PR12-02: SearchRoomCard wires "Đặt ngay" CTA directly to customer check
   assert.equal((code.match(/<Link\s+to=\{roomHref\}[^>]*>Xem chi tiết phòng<\/Link>/g) ?? []).length, 2);
 });
 
-test('UX-ENHANCE-01: Direct date picker in checkout form when dates not preselected', async () => {
+test('UX-ENHANCE-01: Direct booking CTA and date picker in checkout form when dates not preselected', async () => {
+  const searchCardPath = fileURLToPath(new URL('../src/components/search/SearchRoomCard.jsx', import.meta.url));
+  const cardCode = await readFile(searchCardPath, 'utf8');
+
+  // Verify non-availability search offers "Đặt phòng" CTA
+  assert.match(cardCode, /<Link\s+to=\{checkoutHref\}[^>]*>Đặt phòng<\/Link>/);
+
   // Verify CheckoutGuestsStep contains date inputs and date validation
   const guestsStepPath = fileURLToPath(new URL('../src/components/checkout/CheckoutGuestsStep.jsx', import.meta.url));
   const guestsCode = await readFile(guestsStepPath, 'utf8');
