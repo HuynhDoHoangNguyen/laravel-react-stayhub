@@ -8,6 +8,9 @@ use App\DTOs\Catalog\Responses\HostPropertyImageResponse;
 use App\Mappers\Catalog\CatalogMapper;
 use App\Models\Property;
 use App\Models\PropertyImage;
+use App\Models\Room;
+use App\Models\RoomImage;
+use App\Models\RoomType;
 use App\Models\User;
 use App\Repositories\Catalog\CatalogRepository;
 use App\Services\Catalog\HostPropertyImageService;
@@ -436,6 +439,61 @@ class HostPropertyImagesTest extends TestCase
         $this->assertDatabaseMissing('property_images',['id'=>$image->id]);
         if($mode==='shared'||$mode==='not_managed')Storage::disk('public')->assertExists($path);
         if($mode==='failed')Log::shouldHaveReceived('warning')->once();
+    }
+
+    public static function sharedRoomOwners(): array
+    {
+        return ['same property' => [false], 'different host property' => [true]];
+    }
+
+    #[DataProvider('sharedRoomOwners')]
+    public function test_delete_preserves_managed_file_referenced_by_room_image(bool $differentOwner): void
+    {
+        $host = $this->actor();
+        $property = $this->property($host);
+        $image = $this->managedImage($property, true);
+        $path = $image->image_path;
+        $roomProperty = $differentOwner ? $this->property($this->actor()) : $property;
+        $roomType = RoomType::factory()->create(['property_id' => $roomProperty->id]);
+        $room = Room::factory()->create([
+            'property_id' => $roomProperty->id, 'room_type_id' => $roomType->id,
+        ]);
+        $roomImage = RoomImage::create([
+            'room_id' => $room->id, 'image_path' => $path, 'is_primary' => true,
+        ]);
+        $originalRoom = $room->fresh()->getAttributes();
+
+        $this->actingAs($host)->deleteJson($this->endpoint($property->id).'/'.$image->id)
+            ->assertOk()
+            ->assertJsonPath('data.deleted_image_id', $image->id)
+            ->assertJsonPath('data.cleanup_status', 'shared')
+            ->assertJsonPath('data.images', []);
+
+        $this->assertDatabaseMissing('property_images', ['id' => $image->id]);
+        $this->assertDatabaseHas('room_images', [
+            'id' => $roomImage->id, 'room_id' => $room->id,
+            'image_path' => $path, 'is_primary' => true,
+        ]);
+        $this->assertSame($originalRoom, $room->fresh()->getAttributes());
+        Storage::disk('public')->assertExists($path);
+        $this->assertSame('owned fixture', Storage::disk('public')->get($path));
+    }
+
+    public function test_delete_removes_unreferenced_managed_file(): void
+    {
+        $host = $this->actor();
+        $property = $this->property($host);
+        $image = $this->managedImage($property, true);
+        $path = $image->image_path;
+
+        $this->actingAs($host)->deleteJson($this->endpoint($property->id).'/'.$image->id)
+            ->assertOk()
+            ->assertJsonPath('data.deleted_image_id', $image->id)
+            ->assertJsonPath('data.cleanup_status', 'deleted')
+            ->assertJsonPath('data.images', []);
+
+        $this->assertDatabaseMissing('property_images', ['id' => $image->id]);
+        Storage::disk('public')->assertMissing($path);
     }
 
     public static function imageOperations(): array {return [['makePrimary'],['delete']];}

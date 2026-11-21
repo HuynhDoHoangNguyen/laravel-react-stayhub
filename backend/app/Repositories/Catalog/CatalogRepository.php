@@ -321,7 +321,7 @@ class CatalogRepository
 
     public function imagePathReferenced(string $path): bool
     {
-        return PropertyImage::query()->where('image_path', $path)->exists();
+        return $this->roomImagePathReferenced($path);
     }
 
     /** @return Collection<int, PropertyImage> */
