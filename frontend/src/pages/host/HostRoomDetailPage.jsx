@@ -5,7 +5,7 @@ import { hostRoomService } from '../../services/hostRoomService';
 import { formatCatalogPrice } from '../../services/catalog';
 import HostRoomEditForm from '../../components/catalog/HostRoomEditForm';
 import HostRoomStatusForm from '../../components/catalog/HostRoomStatusForm';
-import CatalogImage from '../../components/catalog/CatalogImage';
+import HostRoomImageManager from '../../components/catalog/HostRoomImageManager';
 
 const roomStatuses = { ACTIVE: 'Đang hoạt động', MAINTENANCE: 'Đang bảo trì', INACTIVE: 'Ngưng hoạt động' };
 const propertyStatuses = { ACTIVE: 'Đang hoạt động', INACTIVE: 'Ngưng hoạt động', PENDING: 'Chờ duyệt', BLOCKED: 'Đã khóa' };
@@ -116,15 +116,7 @@ function RoomDetail({ roomId }) {
                 <h2 id="room-description-title" className="text-xl font-semibold">Mô tả</h2>
                 <p className="whitespace-pre-line break-words">{room.description ?? 'Chưa có mô tả.'}</p>
             </section>
-            <section aria-labelledby="room-images-title" className="space-y-3">
-                <h2 id="room-images-title" className="text-xl font-semibold">Hình ảnh phòng</h2>
-                {room.images.length === 0 ? <p className="text-muted-foreground">Chưa có hình ảnh.</p>
-                    : <div className="grid gap-4 sm:grid-cols-2">
-                        {room.images.map((url, index) => <div key={index} className="aspect-[4/3] overflow-hidden rounded-xl">
-                            <CatalogImage src={url} alt={room.name + ' — ảnh ' + (index + 1)} />
-                        </div>)}
-                    </div>}
-            </section>
+            <HostRoomImageManager roomId={room.id} />
             <section aria-labelledby="room-amenities-title" className="space-y-3">
                 <h2 id="room-amenities-title" className="text-xl font-semibold">Tiện nghi</h2>
                 {room.amenities.length === 0 ? <p className="text-muted-foreground">Chưa gán tiện nghi.</p>

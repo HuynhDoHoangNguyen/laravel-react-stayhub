@@ -16,6 +16,8 @@ use App\Mappers\EloquentObjectMapper;
 use App\Models\Amenity;
 use App\Models\Property;
 use App\Models\PropertyImage;
+use App\Models\RoomImage;
+use App\DTOs\Catalog\Responses\HostRoomImageResponse;
 use App\DTOs\Catalog\Responses\HostPropertyImageResponse;
 use App\Models\Room;
 use App\Models\RoomType;
@@ -26,6 +28,14 @@ use LogicException;
 
 final class CatalogMapper
 {
+    public function toHostRoomImage(RoomImage $image): ?HostRoomImageResponse
+    {
+        $url = PublicImageUrl::from($image->image_path);
+
+        return $url === null ? null : $this->objectMapper->map($image, HostRoomImageResponse::class,
+            ['id', 'is_primary'], ['url' => $url]);
+    }
+
     public function __construct(private readonly EloquentObjectMapper $objectMapper) {}
 
     public function toPublicRoomListItem(Room $room): PublicRoomListItemResponse

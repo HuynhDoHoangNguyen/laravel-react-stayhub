@@ -7,6 +7,12 @@ use App\Http\Controllers\Catalog\HostPropertyImageController;
 use App\Http\Controllers\Catalog\HostRoomTypeController;
 use App\Http\Controllers\Catalog\HostRoomController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Catalog\HostRoomImageController;
+
+Route::get('/host/rooms/{room}/images', [HostRoomImageController::class, 'index'])
+    ->middleware(['auth:sanctum', 'account.active']);
+Route::post('/host/rooms/{room}/images', [HostRoomImageController::class, 'store'])
+    ->middleware(['auth:sanctum', 'account.active']);
 
 Route::get('/public/rooms', [PublicRoomController::class, 'index']);
 Route::get('/public/rooms/filter-options', [PublicRoomController::class, 'filterOptions']);

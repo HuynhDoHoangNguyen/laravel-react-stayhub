@@ -22,6 +22,8 @@ use App\DTOs\Catalog\Requests\HostRoomListQuery;
 use App\DTOs\Catalog\Requests\HostRoomDetailQuery;
 use App\DTOs\Catalog\Requests\UploadHostPropertyImageRequest;
 use App\DTOs\Catalog\Requests\HostPropertyImageRequest;
+use App\DTOs\Catalog\Requests\HostRoomImageQuery;
+use App\DTOs\Catalog\Requests\UploadHostRoomImageRequest;
 use App\Models\User;
 use App\DTOs\Catalog\Requests\PublicPropertyDetailQuery;
 use App\DTOs\Catalog\Requests\PublicPropertyListQuery;
@@ -34,6 +36,42 @@ use App\Exceptions\AppException;
 
 final class CatalogValidator
 {
+    public function validateHostRoomImageQuery(User $actor, string $room, array $input): ?HostRoomImageQuery
+    {
+        $this->authorizeHost($actor);
+        $id = (int) $room;
+        if ($id < 1 || (string) $id !== $room) return null;
+        $validator = $this->validation->make($input, []);
+        $validator->after(static function (Validator $validator) use ($input): void {
+            foreach (array_keys($input) as $field) {
+                $validator->errors()->add($field, 'Danh sách ảnh phòng không nhận thêm tham số.');
+            }
+        });
+        $validator->validate();
+
+        return new HostRoomImageQuery($id);
+    }
+
+    public function validateHostRoomImageUpload(User $actor, array $body, array $query = []): UploadHostRoomImageRequest
+    {
+        $this->authorizeHost($actor);
+        $validator = $this->validation->make($body, [
+            'image' => ['bail', 'required', 'file', 'image', 'mimetypes:image/jpeg,image/png,image/webp',
+                'max:5120', 'dimensions:max_width=4096,max_height=4096'],
+        ], ['image.*' => 'Vui lòng chọn một ảnh JPG, PNG hoặc WebP hợp lệ, tối đa 5 MiB và 4096 × 4096 pixel.']);
+        $validator->after(static function (Validator $validator) use ($body, $query): void {
+            foreach (array_diff(array_keys($body), ['image']) as $field) {
+                $validator->errors()->add($field, 'Chỉ được gửi một tệp image.');
+            }
+            foreach (array_keys($query) as $field) {
+                $validator->errors()->add($field, 'Upload ảnh phòng không nhận tham số truy vấn.');
+            }
+        });
+        $data = $validator->validate();
+
+        return new UploadHostRoomImageRequest($data['image']);
+    }
+
     public function __construct(
         private readonly Factory $validation,
         private readonly AttributeValidator $attributes,

@@ -12,6 +12,7 @@ use App\Models\Maintenance;
 use App\Models\Amenity;
 use App\Models\Property;
 use App\Models\PropertyImage;
+use App\Models\RoomImage;
 use App\Models\Room;
 use App\Models\RoomType;
 use App\Models\Review;
@@ -21,6 +22,34 @@ use Illuminate\Database\Eloquent\Collection;
 
 class CatalogRepository
 {
+    /** @return Collection<int, RoomImage> */
+    public function getRoomImages(int $roomId, bool $lock = false): Collection
+    {
+        $query = RoomImage::query()->where('room_id', $roomId)->orderByDesc('is_primary')->orderBy('id');
+        if ($lock) $query->lockForUpdate();
+
+        return $query->get();
+    }
+
+    public function createRoomImage(array $attributes): RoomImage
+    {
+        return RoomImage::create($attributes)->refresh();
+    }
+
+    public function setRoomImagePrimary(int $roomId, int $imageId): void
+    {
+        RoomImage::query()->where('room_id', $roomId)->whereKeyNot($imageId)
+            ->where('is_primary', true)->update(['is_primary' => false]);
+        RoomImage::query()->where('room_id', $roomId)->whereKey($imageId)
+            ->where('is_primary', false)->update(['is_primary' => true]);
+    }
+
+    public function roomImagePathReferenced(string $path): bool
+    {
+        return RoomImage::query()->where('image_path', $path)->exists()
+            || PropertyImage::query()->where('image_path', $path)->exists();
+    }
+
     /** Public catalog filtering; deliberately not a date-based availability query. */
     public function paginatePublicRooms(PublicRoomFilterQuery $filters): LengthAwarePaginator
     {
