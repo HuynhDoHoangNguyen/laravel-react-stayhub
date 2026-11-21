@@ -4,6 +4,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { fileURLToPath } from 'node:url';
+import { searchBackLink } from '../src/utils/searchNavigation.js';
 
 let server;
 test.after(async () => { await server?.close(); });
@@ -105,4 +106,21 @@ test('room breadcrumbs keep the property URL and guest/date context', async () =
     assert.ok(html.includes('href="/properties/7?checkIn=2027-01-01&amp;checkOut=2027-01-03&amp;adults=2&amp;children=1"'));
     assert.ok(html.includes('aria-current="page"'));
     assert.ok(html.includes('Phòng thật'));
+});
+
+test('merged property breadcrumb restores UC7 room/property URLs while retaining the UC8 breadcrumb', async () => {
+    const roomSearch = '?startDate=2027-01-01&endDate=2027-01-03&adults=2&children=1&amenity_ids[]=7&sort=price_asc&page=2&per_page=50';
+    const propertySearch = '?tab=properties&page=3&per_page=6&min_price=0.00';
+    for (const query of [roomSearch, propertySearch]) {
+        const back = searchBackLink({ searchPage: query });
+        assert.equal(back, '/search' + query);
+        const html = await render('DetailBreadcrumbs', { items: [{ label: 'Kết quả khám phá', to: back }, { label: 'Cơ sở thật' }] });
+        assert.ok(html.includes('href="' + back.replaceAll('&', '&amp;') + '"'));
+        assert.ok(html.includes('Kết quả khám phá'));
+        assert.ok(html.includes('aria-current="page"'));
+    }
+    assert.equal(searchBackLink({ catalogPage: '?page=2&per_page=6' }), '/search?page=2&per_page=6&tab=properties');
+    for (const state of [null, { searchPage: 'https://evil.test' }, { searchPage: '?tab=unknown' }]) {
+        assert.equal(searchBackLink(state), '/search?tab=properties');
+    }
 });
