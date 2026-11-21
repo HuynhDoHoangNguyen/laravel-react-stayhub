@@ -131,7 +131,7 @@ function HostInvoiceListPage() {
             <div className="host-filter-bar">
                 <div>
                     <select
-                        className="host-filter-select"
+                        className="invoice-filter-select"
                         value={status}
                         onChange={handleStatusChange}
                         aria-label="Lọc theo trạng thái thanh toán"
@@ -152,7 +152,7 @@ function HostInvoiceListPage() {
                     </span>
                     <input
                         type="text"
-                        className="host-search-input"
+                        className="invoice-search-input"
                         placeholder="Tìm theo mã hóa đơn hoặc tên khách hàng..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}

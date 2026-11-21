@@ -1,7 +1,7 @@
 # UC36 — Nghiệm thu TV3 và dependency TV2
 
-Cập nhật: 2026-11-17 (Asia/Bangkok), theo [phân công TV3](../stayhub-team-work-assignment.md). Baseline `feature/tv3-uc36-payment-status`, HEAD `6bd6838` cộng working tree đã nghiệm thu; không dùng HEAD riêng thay source.
-**UC36 hoàn thành và được chốt nghiệm thu trong phạm vi TV3 theo quyết định owner trên chat.** Tích hợp Booking production TV2 được hoãn riêng: TV2 còn phát triển và chưa đưa nhánh về kiến trúc mới; hiện không lấy/merge code nhánh đó.
+Biên tập: 2026-11-21; runtime lịch sử 2026-11-17 (Asia/Bangkok), theo [phân công TV3](../stayhub-team-work-assignment.md). Baseline `feature/tv3-uc36-payment-status`, HEAD `6bd6838` cộng working tree đã nghiệm thu; không dùng HEAD riêng thay source.
+**UC36 CLOSED TV3 theo quyết định owner trên chat.** Booking production integration hoãn riêng theo T01–T03. Nhận định source TV2 ở §5 chỉ đúng pinned SHA ngày 2026-11-17; không coi là review PR hiện tại.
 Hồ sơ này gộp QA và khảo sát tích hợp; [workflow](INVOICE_PAYMENT_WORKFLOW.md) giữ contract, [checklist](TV3_CHECKLIST.md) giữ tiến độ. Không mở rộng nghiệm thu sang các UC Invoice khác.
 
 ## 1. Phạm vi nghiệm thu
@@ -13,7 +13,7 @@ Hồ sơ này gộp QA và khảo sát tích hợp; [workflow](INVOICE_PAYMENT_W
 | UC36-QA-01 | MySQL transaction/concurrency/lock timeout/guard đã ACCEPTED |
 | UC36-QA-02A/02B | Browser/session/CSRF/pending/focus/responsive/recovery/cancellation đã nghiệm thu theo phạm vi;02A9PASS/2PARTIAL là kết quả lịch sử |
 | UC36-FIX-01 | Host paid_at và hướng dẫn419 đã ACCEPTED; F01/F02 CLOSED |
-| UC36-QA-03/04 | Rà12gate và bổ sung quan hệ thiếu/Axios timeout thật đã ACCEPTED; T04/T10/G01/G02 VERIFIED trong điều kiện harness được duyệt |
+| UC36-QA-03/04 | Rà12 gate và bổ sung quan hệ thiếu/Axios timeout thật đã ACCEPTED; T04/T10/G01/G02 VERIFIED trong điều kiện harness được duyệt |
 | UC36-CLOSE-01 | Tổng hợp nghiệm thu và chuẩn bị bàn giao đã ACCEPTED |
 | UC36 tổng phạm vi TV3 | ACCEPTED; nhóm triển khai/QA đã hoàn tất trong phạm vi TV3. Booking production end-to-end tách sang dependency hoãn |
 | UC36-INT-PREP-01 | Khảo sát source TECHNICAL PASS; nghiệm thu riêng PENDING. Không coi đây là runtime integration |
@@ -47,9 +47,9 @@ AC03 từng PARTIAL và AC07 từng PENDING khi còn gộp gate tích hợp; c�
 
 Detail dùng envelope data; tiền decimal strings, paid_at ISO UTC nullable, items có trong detail và bị omission ở list. Payment success PAID phải có paid_at. Không chuẩn hóa lỗi tạo cũ sang code payment mới hoặc bịa field changed. Nguồn: [Host controller](../../backend/app/Http/Controllers/Invoice/HostInvoiceController.php), [response DTO](../../backend/app/DTOs/Invoice/Responses/InvoiceResponse.php), [Frontend API](../../frontend/src/api/invoiceApi.js).
 
-Router React hiện có /host/bookings/:bookingId/create-invoice, /host/invoices/create, /host/invoices/:invoiceId và /customer/invoices/:invoiceId trong [AppRouter](../../frontend/src/routes/AppRouter.jsx). Host creation nhận Booking ID từ route hoặc nhập tay. Customer Booking detail hiện đọc booking.invoice_id hoặc booking.invoice.id để tạo link Invoice. Đây là nhu cầu consumer hiện hữu, **chưa phải Booking API response đã được TV2 xác nhận**.
+Router React hiện có /host/bookings/:bookingId/create-invoice, /host/invoices/create, /host/invoices/:invoiceId và /customer/invoices/:invoiceId trong [AppRouter](../../frontend/src/routes/AppRouter.jsx). Host creation nhận Booking ID từ route hoặc nhập tay. Customer Booking detail tại baseline đọc booking.invoice_id hoặc booking.invoice.id để tạo link Invoice. Đây là consumer được khảo sát lúc đó, **chưa phải response contract TV2 đã xác nhận cho tích hợp**.
 
-[Backend API root](../../backend/routes/api.php) hiện include billing/reviews/profile/catalog; chưa đăng ký workflow Booking production. Đường /api/customer/bookings/{id} trong [bookingService](../../frontend/src/services/bookingService.js) là consumer kỳ vọng, không chứng minh endpoint đã hoạt động. Mock chỉ bật khi DEV và VITE_ENABLE_BOOKING_MOCKS=true; không có fallback mock tự động khi API lỗi. Không sửa env để bật mock và gọi đó là tích hợp thật.
+Tại baseline UC36, [API root](../../backend/routes/api.php) mới include billing/reviews/profile/catalog, chưa đăng ký Booking production; `/api/customer/bookings/{id}` trong [bookingService](../../frontend/src/services/bookingService.js) khi đó là consumer kỳ vọng. **Source hiện tại đã include `api/booking.php` và đăng ký GET Customer Booking detail**; việc có route không chứng minh T01–T03 đạt. Mock chỉ bật khi DEV và VITE_ENABLE_BOOKING_MOCKS=true, không fallback tự động khi API lỗi; bật mock không phải tích hợp thật.
 
 ### Snapshot Booking mà Invoice đang đọc
 
@@ -64,49 +64,49 @@ Nguồn: [InvoiceService](../../backend/app/Services/Invoice/InvoiceService.php)
 | Booking services | bookingServices có service_id, service_name, quantity, unit_price, amount; Model còn có unit. Quantity dương, amount khớp phép tính decimal quantity × unit_price; danh sách rỗng hợp lệ |
 | Tiền dịch vụ | Mapper chuyển snapshot đã lưu, Validator kiểm amount; Calculator tính lại từ quantity/unit_price snapshot và cộng tổng. Không đọc lại giá Service catalog; không tin giá client |
 | Discount/extra fee | Service tạo hiện đặt cả hai0.00; fixture QA có giá trị khác để kiểm bảo toàn payment không có nghĩa API create hỗ trợ nhập tùy ý |
-| Uniqueness/transaction | Tối đa1Invoice/Booking, Booking lock và unique constraint, header/items tạo atomically; Booking/BookingService không được payment sửa |
+| Uniqueness/transaction | Tối đa1 Invoice/Booking, Booking lock và unique constraint, header/items tạo atomically; Booking/BookingService không được payment sửa |
 
 Tài liệu công thức SUM(booking_services.amount) và code tính từ quantity/unit_price chỉ tương đương sau kiểm nhất quán amount. Không bỏ kiểm này để nhận snapshot TV2 sai; nếu TV2 có rounding/discount theo dòng khác thì cần thống nhất riêng trước thay đổi. Không chuyển giá catalog mới thành giá snapshot của Booking cũ.
 
 ## 3. Ma trận 12 gate
 
-Kết quả dưới là bằng chứng kế thừa các lượt triển khai/QA đã nghiệm thu, không phải test vừa chạy ở lượt gộp tài liệu. Các gate đạt trong phạm vi và điều kiện ghi tại từng dòng.
+12 gate dưới kế thừa các lượt đã nghiệm thu, trong điều kiện từng dòng; không phải test mới.
 
 | Gate INV-02 | Evidence được kế thừa | Ranh giới |
 | --- | --- | --- |
-| T01 transition | Payment MySQL03A/03B/QA-03/04, browser readback | Fixture Booking, không TV2 workflow |
+| T01 transition | Payment MySQL 03A/03B/QA-03/04, browser readback | Fixture Booking, không TV2 workflow |
 | T02 no-op | Duplicate/no-op và race thật | Một paid_at/update/log; không thêm field changed |
 | T03 conflicts | HTTP4state cases và domain unknown-state | Unknown enum chỉ validator fact boundary, không lưu enum sai lên MySQL |
-| T04 role/ownership/relations | Actor/precedence/direct-call và QA-04 relation4tests/37assertions | Quan hệ lỗi dựng bằng FK session override được duyệt; FK bật lại lúc request |
+| T04 role/ownership/relations | Actor/precedence/direct-call và QA-04 relation 4 tests/37 assertions | Quan hệ lỗi dựng bằng FK session override được duyệt; FK bật lại lúc request |
 | T05 payload | Raw type/value/whitelist/non-object/parser matrix | Contract parser/framework phân biệt422 |
 | T06 rollback/outer commit | Commit suite faults/reader độc lập | Mapper/updated-event errors/outer transaction được kiểm |
-| T07 concurrency |2worker/PDO, wait/NOWAIT/timeout control, both commit orders/rollback | SQL lock timeout không thay Axios timeout |
+| T07 concurrency |2 worker/PDO, wait/NOWAIT/timeout control, both commit orders/rollback | SQL lock timeout không thay Axios timeout |
 | T08 Invoice regression |5API cũ và Host/Customer readback | Không tự nghiệm thu toàn các UC Invoice khác |
-| T09 Node |158tests gần nhất QA-04 | Transport fixtures, không browser proof |
+| T09 Node |158 tests gần nhất QA-04 | Transport fixtures, không browser proof |
 | T10 browser |02A/02B/FIX-01/QA-03 + QA-04 XHR timeout trước/sau commit | Timeout5000ms chỉ harness; production vẫn không timeout, cancellation/account switch có giới hạn02B |
-| T11 lint/build | QA-03 exit0,3FastRefresh warnings/chunk>500kB | QA-04/CLOSE-01 không chạy lại; source giữhash |
+| T11 lint/build | QA-03 exit 0,3FastRefresh warnings/chunk>500kB | QA-04/CLOSE-01 không chạy lại; source giữhash |
 | T12 isolation | Owned target guards,27demo tables hashes/columns,cleanup từng lượt | CLOSE-01 không kết nối DB hoặc provision |
 
 ## 4. Bằng chứng kiểm thử theo lượt
 
-Ngày các lượt UC36: 2026-11-17, Asia/Bangkok. Runtime DB: MySQL Docker8.4.13/127.0.0.1:3307, server UUID `b4736273-e223-11f1-a722-aaf8fde9dbf9`; PHP XAMPP8.2.12. Đây là metadata lúc chạy, không xác nhận instance đang chạy ở lượt tài liệu.
+Ngày các lượt UC36: 2026-11-17, Asia/Bangkok. Runtime DB: MySQL Docker 8.4.13/127.0.0.1:3307, server UUID `b4736273-e223-11f1-a722-aaf8fde9dbf9`; PHP XAMPP8.2.12. Đây là metadata lúc chạy, không xác nhận instance đang chạy ở lượt tài liệu.
 Mỗi run dùng schema `stayhub_uc36_test_<guid32>`/user `uc36_<hex>` riêng; không dùng stayhub làm fixture. Browser dùng React/Vite và Laravel/session/CSRF thật, dataset tổng hợp; không phải workflow Booking TV2.
 
 | Run / artifact local | Kết quả gốc / giới hạn |
 | --- | --- |
-| [INV-03A](E:/StayHub-DB-Recovery/uc36-inv03a-1a9503ea94fa4c2695e3773e556762d7/) | MySQL26tests/119assertions;Node158;lint/build exit0. Chưa browser trong lượt này |
-| [INV-03B](E:/StayHub-DB-Recovery/uc36-inv03b-b4bbd84b580b4a2984790615bea59fa4/) | MySQL52/344;Node158;Host/Customer browser smoke/SQL; không full Backend |
-| [QA-01](E:/StayHub-DB-Recovery/uc36-qa01-48d6387fcd89406b89e2f7a91d76b5f1/) | MySQL57/559;hai process/PDO thật, NOWAIT3572/processlist/lock timeout1205;hai commit orders, rollback và timeout control. Không Node/browser/lint/build mới |
-| [QA-02A](E:/StayHub-DB-Recovery/uc36-qa02a-cd5a27e6042b4eada2718cc5158a7a09/) |11browser cases:9PASS/2PARTIAL; F01 thiếu paid_at Host/F02 hướng dẫn419 lúc đó OPEN. Không PHPUnit/Node/lint/build mới |
-| [QA-02B](E:/StayHub-DB-Recovery/uc36-qa02b-5b32be6de5874852b594c8a7f361cae6/) |7browser probes; lost response trước/sau commit,GET503,malformed success,cancellation/account switch. Không gọi drop network là Axios timeout |
-| [FIX-01](E:/StayHub-DB-Recovery/uc36-fix01-0a41c56b1d284d56b0a8b56ff1206114/) |Node158,lint/build exit0;T01–T08 browser/SQL PASS; F01/F02 sửa và được nghiệm thu đóng |
-| [QA-03](E:/StayHub-DB-Recovery/uc36-qa03-6d4d9358e3414e6e8c6b745ad7108884/) |MySQL57/560;Node158,lint/build exit0;Host/Customer readback/419/lost response và bốn negative target guards.10gate đạt, T04/T10 PARTIAL lúc đó |
-| [QA-04](E:/StayHub-DB-Recovery/uc36-qa04-ff1dae9aab5d430f8edfed7de0e5ed2e/) |MySQL57/559;external RelationGapTest4/37;Node158;hai XHR timeouts thật/control;T04/T10 bổ sung VERIFIED. Lint/build kế thừa QA-03 |
+| [INV-03A](E:/StayHub-DB-Recovery/uc36-inv03a-1a9503ea94fa4c2695e3773e556762d7/) | MySQL 26 tests/119 assertions;Node 158;lint/build exit 0. Chưa browser trong lượt này |
+| [INV-03B](E:/StayHub-DB-Recovery/uc36-inv03b-b4bbd84b580b4a2984790615bea59fa4/) | MySQL 52/344;Node 158;Host/Customer browser smoke/SQL; không full Backend |
+| [QA-01](E:/StayHub-DB-Recovery/uc36-qa01-48d6387fcd89406b89e2f7a91d76b5f1/) | MySQL 57/559;hai process/PDO thật, NOWAIT3572/processlist/lock timeout1205;hai commit orders, rollback và timeout control. Không Node/browser/lint/build mới |
+| [QA-02A](E:/StayHub-DB-Recovery/uc36-qa02a-cd5a27e6042b4eada2718cc5158a7a09/) |11 browser cases:9PASS/2PARTIAL; F01 thiếu paid_at Host/F02 hướng dẫn419 lúc đó OPEN. Không PHPUnit/Node/lint/build mới |
+| [QA-02B](E:/StayHub-DB-Recovery/uc36-qa02b-5b32be6de5874852b594c8a7f361cae6/) |7 browser probes; lost response trước/sau commit,GET503,malformed success,cancellation/account switch. Không gọi drop network là Axios timeout |
+| [FIX-01](E:/StayHub-DB-Recovery/uc36-fix01-0a41c56b1d284d56b0a8b56ff1206114/) |Node 158,lint/build exit 0;T01–T08 browser/SQL PASS; F01/F02 sửa và được nghiệm thu đóng |
+| [QA-03](E:/StayHub-DB-Recovery/uc36-qa03-6d4d9358e3414e6e8c6b745ad7108884/) |MySQL 57/560;Node 158,lint/build exit 0;Host/Customer readback/419/lost response và bốn negative target guards.10 gate đạt, T04/T10 PARTIAL lúc đó |
+| [QA-04](E:/StayHub-DB-Recovery/uc36-qa04-ff1dae9aab5d430f8edfed7de0e5ed2e/) |MySQL 57/559;external RelationGapTest4/37;Node 158;hai XHR timeouts thật/control;T04/T10 bổ sung VERIFIED. Lint/build kế thừa QA-03 |
 | [CLOSE-01](E:/StayHub-DB-Recovery/uc36-close01-76f27db481254bdd950f0f02207607f4/) |Docs/source/evidence verification:73links/3anchors,8artifact dirs,659outside hashes; không DB/runtime mới |
 | [INT-PREP-01](E:/StayHub-DB-Recovery/uc36-int-prep01-6addfa71c1654c919e01cad79b397e27/) |Source-only:76links/3anchors,112candidate paths/660outside hashes; refs/index giữ nguyên. Không ghép code,không DB/runtime |
 
-Số assertion57/560 của QA-03 và57/559 của QA-04 là các lượt khác; không cộng dồn hoặc sửa lịch sử. Node là domain/transport tests, không browser proof. Lint còn ba Fast Refresh warnings, build chunk>500kB; đây là warnings lịch sử. Full Backend/SQLite không chạy để đóng UC36; các suite SQLite-only giữ nguyên guards.
-Artifact chứa baseline/final-verification, tests/logs, request/SQL/geometry/screenshots khi áp dụng và cleanup. Các đường dẫn local ngoài Git cần được cung cấp riêng khi bàn giao; đọc log không phải chạy lại test hoặc CI.
+Số assertion 57/560 của QA-03 và57/559 của QA-04 là các lượt khác; không cộng dồn hoặc sửa lịch sử. Node là domain/transport tests, không browser proof. Lint còn ba Fast Refresh warnings, build chunk>500kB; đây là warnings lịch sử. Full Backend/SQLite không chạy để đóng UC36; các suite SQLite-only giữ nguyên guards.
+Artifact gồm baseline/final-verification, tests/logs, request/SQL/geometry/screenshots và cleanup khi áp dụng. Đường dẫn local ngoài Git cần bàn giao riêng; đọc log không phải chạy test/CI.
 
 ### Browser, findings và giới hạn quan sát
 
@@ -123,64 +123,37 @@ Artifact chứa baseline/final-verification, tests/logs, request/SQL/geometry/sc
 | FIX-01 T01–T08 |Host paid_at sau confirm/reload/recovery;PAIDnull hiển thị gạch;UNPAID/REFUNDED ẩn;419 tiếng Việt/manualGET;409/404/focus/responsive đạt |
 | QA-03 readback |Host và Customer cùng Invoice/paid_at;419 phục hồi thủ công;lost response sau commit→GETPAID; không mở rộng sang Booking thật |
 
-UC36-QA02A-F01/F02 hiện **CLOSED / FIX-01 ACCEPTED**. Các PARTIAL cũ giữ nguyên kết quả lượt gốc, không ghi lại thành fullPASS.
+UC36-QA02A-F01/F02 **CLOSED / FIX-01 ACCEPTED**; PARTIAL cũ giữ verdict gốc.
 
 - T04/G01: schema test được duyệt FK override chỉ lúc dựng ba fixture thiếu Booking/Room/Property; FK bật lại trước HTTP. Ba404/no-write/no-success-log,control200/một success;restore fixture,FKsession/global1 và0orphan trước cleanup. Unknown enum chỉ validator fact boundary, không persist enum sai lên MySQL.
 - T10/G02: harness interceptor override5000ms chỉ ba PATCH mục tiêu, proxy giữ trước forward/sau commit; hai XHR timeout `ECONNABORTED` sau5011/5004ms. GET lần lượt UNPAID/PAID;control372ms. Ba PATCH nhận/hai forward, không automatic replay. Production vẫn không cấu hình timeout; không sửa shared Axios/env/source để đạt test.
 - No-op giữ paid_at/updated_at/items/log; success chỉ sau outer commit. Fixtures so money/header/items/Booking trước/sau, không dùng số tiền client hoặc catalog mới.
 - Mỗi lượt kiểm target/effective config/UUID và ownership trước write; scoped user không đọc được stayhub,27demo tables/counts/hashes/payment columns giữ nguyên. Chỉ drop schema/user owned khi0connection;fixture processes/browser đã dọn và password metadata loại bỏ. Datadir XAMPP/backup/Docker volume/env được giữ. Đây là bằng chứng bảo toàn/cleanup của lượt gốc, không phải kiểm SQL mới ở lượt tài liệu.
 
-## 5. Dependency TV2 đang hoãn
+## 5. TV2 — PREPARED / NOT SENT / ACK PENDING
 
-Tất cả các mục dưới **OPEN / chưa xác nhận bởi TV2**. Owner ở bảng là phân công đề nghị phối hợp, không phải xác nhận TV2 đã nhận việc.
+UC36-INT-PREP-01 chỉ khảo sát source TECHNICAL PASS, acceptance riêng PENDING; PREP-02/INT-01 chưa thực hiện. Khảo sát2026-11-17: candidate `feature/member-2-booking` SHA `dca536024bfe1c6915818b5088db83721dc78c53`, merge-base `951f62efc70127a3719c840ae529f8d311842a49`, TV3/dev `6bd6838a685be8173d3da3e7edba8e5df89d06c7` cộng working tree. Không phải trạng thái PR TV2 hiện tại hoặc bàn giao chính thức.
 
-| ID | Nội dung cần xác nhận | Owner phối hợp |
-| --- | --- | --- |
-| UC36-TV2-D01 | Workflow Booking thật, route/role và điều kiện check-out → COMPLETED, không bắt buộc PAID trước khi TV3 được tạo Invoice UNPAID | TV2 chính; TV3 đối chiếu consumer |
-| UC36-TV2-D02 | Ghi và giữ snapshot nights/price/room_total, dịch vụ quantity/unit_price/amount, rounding; quy tắc bất biến khi Invoice đã tạo | TV2 chính, TV3 xác nhận tương thích |
-| UC36-TV2-D03 | Dữ liệu Customer/Room/Property đủ cho snapshot và ownership; thay đổi chủ/lifecycle nếu có phải chốt writer/lock tương ứng với TV1 | TV2/TV1 theo domain, TV3 kiểm scope Invoice |
-| UC36-TV2-D04 | Booking detail cung cấp liên kết Invoice theo shape thống nhất; Host có điểm vào create/detail thật; không coi frontend expectation là API đã chốt | TV2 consumer Booking + TV3 Invoice, integrator nếu shared router cần đổi |
-| UC36-TV2-D05 | Thực thi end-to-end trên MySQL Docker/schema riêng khi workflow TV2 sẵn sàng, lưu evidence rồi xin nghiệm thu chung | TV2+TV3; owner nghiệm thu |
-
-Điểm cần TV2 xác nhận từ source: bookingService gắn hint COMPLETED là “Kỳ nghỉ đã hoàn tất thanh toán”, nhưng use case hiện mô tả COMPLETED → tạo Invoice UNPAID. COMPLETED của Booking không tự chứng minh Invoice PAID. Đây là khác biệt diễn đạt cần thống nhất trước tích hợp; CLOSE-01 không sửa Booking status, copy UI hoặc payment policy của TV2.
-
-### Khảo sát source UC36-INT-PREP-01
-
-Khảo sát ngày2026-11-17, local candidate `feature/member-2-booking` tại `dca536024bfe1c6915818b5088db83721dc78c53`; merge-base `951f62efc70127a3719c840ae529f8d311842a49`; TV3 HEAD/dev `6bd6838a685be8173d3da3e7edba8e5df89d06c7` cộng accepted working tree.
-Đọc git show/diff/ls-tree,không fetch/checkout/merge/merge-tree/runtime. Đây là kết quả tại SHA cũ, không phải trạng thái nhánh đang được TV2 phát triển hôm nay hoặc bàn giao chính thức.
-
-Inventory normalizeCRLF để phân loại:262TV3-only cần giữ,105TV2-only và7both-differ (112candidate paths). Không gọi bảy đường dẫn là bảy merge conflicts đã tái hiện hoặc112file được phép nhập. Exact inventory/quyết định đề nghị nằm ở artifact PREP-01: `three-side-inventory.json`, `candidate-decisions.json`, `refs.json`, `baseline.json`, `final-verification.json`.
-
-Bảy đường dẫn both-differ: backend/bootstrap/app.php; backend/routes/api.php; backend/tests/Feature/Auth/AuthenticationTest.php; frontend/src/pages/customer/CustomerCheckoutPage.jsx; frontend/src/pages/public/PropertyDetailPage.jsx; frontend/src/routes/AppRouter.jsx; frontend/src/services/propertyService.js.
-
-- Giữ baseline stateful/account/GlobalExceptionHandler/Catalog routes và UI Catalog; candidate bootstrap/router cũ có thể làm mất chúng nếu ghi đè. Role alias/HostLayout/Booking routes chỉ xem xét sau scope chung được duyệt.
-- Candidate có duplicate GET /api/host/properties; cả hai source trả array id/name, không có finding pagination mismatch. Giữ API TV1, tránh nhập stub trùng. Model/factory shared cần owner tương ứng xác nhận.
-- TV2 composer/lock,Frontend manifests,phpunit,migrations/seeders và BookingStatus không delta so merge-base. Giữ Symfony dependencies TV3; không downgrade. Binary backend/stayhub là SQLite data,không nhập; .vscode preferences không nhập,context docs chỉ tham khảo.
-- Candidate suites dùng RefreshDatabase,không owned MySQL guards; không chạy trên stayhub. Khi được tiếp tục cần runner schema/user riêng,giữ legacy SQLite guards.
-- BookingResource/HostBookingResource chưa invoice projection; Customer UI đang kỳ vọng invoice_id hoặc invoice.id,Host chưa action Invoice. Đây là nhu cầu contract,chưa shape được TV2 xác nhận.
-
-### Contract cần TV2 xác nhận khi tiếp tục
-
-Tất cả **PENDING TV2 CONFIRMATION**; owner trong bảng là đầu mối đề nghị, không phải người đã nhận việc. Không gửi câu hỏi qua công cụ trong task này.
+Inventory262TV3-only/105TV2-only/7both-differ (112candidate paths), không phải7conflicts đã tái hiện. Artifact INT-PREP-01 ở bảng run giữ three-side-inventory/candidate-decisions/refs/baseline/final-verification. Bảy shared paths: bootstrap/app.php, routes/api.php, AuthenticationTest.php, CustomerCheckoutPage.jsx, PropertyDetailPage.jsx, AppRouter.jsx, propertyService.js. Giữ Auth/renderer/Catalog/Symfony/shared Axios; không nhập binary backend/stayhub/.vscode hoặc chạy RefreshDatabase trên dev.
 
 | ID | Source/câu hỏi cụ thể | Owner và điều kiện đóng |
 | --- | --- | --- |
 | UC36-PREP-C01 | TV2 có bàn giao chính thức dca5360 hay commit khác? Nhánh local có còn thay đổi chưa thấy? | TV2 chốt full SHA và tài liệu/test baseline; owner chốt cách đưa đủ working tree TV3 vào nguồn ghép |
 | UC36-PREP-C02 | BookingWorkflowService::checkOut chuyển COMPLETED không kiểm Invoice PAID, phù hợp create Invoice UNPAID. Hint COMPLETED trong bookingService nói đã hoàn tất thanh toán có cần đổi? | TV2 xác nhận COMPLETED là kết thúc lưu trú; TV3 xác nhận payment độc lập, không tự đổi lifecycle |
-| UC36-PREP-C03 | PricingService dùng float×float/number_format; BookingServiceManagement round quantity2digits; Invoice dùng BCMath round-half-up và so snapshot amount | TV2+TV3 thống nhất decimal precision/rounding/maximum và dữ liệu cũ; runtime edge cases cần đạt, không chỉ đồng ý bằng lời |
+| UC36-PREP-C03 | PricingService dùng float×float/number_format; BookingServiceManagement round quantity 2 digits; Invoice dùng BCMath round-half-up và so snapshot amount | TV2+TV3 thống nhất decimal precision/rounding/maximum và dữ liệu cũ; runtime edge cases cần đạt, không chỉ đồng ý bằng lời |
 | UC36-PREP-C04 | add service khóa Booking trong transaction; updateQuantity/remove kiểm status model đã load rồi write không khóa cùng Booking. Check-out khóa Booking và đổi COMPLETED | TV2 chốt bất biến snapshot sau COMPLETED/Invoice, cách serialize writer update/remove với check-out/create Invoice; race đang là risk source, chưa runtime FAIL |
 | UC36-PREP-C05 | BookingResource/HostBookingResource chưa có invoice_id/invoice, Customer UI đã đọc các field này; Host chưa có Invoice action | TV2+TV3 chốt optional/null/omission, fields id/code/payment_status/paid_at nếu cần, quyền/customer projection và load relations; không chốt cả hai shape tùy tiện |
 | UC36-PREP-C06 | role alias/renderer/trait envelopes và duplicate GET Host Properties; UI catalog/routes hiện hành phải giữ | TV2+TV1/integrator chốt exact shared files và preserve contract; không thay Auth/shared Axios/config toàn cục |
 | UC36-PREP-C07 | TV2 composer/package/migrations không delta so merge-base, fixtures/tests mới có RefreshDatabase, binary backend/stayhub | TV2 xác nhận required files/dependencies/test engine; bỏ binary khỏi candidate, MySQL runner owned schema trước test; không giảm baseline Symfony dependencies |
 
-### 3.1. Rủi ro source cần TV2 xử lý/xác nhận trước runtime
-
 | ID | Quan sát đã thấy | Ảnh hưởng/kiểm chứng cần làm |
 | --- | --- | --- |
 | UC36-PREP-R01 | Nhận định ban đầu thiếu booking_id đã bị loại khi tái đọc đầy đủ source pinned SHA: create có booking_id=$currentBooking->id | Không còn source finding thiếu FK. Vẫn kiểm create service mới/persisted booking_id trong runtime integration như đối chứng, không coi là bug cần TV2 sửa |
 | UC36-PREP-R02 | updateQuantity/remove không re-read status dưới Booking lock cùng checkOut/create Invoice | Có thể ghi dịch vụ qua cửa sổ chuyển trạng thái từ model cũ; cần2writer race, bảo toàn snapshot/Invoice; không sửa TV2 trong PREP |
-| UC36-PREP-R03 | Float pricing và BCMath validation khác triển khai | Chưa chứng minh sai tiền; test quantity0.01/0.05/1.005 input theo precision allowed, unit_price0.10/0.15/2.55, half-cent products, gần giới hạn DECIMAL12,2 và nhiều dòng; expected độc lập decimal, reject overflow rõ. Không truyền quantity3digits nếu request contract chỉ cho2digits rồi coi đó là case hợp lệ |
+| UC36-PREP-R03 | Float pricing và BCMath validation khác triển khai | Chưa chứng minh sai tiền; test quantity 0.01/0.05/1.005 input theo precision allowed, unit_price0.10/0.15/2.55, half-cent products, gần giới hạn DECIMAL12,2 và nhiều dòng; expected độc lập decimal, reject overflow rõ. Không truyền quantity 3 digits nếu request contract chỉ cho2 digits rồi coi đó là case hợp lệ |
 | UC36-PREP-R04 | Ghi đè API/bootstrap/router theo tree TV2 cũ có thể bỏ Catalog/renderer/UC36 working files | Cần combined snapshot và regression chéo; không merge ở working tree bẩn hoặc dùng HEAD-only snapshot |
+
+C01–C07 giữ **PENDING TV2 CONFIRMATION** của khảo sát này; không suy đã đóng từ PR mới. R01 không còn là bug; float/lock risks chưa là runtime FAIL. COMPLETED chỉ kết thúc lưu trú, không chứng minh PAID; projection invoice_id/invoice cần thống nhất riêng.
 
 ## 6. Checklist tích hợp khi TV2 sẵn sàng
 
@@ -199,4 +172,4 @@ Toàn bộ case dưới **NOT VERIFIED trên workflow Booking production**, khô
 
 TV2 không phải tái triển khai Invoice payment. TV3 không tự triển khai Booking/check-in/check-out, availability hoặc sửa module TV1 để hoàn tất checklist trên.
 
-PREP-02 và INT-01 chưa thực hiện; các bước ghép/triển khai từng đề xuất không còn là kế hoạch đang chạy. Khi owner yêu cầu tiếp phải kiểm lại Git/SHA/accepted working tree/kiến trúc/contract và lập Mini Plan mới. Không tự tạo nguồn ghép, lấy code TV2 hoặc sửa nghiệp vụ TV1/TV2.
+PREP-02/INT-01 chưa thực hiện trong chuỗi này; đề xuất ghép cũ không phải plan đang chạy. Khi được giao lại, kiểm Git/SHA/accepted working tree/kiến trúc/contract rồi lập Mini Plan riêng. Không tự lấy code hoặc sửa nghiệp vụ TV1/TV2. Dependency hiện hành **T01–T03 BLOCKED TV2** theo [ma trận](TV3_FUNCTIONAL_ACCEPTANCE_MATRIX.md); không mở lại UC36 CLOSED TV3 hoặc suy integration PASS từ fixture.

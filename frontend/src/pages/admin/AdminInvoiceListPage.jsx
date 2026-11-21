@@ -62,7 +62,7 @@ function InvoiceOptionFilter({ kind, hostId = null, user, captureAuth, isAuthCur
         <form className="flex flex-wrap items-end gap-3" onSubmit={(event) => { event.preventDefault(); change({ search: draft.trim(), page: 1 }); }}>
             <label htmlFor={`${prefix}-search`} className="grid min-w-0 flex-1 gap-1">
                 Tìm tên {label}
-                <input id={`${prefix}-search`} className="host-search-input" style={{ paddingLeft: 14 }} value={draft} maxLength={255}
+                <input id={`${prefix}-search`} className="invoice-search-input" style={{ paddingLeft: 14 }} value={draft} maxLength={255}
                     onChange={(event) => setDraft(event.target.value)} aria-invalid={Boolean(error?.fields.search)}
                     aria-describedby={error?.fields.search ? `${prefix}-errors` : undefined} />
             </label>
@@ -71,7 +71,7 @@ function InvoiceOptionFilter({ kind, hostId = null, user, captureAuth, isAuthCur
         </form>
         <label htmlFor={`${prefix}-select`} className="mt-3 grid min-w-0 gap-1">
             {propertyMode ? 'Cơ sở' : 'Host'} đang lọc
-            <select id={`${prefix}-select`} className="host-filter-select w-full min-w-0" value={selected?.id ?? ''}
+            <select id={`${prefix}-select`} className="invoice-filter-select w-full min-w-0" value={selected?.id ?? ''}
                 onChange={(event) => onSelect(event.target.value === '' ? null : options.find(({ id }) => id === Number(event.target.value)))}>
                 <option value="">Tất cả {label}</option>
                 {options.map(({ id, name }) => <option key={id} value={id}>{name} — #{id}</option>)}
@@ -159,13 +159,13 @@ function AdminInvoiceList({ user, captureAuth, isAuthCurrent }) {
             style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'end', gap: 16, marginBottom: 20 }}>
             <label htmlFor="admin-invoice-search" style={{ display: 'grid', gap: 6, flex: '1 1 220px' }}>
                 Tìm hóa đơn, khách hàng hoặc cơ sở
-                <input id="admin-invoice-search" className="host-search-input" style={{ paddingLeft: 14 }} type="search" value={draft} maxLength={255}
+                <input id="admin-invoice-search" className="invoice-search-input" style={{ paddingLeft: 14 }} type="search" value={draft} maxLength={255}
                     onChange={(event) => setDraft(event.target.value)} aria-invalid={Boolean(error?.fields.search)}
                     aria-describedby={error?.fields.search ? 'admin-invoice-errors' : undefined} />
             </label>
             <label htmlFor="admin-invoice-status" style={{ display: 'grid', gap: 6 }}>
                 Trạng thái thanh toán
-                <select id="admin-invoice-status" className="host-filter-select" value={query.status}
+                <select id="admin-invoice-status" className="invoice-filter-select" value={query.status}
                     aria-invalid={Boolean(error?.fields.status)} aria-describedby={error?.fields.status ? 'admin-invoice-errors' : undefined}
                     onChange={(event) => changeQuery({ status: event.target.value, page: 1 })}>
                     <option value="ALL">Tất cả trạng thái</option>
@@ -201,7 +201,7 @@ function AdminInvoiceList({ user, captureAuth, isAuthCurrent }) {
                     </div>}
                 <nav aria-label="Phân trang hóa đơn" style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
                     <label htmlFor="admin-invoice-size">Số dòng mỗi trang </label>
-                    <select id="admin-invoice-size" className="host-filter-select" value={query.perPage} onChange={(event) => changeQuery({ perPage: Number(event.target.value), page: 1 })}>
+                    <select id="admin-invoice-size" className="invoice-filter-select" value={query.perPage} onChange={(event) => changeQuery({ perPage: Number(event.target.value), page: 1 })}>
                         {[10, 20, 50].map((size) => <option key={size} value={size}>{size}</option>)}
                     </select>
                     <button type="button" disabled={query.page === 1} onClick={() => changeQuery({ page: 1 })}>Trang đầu</button>

@@ -1,0 +1,74 @@
+.admin-dashboard { --admin-dashboard-radius: 1rem; }
+.admin-dashboard .admin-dashboard__link { display: inline-flex; align-items: center; gap: .35rem; color: var(--primary); font-size: .8125rem; font-weight: 600; text-decoration: none; border-radius: .25rem; }
+.admin-dashboard .admin-dashboard__link:hover { text-decoration: underline; text-underline-offset: 4px; }
+.admin-dashboard :is(a, button, summary):focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; }
+.admin-dashboard__metric { min-width: 0; border: 1px solid var(--border); border-radius: var(--admin-dashboard-radius); padding: 1.25rem; background: var(--card); box-shadow: 0 2px 5px rgb(0 0 0 / .025); }
+.admin-dashboard__metric-top { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.admin-dashboard__metric-icon, .admin-dashboard__chart-icon { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 2.6rem; height: 2.6rem; border-radius: .8rem; background: color-mix(in srgb, var(--primary) 10%, var(--card)); color: var(--primary); }
+.admin-dashboard__metric[data-tone="violet"] .admin-dashboard__metric-icon { background: color-mix(in srgb, #8b5cf6 12%, var(--card)); color: #7c3aed; }
+.admin-dashboard__metric[data-tone="amber"] .admin-dashboard__metric-icon { background: color-mix(in srgb, #d97706 12%, var(--card)); color: #b45309; }
+.admin-dashboard__metric[data-tone="blue"] .admin-dashboard__metric-icon { background: color-mix(in srgb, #2563eb 12%, var(--card)); color: #2563eb; }
+.admin-dashboard__metric[data-tone="teal"] .admin-dashboard__metric-icon { background: color-mix(in srgb, #0d9488 12%, var(--card)); color: #0d9488; }
+.admin-dashboard__metric--revenue { background: linear-gradient(125deg, color-mix(in srgb, var(--primary) 7%, var(--card)), var(--card)); }
+.admin-dashboard__metric-footer { margin-top: .85rem; min-height: 1.25rem; color: var(--muted-foreground); font-size: .75rem; font-weight: 400; letter-spacing: normal; line-height: 1.5; }
+.admin-dashboard__charts { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 1.25rem; }
+.admin-dashboard__chart-card { min-width: 0; padding: 1.25rem; border: 1px solid var(--border); border-radius: var(--admin-dashboard-radius); background: var(--card); box-shadow: 0 2px 5px rgb(0 0 0 / .025); }
+.admin-dashboard__chart-heading { display: flex; align-items: center; gap: .75rem; }
+.admin-dashboard__chart-heading > div { min-width: 0; }
+.admin-dashboard__chart-heading h2 { font-size: 1rem; font-weight: 650; line-height: 1.5; }
+.admin-dashboard__chart-heading p, .admin-dashboard__chart-description { font-size: .75rem; color: var(--muted-foreground); line-height: 1.6; }
+.admin-dashboard__chart-description { margin-top: 1rem; min-height: 2.4rem; }
+.admin-dashboard__chart-icon--revenue { background: color-mix(in srgb, #0d9488 10%, var(--card)); color: #0d9488; }
+.admin-dashboard__chart-empty { margin-top: .75rem; padding: .65rem .85rem; border-radius: .6rem; background: var(--muted); color: var(--muted-foreground); font-size: .8125rem; }
+.admin-dashboard__column-chart { display: flex; gap: .6rem; margin-top: 1.75rem; }
+.admin-dashboard__chart-scale { display: flex; flex-direction: column; justify-content: space-between; padding: 1.5rem 0 3.4rem; color: var(--muted-foreground); font-size: .65rem; max-width: 25%; overflow-wrap: anywhere; }
+.admin-dashboard__columns { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: .55rem; background: repeating-linear-gradient(to top, transparent 0, transparent 49px, var(--border) 50px); }
+.admin-dashboard__column-item { min-width: 0; text-align: center; }
+.admin-dashboard__column-count { display: block; min-height: 1.5rem; font-size: .75rem; font-weight: 650; overflow-wrap: anywhere; }
+.admin-dashboard__column-track { height: 180px; display: flex; align-items: flex-end; justify-content: center; }
+.admin-dashboard__column { width: min(100%, 2.5rem); border-radius: .45rem .45rem 0 0; background: var(--primary); opacity: .85; }
+.admin-dashboard__status-confirmed { background: #3b82f6; }
+.admin-dashboard__status-checked_in { background: #8b5cf6; }
+.admin-dashboard__status-completed { background: #0d9488; }
+.admin-dashboard__status-cancelled { background: #e87924; }
+.admin-dashboard__status-rejected { background: #e05a76; }
+.admin-dashboard__column-label { display: block; min-height: 3.4rem; padding-top: .6rem; background: var(--card); font-size: .625rem; line-height: 1.5; overflow-wrap: anywhere; }
+.admin-dashboard__revenue-value { margin-top: 1rem; display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .3rem .75rem; }
+.admin-dashboard__revenue-value span { color: var(--muted-foreground); font-size: .75rem; }
+.admin-dashboard__revenue-value strong { font-size: 1.2rem; overflow-wrap: anywhere; min-width: 0; }
+.admin-dashboard__line-chart { display: block; width: 100%; height: auto; margin-top: .5rem; overflow: visible; }
+.admin-dashboard__gridline { stroke: var(--border); stroke-dasharray: 4 5; }
+.admin-dashboard__line-area { fill: color-mix(in srgb, var(--primary) 9%, transparent); }
+.admin-dashboard__revenue-line { fill: none; stroke: var(--primary); stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
+.admin-dashboard__revenue-point { fill: var(--card); stroke: var(--primary); stroke-width: 2; }
+.admin-dashboard__revenue-point.is-selected { fill: var(--primary); stroke-width: 3; }
+.admin-dashboard__selection-line { stroke: var(--primary); stroke-dasharray: 3 5; opacity: .3; }
+.admin-dashboard__months { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: .3rem; }
+.admin-dashboard__months button { min-height: 2rem; padding: .2rem; border-radius: .45rem; border: 1px solid transparent; font-size: .75rem; color: var(--muted-foreground); cursor: pointer; }
+.admin-dashboard__months button[aria-pressed="true"] { background: color-mix(in srgb, var(--primary) 10%, var(--card)); border-color: color-mix(in srgb, var(--primary) 25%, var(--border)); color: var(--primary); font-weight: 700; }
+.admin-dashboard__chart-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; margin-top: 1rem; font-size: .75rem; color: var(--muted-foreground); }
+.admin-dashboard__chart-data { margin-top: 1.25rem; border-top: 1px solid var(--border); padding-top: .85rem; }
+.admin-dashboard__chart-data summary { width: fit-content; display: flex; align-items: center; gap: .5rem; cursor: pointer; font-size: .8125rem; font-weight: 600; border-radius: .25rem; list-style: none; }
+.admin-dashboard__chart-data summary::-webkit-details-marker { display: none; }
+.admin-dashboard__chart-data[open] summary svg { transform: rotate(180deg); }
+.admin-dashboard__chart-data table { width: 100%; table-layout: fixed; margin-top: .75rem; border-collapse: collapse; font-size: .75rem; }
+.admin-dashboard__chart-data :is(th, td) { padding: .6rem .3rem; text-align: left; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.admin-dashboard__chart-data thead th { color: var(--muted-foreground); font-weight: 500; }
+.admin-dashboard__chart-data tbody th { font-weight: 400; }
+.admin-dashboard__chart-data :is(th, td):last-child { text-align: right; }
+.admin-dashboard__chart-data tbody td { font-variant-numeric: tabular-nums; font-weight: 600; }
+@media (min-width: 640px) { .admin-dashboard__months { grid-template-columns: repeat(12, minmax(0, 1fr)); } .admin-dashboard__column-label { font-size: .75rem; } }
+@media (min-width: 1280px) { .admin-dashboard__charts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (hover: hover) {
+  .admin-dashboard__metric:hover { border-color: color-mix(in srgb, var(--primary) 40%, var(--border)); box-shadow: 0 8px 24px rgb(0 0 0 / .055); }
+  .admin-dashboard__column-item:hover .admin-dashboard__column { opacity: 1; filter: brightness(1.08); }
+  .admin-dashboard__revenue-point:hover { fill: var(--primary); stroke-width: 4; }
+  .admin-dashboard__months button:hover { background: var(--muted); color: var(--foreground); }
+  .admin-dashboard__chart-data tbody tr:hover { background: var(--muted); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .admin-dashboard__metric { transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease; }
+  .admin-dashboard__metric:hover { transform: translateY(-2px); }
+  .admin-dashboard__column, .admin-dashboard__months button { transition: opacity 160ms ease, background-color 160ms ease, filter 160ms ease; }
+  .admin-dashboard__chart-data summary svg { transition: transform 160ms ease; }
+}
