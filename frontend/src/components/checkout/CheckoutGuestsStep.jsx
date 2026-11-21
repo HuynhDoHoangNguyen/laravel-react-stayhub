@@ -2,6 +2,7 @@ import { User, Phone, Mail, Users, AlertCircle, ArrowRight, ShieldCheck, Calenda
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { addDaysToIsoDate } from '../../utils/propertyBooking.js';
 
 function getTodayIso() {
   const d = new Date();
@@ -147,12 +148,7 @@ export function CheckoutGuestsStep({
                 const newCheckIn = e.target.value;
                 let newCheckOut = endDate;
                 if (newCheckIn && newCheckOut && newCheckOut <= newCheckIn) {
-                  const nextDay = new Date(newCheckIn);
-                  nextDay.setDate(nextDay.getDate() + 1);
-                  const y = nextDay.getFullYear();
-                  const m = String(nextDay.getMonth() + 1).padStart(2, '0');
-                  const d = String(nextDay.getDate()).padStart(2, '0');
-                  newCheckOut = `${y}-${m}-${d}`;
+                  newCheckOut = addDaysToIsoDate(newCheckIn, 1);
                 }
                 if (onDatesChange) {
                   onDatesChange(newCheckIn, newCheckOut);

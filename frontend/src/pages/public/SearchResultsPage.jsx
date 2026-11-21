@@ -12,7 +12,7 @@ import { PropertyResultsPanel } from '../../components/search/PropertyResultsPan
 import { readSearchNavigation, changeSearchTab } from '../../utils/searchNavigation';
 import { normalizeApiError } from '../../api/apiError';
 import { roomSearchService, readRoomSearch, updateRoomSearch, createRoomSearchLoader } from '../../services/roomSearchService';
-import { isAvailabilitySearch, parseAvailabilitySearchParams, searchAvailableRooms } from '../../services/roomAvailabilitySearchService';
+import { isAvailabilitySearch, hasPartialDateRange, parseAvailabilitySearchParams, searchAvailableRooms } from '../../services/roomAvailabilitySearchService';
 
 function useRoomRequest(request) {
     const [loader] = useState(createRoomSearchLoader);
@@ -26,19 +26,38 @@ const getOptions = signal => roomSearchService.filterOptions({ signal });
 function RoomResults({ search, navigate, view, onViewChange }) {
     const available = isAvailabilitySearch(search);
     const searchUrl = new URLSearchParams(search);
-    const hasLocation = Boolean(searchUrl.get('city') || searchUrl.get('keyword') || searchUrl.get('q'));
-    const isRoomSearch = available || hasLocation;
-    const availability = isRoomSearch ? parseAvailabilitySearchParams(search) : null;
-    const params = isRoomSearch ? { ...availability.params,
+    const availability = available ? parseAvailabilitySearchParams(search) : null;
+    const params = available ? { ...availability.params,
         room_type_ids: availability.room_type_ids.map(String),
         amenity_ids: (availability.params.amenity_ids ?? []).map(String),
         min_rating: String(availability.min_rating) } : readRoomSearch(search).params;
-    const [request] = useState(() => signal => isRoomSearch
+    const [request] = useState(() => signal => available
         ? searchAvailableRooms(search, { signal }) : roomSearchService.list(search, { signal }));
-    const checkoutChildren = available ? Math.min(Math.max(0, Number.isFinite(availability.children) ? availability.children : 0), availability.guests - 1) : 0;
-    const forwardParams = available ? new URLSearchParams({ startDate: availability.checkIn, endDate: availability.checkOut,
-        checkIn: availability.checkIn, checkOut: availability.checkOut,
-        adults: String(availability.guests - checkoutChildren), children: String(checkoutChildren) }).toString() : '';
+
+    // Preserve guest count (adults & children) whether dates are preselected or not (PR18-FIX-01 Finding 2)
+    const rawAdults = searchUrl.get('adults');
+    const rawChildren = searchUrl.get('children');
+    const rawGuests = searchUrl.get('guest_count');
+    const parsedGuests = rawGuests ? parseInt(rawGuests, 10) : NaN;
+    const parsedAdults = rawAdults ? parseInt(rawAdults, 10) : (Number.isFinite(parsedGuests) ? parsedGuests : 2);
+    const parsedChildren = rawChildren ? parseInt(rawChildren, 10) : 0;
+    const finalAdults = Math.max(1, Number.isFinite(parsedAdults) ? parsedAdults : 2);
+    const finalChildren = Math.max(0, Number.isFinite(parsedChildren) ? parsedChildren : 0);
+
+    const forwardUrl = new URLSearchParams();
+    if (available && availability) {
+        const checkoutChildren = Math.min(Math.max(0, Number.isFinite(availability.children) ? availability.children : 0), availability.guests - 1);
+        forwardUrl.set('startDate', availability.checkIn);
+        forwardUrl.set('endDate', availability.checkOut);
+        forwardUrl.set('checkIn', availability.checkIn);
+        forwardUrl.set('checkOut', availability.checkOut);
+        forwardUrl.set('adults', String(availability.guests - checkoutChildren));
+        forwardUrl.set('children', String(checkoutChildren));
+    } else {
+        forwardUrl.set('adults', String(finalAdults));
+        forwardUrl.set('children', String(finalChildren));
+    }
+    const forwardParams = forwardUrl.toString();
     const results = useRoomRequest(request);
     const options = useRoomRequest(getOptions);
     const errors = results.error?.response?.data?.errors ?? {};
@@ -98,10 +117,8 @@ export default function SearchResultsPage() {
     const search = searchParams.toString();
     const navigation = readSearchNavigation(search);
     const hasDates = isAvailabilitySearch(navigation.roomSearch);
-    const searchUrl = new URLSearchParams(navigation.roomSearch);
-    const hasLocation = Boolean(searchUrl.get('city') || searchUrl.get('keyword') || searchUrl.get('q'));
-    const isRoomSearch = hasDates || hasLocation;
-    const unsupported = navigation.tab === 'rooms' && !isRoomSearch
+    const partialDate = hasPartialDateRange(navigation.roomSearch);
+    const unsupported = navigation.tab === 'rooms' && !hasDates
         ? readRoomSearch(navigation.roomSearch).unsupported : [];
     const switchTab = tab => setSearchParams(changeSearchTab(search, tab));
     return <div className="min-h-screen bg-background">
@@ -115,6 +132,18 @@ export default function SearchResultsPage() {
                     onClick={() => switchTab(tab)} className={['rounded-full border px-5 py-2.5 text-sm font-medium', navigation.tab === tab ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-ink'].join(' ')}>{label}</button>)}
             </nav>
             {navigation.error ? <section role="alert"><EmptyState title="Tab tìm kiếm không hợp lệ" message={navigation.error} onRetry={() => switchTab('rooms')} actionLabel="Về tab Phòng" /></section>
+                : partialDate ? <section role="alert" className="rounded-3xl bg-card p-8 ring-1 ring-black/[0.04]">
+                <h2 className="font-display text-xl text-destructive">Khoảng ngày tìm kiếm chưa hợp lệ</h2>
+                <p className="mt-3 text-sm text-muted-foreground">Vui lòng chọn cả ngày nhận phòng và ngày trả phòng để tìm kiếm phòng trống theo khoảng thời gian.</p>
+                <button type="button" className="mt-5 rounded-full bg-primary px-5 py-3 font-semibold text-primary-foreground"
+                    onClick={() => {
+                        const next = new URLSearchParams(navigation.roomSearch);
+                        next.delete('startDate'); next.delete('endDate');
+                        next.delete('checkIn'); next.delete('checkOut');
+                        next.delete('check_in_date'); next.delete('check_out_date');
+                        setSearchParams(next);
+                    }}>Bỏ chọn ngày để xem danh mục phòng</button>
+            </section>
                 : unsupported.length ? <section role="alert" className="rounded-3xl bg-card p-8 ring-1 ring-black/[0.04]">
                 <h2 className="font-display text-xl">Tìm kiếm theo ngày hoặc địa điểm chưa được hỗ trợ</h2>
                 <p className="mt-3 text-sm text-muted-foreground">Địa chỉ hiện tại có bộ lọc chưa được hỗ trợ ({unsupported.join(', ')}). Chưa có kết quả xác nhận khả dụng cho yêu cầu này.</p>

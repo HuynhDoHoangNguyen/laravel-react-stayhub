@@ -1,11 +1,11 @@
-import { MOCK_BOOKINGS } from '@/mocks/bookingMockData';
-import { bookingApi } from '@/api/bookingApi';
+import { MOCK_BOOKINGS } from '../mocks/bookingMockData.js';
+import { bookingApi } from '../api/bookingApi.js';
 import {
   mapBookingCommandResponse,
   mapCustomerBookingDetailResponse,
   mapCustomerBookingListResponse,
   mapCustomerBookingServicesResponse,
-} from '@/mappers/bookingMapper';
+} from '../mappers/bookingMapper.js';
 
 /**
  * Cấu hình hiển thị chuẩn hóa 6 trạng thái từ Backend BookingStatus:
@@ -102,9 +102,14 @@ export function formatLongDateVi(dateStr) {
  */
 export function nightsBetween(checkInStr, checkOutStr) {
   if (!checkInStr || !checkOutStr) return 1;
-  const inDate = new Date(checkInStr);
-  const outDate = new Date(checkOutStr);
-  const diffTime = outDate.getTime() - inDate.getTime();
+  const inParts = String(checkInStr).split('-').map(Number);
+  const outParts = String(checkOutStr).split('-').map(Number);
+  if (inParts.length !== 3 || outParts.length !== 3 || inParts.some(isNaN) || outParts.some(isNaN)) {
+    return 1;
+  }
+  const inUtc = Date.UTC(inParts[0], inParts[1] - 1, inParts[2]);
+  const outUtc = Date.UTC(outParts[0], outParts[1] - 1, outParts[2]);
+  const diffTime = outUtc - inUtc;
   const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
   return Math.max(1, isNaN(diffDays) ? 1 : diffDays);
 }
