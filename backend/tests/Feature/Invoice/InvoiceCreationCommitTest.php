@@ -89,6 +89,7 @@ class InvoiceCreationCommitTest extends TestCase
             app(\App\Validators\Invoice\InvoiceValidator::class),
             app(\App\Services\Invoice\InvoiceCalculationService::class),
             app(\App\Mappers\Invoice\InvoiceMapper::class), $logger,
+            app(\App\Services\Commission\CommissionChargeService::class),
         );
     }
 

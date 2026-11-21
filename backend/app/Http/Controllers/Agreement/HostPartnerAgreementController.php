@@ -37,6 +37,22 @@ class HostPartnerAgreementController extends Controller
     }
 
     /**
+     * Lấy danh sách lịch sử các phiên bản hợp đồng mà Host đã chấp thuận.
+     */
+    public function acceptances(Request $request): JsonResponse
+    {
+        $actor = $request->user();
+        $this->validator->authorizeHost($actor);
+
+        $acceptances = $this->service->listHostAcceptances($actor->id);
+
+        return response()->json([
+            'success' => true,
+            'data' => $this->mapper->toAcceptancesListResponse($acceptances),
+        ], 200);
+    }
+
+    /**
      * Chấp thuận thỏa thuận đối tác (Clickwrap).
      */
     public function accept(Request $request, int|string $id): JsonResponse
@@ -44,11 +60,12 @@ class HostPartnerAgreementController extends Controller
         $actor = $request->user();
         $this->validator->authorizeHost($actor);
 
+        $agreementId = $this->validator->validateId($id);
         $validated = $this->validator->validateAcceptPayload($request->all());
 
         $acceptance = $this->service->acceptAgreement(
             $actor->id,
-            (int) $id,
+            $agreementId,
             $validated['content_sha256']
         );
 

@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class CommissionValidator
 {
@@ -27,6 +28,19 @@ class CommissionValidator
         if ($actor === null || ($actor->role?->value !== 'ADMIN' && $actor->role !== 'ADMIN')) {
             throw new AuthorizationException('Chỉ tài khoản Admin mới có quyền truy cập.');
         }
+    }
+
+    /**
+     * Xác thực tham số định danh nguyên dương trước khi chuyển đổi.
+     */
+    public function validateId(int|string $id): int
+    {
+        $str = trim((string) $id);
+        if (! preg_match('/^[1-9]\d*$/', $str)) {
+            throw new NotFoundHttpException('Không tìm thấy tài nguyên yêu cầu.');
+        }
+
+        return (int) $str;
     }
 
     /**

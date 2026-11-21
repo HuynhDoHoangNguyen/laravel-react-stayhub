@@ -1,4 +1,10 @@
 import api from '../api/axios';
+import {
+    mapCommissionDetailResponse,
+    mapCommissionListResponse,
+    mapHostFinancialSummaryResponse,
+    mapRemittanceSubmitResponse,
+} from '../mappers/commissionMapper';
 
 export const hostCommissionService = {
     /**
@@ -6,7 +12,7 @@ export const hostCommissionService = {
      */
     async getCommissions(params = {}, options = {}) {
         const response = await api.get('/api/host/commissions', { params, ...options });
-        return response.data;
+        return mapCommissionListResponse(response.data);
     },
 
     /**
@@ -14,7 +20,7 @@ export const hostCommissionService = {
      */
     async getCommissionDetail(id, options = {}) {
         const response = await api.get(`/api/host/commissions/${id}`, options);
-        return response.data;
+        return mapCommissionDetailResponse(response.data);
     },
 
     /**
@@ -22,7 +28,7 @@ export const hostCommissionService = {
      */
     async submitRemittance(id, payload, options = {}) {
         const response = await api.post(`/api/host/commissions/${id}/remittances`, payload, options);
-        return response.data;
+        return mapRemittanceSubmitResponse(response.data);
     },
 
     /**
@@ -30,6 +36,6 @@ export const hostCommissionService = {
      */
     async getFinancialSummary(options = {}) {
         const response = await api.get('/api/host/commissions/dashboard/financial-summary', options);
-        return response.data;
+        return mapHostFinancialSummaryResponse(response.data);
     },
 };

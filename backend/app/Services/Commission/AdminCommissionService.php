@@ -4,50 +4,25 @@ namespace App\Services\Commission;
 
 use App\Enums\CommissionStatus;
 use App\Enums\RemittanceStatus;
-use App\Models\BookingCommission;
-use App\Models\CommissionRemittance;
+use App\Repositories\Commission\CommissionRepository;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 class AdminCommissionService
 {
+    public function __construct(
+        protected readonly CommissionRepository $repository,
+    ) {}
+
     /**
      * Danh sách toàn bộ hoa hồng hệ thống dành cho Admin.
      */
     public function listCommissions(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
-        $query = BookingCommission::query()
-            ->with([
-                'host:id,name,email,phone',
-                'invoice:id,invoice_code,subtotal,discount_amount,extra_fee,total_amount,payment_status,paid_at',
-                'booking:id,booking_code,check_in_date,check_out_date,room_id',
-                'booking.room:id,name,property_id',
-                'booking.room.property:id,name',
-                'remittances' => fn ($q) => $q->orderByDesc('id'),
-            ]);
-
-        if (! empty($filters['host_id'])) {
-            $query->where('host_id', (int) $filters['host_id']);
-        }
-
-        $statusFilter = strtoupper((string) ($filters['status'] ?? 'ALL'));
-        if ($statusFilter !== 'ALL' && $statusFilter !== '') {
-            if ($statusFilter === 'OVERDUE') {
-                $query->where('status', CommissionStatus::DUE)
-                    ->whereNotNull('due_at')
-                    ->where('due_at', '<', now())
-                    ->whereDoesntHave('remittances', fn ($q) => $q->where('status', RemittanceStatus::SUBMITTED));
-            } elseif ($statusFilter === 'UNDER_REVIEW') {
-                $query->where('status', CommissionStatus::DUE)
-                    ->whereHas('remittances', fn ($q) => $q->where('status', RemittanceStatus::SUBMITTED));
-            } elseif (in_array($statusFilter, ['AWAITING_CUSTOMER_PAYMENT', 'DUE', 'SETTLED', 'DISPUTED', 'VOID'], true)) {
-                $query->where('status', $statusFilter);
-            }
-        }
-
-        return $query->orderByDesc('id')->paginate($perPage);
+        return $this->repository->paginateForAdmin($filters, $perPage);
     }
 
     /**
@@ -55,42 +30,35 @@ class AdminCommissionService
      */
     public function listRemittances(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
-        $query = CommissionRemittance::query()
-            ->with([
-                'host:id,name,email,phone',
-                'reviewedByAdmin:id,name',
-                'commission.invoice:id,invoice_code,total_amount,paid_at',
-                'commission.booking.room.property:id,name',
-            ]);
-
-        $status = strtoupper((string) ($filters['status'] ?? 'SUBMITTED'));
-        if ($status !== 'ALL' && $status !== '') {
-            if (in_array($status, ['SUBMITTED', 'VERIFIED', 'REJECTED'], true)) {
-                $query->where('status', $status);
-            }
-        }
-
-        return $query->orderByDesc('submitted_at')->paginate($perPage);
+        return $this->repository->paginateRemittancesForAdmin($filters, $perPage);
     }
 
     /**
      * Admin xác minh giao dịch đối soát (Verify).
-     * Tuân thủ quy tắc kiểm tra trạng thái và settlement atomic (REM-01, AC-17).
+     * Tuân thủ thứ tự khóa thống nhất (BookingCommission -> CommissionRemittance),
+     * kiểm tra trạng thái và settlement atomic (REM-01, AC-17).
      */
     public function verifyRemittance(int $remittanceId, int $adminId, array $data): array
     {
-        return DB::transaction(function () use ($remittanceId, $adminId, $data) {
-            /** @var CommissionRemittance|null $remittance */
-            $remittance = CommissionRemittance::query()
-                ->where('id', $remittanceId)
-                ->lockForUpdate()
-                ->first();
+        $commissionId = $this->repository->findRemittanceCommissionId($remittanceId);
+        if ($commissionId === null) {
+            throw new NotFoundHttpException('Không tìm thấy yêu cầu nộp đối soát.');
+        }
+
+        return DB::transaction(function () use ($remittanceId, $commissionId, $adminId, $data) {
+            // 1. Khóa bản ghi cha BookingCommission TRƯỚC, sau đó mới khóa CommissionRemittance (REM-01 lock order)
+            $commission = $this->repository->findCommissionForUpdate($commissionId);
+            $remittance = $this->repository->findRemittanceForUpdate($remittanceId);
 
             if ($remittance === null) {
                 throw new NotFoundHttpException('Không tìm thấy yêu cầu nộp đối soát.');
             }
 
-            // 1. Idempotency: nếu đã VERIFIED trước đó thì trả về thành công no-op (AC-17)
+            if ($commission === null) {
+                throw new NotFoundHttpException('Không tìm thấy khoản hoa hồng liên kết.');
+            }
+
+            // 2. Idempotency: nếu đã VERIFIED trước đó thì trả về thành công no-op (AC-17)
             if ($remittance->status === RemittanceStatus::VERIFIED) {
                 return [
                     'remittance' => $remittance,
@@ -98,9 +66,9 @@ class AdminCommissionService
                 ];
             }
 
-            // 2. Kiểm tra trạng thái remittance: bắt buộc phải đang SUBMITTED (State conflict dùng 409)
+            // 3. Kiểm tra trạng thái remittance: bắt buộc phải đang SUBMITTED (State conflict dùng 409)
             if ($remittance->status !== RemittanceStatus::SUBMITTED) {
-                throw new \Symfony\Component\HttpKernel\Exception\ConflictHttpException(
+                throw new ConflictHttpException(
                     'Không thể xác minh yêu cầu nộp tiền không ở trạng thái chờ duyệt (SUBMITTED).'
                 );
             }
@@ -110,37 +78,22 @@ class AdminCommissionService
                 throw new UnprocessableEntityHttpException('Mã giao dịch ngân hàng trích từ sao kê là bắt buộc.');
             }
 
-            // 3. Chống tái sử dụng verified_bank_reference (AC-19)
-            $duplicateRef = CommissionRemittance::query()
-                ->where('verified_bank_reference', $verifiedBankRef)
-                ->where('id', '!=', $remittance->id)
-                ->exists();
-
-            if ($duplicateRef) {
+            // 4. Chống tái sử dụng verified_bank_reference (AC-19)
+            if ($this->repository->verifiedBankReferenceExists($verifiedBankRef, (int) $remittance->id)) {
                 throw new UnprocessableEntityHttpException(
                     'Mã giao dịch ngân hàng này đã được xác minh cho một khoản đối soát khác. Vui lòng kiểm tra lại sao kê.'
                 );
             }
 
-            /** @var BookingCommission|null $commission */
-            $commission = BookingCommission::query()
-                ->where('id', $remittance->booking_commission_id)
-                ->lockForUpdate()
-                ->first();
-
-            if ($commission === null) {
-                throw new NotFoundHttpException('Không tìm thấy khoản hoa hồng liên kết.');
-            }
-
-            // 4. Kiểm tra trạng thái commission: bắt buộc phải đang DUE (State conflict dùng 409)
+            // 5. Kiểm tra trạng thái commission: bắt buộc phải đang DUE (State conflict dùng 409)
             if ($commission->status !== CommissionStatus::DUE) {
-                throw new \Symfony\Component\HttpKernel\Exception\ConflictHttpException(
+                throw new ConflictHttpException(
                     'Khoản hoa hồng liên kết không ở trạng thái Chờ thanh toán (DUE) để xác minh.'
                 );
             }
 
-            // 5. Kiểm tra số tiền: số tiền đối soát phải khớp 100% với hoa hồng
-            if (bccomp($remittance->amount, $commission->commission_amount, 2) !== 0) {
+            // 6. Kiểm tra số tiền bằng BCMath: số tiền đối soát phải khớp 100% với hoa hồng
+            if (bccomp((string) $remittance->amount, (string) $commission->commission_amount, 2) !== 0) {
                 throw new UnprocessableEntityHttpException(
                     'Số tiền đối soát không khớp với số tiền hoa hồng cần nộp.'
                 );
@@ -149,7 +102,7 @@ class AdminCommissionService
             $now = now();
 
             // Cập nhật Remittance -> VERIFIED
-            $remittance->update([
+            $this->repository->updateRemittance($remittance, [
                 'status' => RemittanceStatus::VERIFIED,
                 'verified_bank_reference' => $verifiedBankRef,
                 'review_note' => $data['review_note'] ?? null,
@@ -158,7 +111,7 @@ class AdminCommissionService
             ]);
 
             // Cập nhật Commission -> SETTLED atomically (AC-17)
-            $commission->update([
+            $this->repository->updateCharge($commission, [
                 'status' => CommissionStatus::SETTLED,
                 'settled_at' => $now,
             ]);
@@ -173,28 +126,36 @@ class AdminCommissionService
 
     /**
      * Admin từ chối giao dịch đối soát (Reject) với lý do bắt buộc.
+     * Tuân thủ thứ tự khóa thống nhất: BookingCommission -> CommissionRemittance.
      */
     public function rejectRemittance(int $remittanceId, int $adminId, array $data): array
     {
-        return DB::transaction(function () use ($remittanceId, $adminId, $data) {
-            /** @var CommissionRemittance|null $remittance */
-            $remittance = CommissionRemittance::query()
-                ->where('id', $remittanceId)
-                ->lockForUpdate()
-                ->first();
+        $commissionId = $this->repository->findRemittanceCommissionId($remittanceId);
+        if ($commissionId === null) {
+            throw new NotFoundHttpException('Không tìm thấy yêu cầu nộp đối soát.');
+        }
+
+        return DB::transaction(function () use ($remittanceId, $commissionId, $adminId, $data) {
+            // Khóa bản ghi cha BookingCommission TRƯỚC, sau đó mới khóa CommissionRemittance (REM-01 lock order)
+            $commission = $this->repository->findCommissionForUpdate($commissionId);
+            $remittance = $this->repository->findRemittanceForUpdate($remittanceId);
 
             if ($remittance === null) {
                 throw new NotFoundHttpException('Không tìm thấy yêu cầu nộp đối soát.');
             }
 
+            if ($commission === null) {
+                throw new NotFoundHttpException('Không tìm thấy khoản hoa hồng liên kết.');
+            }
+
             if ($remittance->status === RemittanceStatus::VERIFIED) {
-                throw new \Symfony\Component\HttpKernel\Exception\ConflictHttpException(
+                throw new ConflictHttpException(
                     'Không thể từ chối giao dịch đã được xác minh thành công.'
                 );
             }
 
             if ($remittance->status !== RemittanceStatus::SUBMITTED) {
-                throw new \Symfony\Component\HttpKernel\Exception\ConflictHttpException(
+                throw new ConflictHttpException(
                     'Yêu cầu nộp đối soát không ở trạng thái chờ duyệt (SUBMITTED) để từ chối.'
                 );
             }
@@ -204,20 +165,10 @@ class AdminCommissionService
                 throw new UnprocessableEntityHttpException('Lý do từ chối là bắt buộc.');
             }
 
-            /** @var BookingCommission|null $commission */
-            $commission = BookingCommission::query()
-                ->where('id', $remittance->booking_commission_id)
-                ->lockForUpdate()
-                ->first();
-
-            if ($commission === null) {
-                throw new NotFoundHttpException('Không tìm thấy khoản hoa hồng liên kết.');
-            }
-
             $now = now();
 
             // Cập nhật Remittance -> REJECTED, giữ lịch sử (AC-18)
-            $remittance->update([
+            $this->repository->updateRemittance($remittance, [
                 'status' => RemittanceStatus::REJECTED,
                 'review_note' => $reason,
                 'reviewed_by_admin_id' => $adminId,
@@ -226,7 +177,7 @@ class AdminCommissionService
 
             // Commission giữ nguyên trạng thái DUE (AC-18)
             if ($commission->status !== CommissionStatus::DUE && $commission->status !== CommissionStatus::SETTLED) {
-                $commission->update([
+                $this->repository->updateCharge($commission, [
                     'status' => CommissionStatus::DUE,
                 ]);
             }

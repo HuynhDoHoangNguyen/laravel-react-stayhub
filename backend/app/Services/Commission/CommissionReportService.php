@@ -2,43 +2,36 @@
 
 namespace App\Services\Commission;
 
-use App\Enums\CommissionStatus;
 use App\Enums\RemittanceStatus;
-use App\Models\BookingCommission;
-use App\Models\CommissionRemittance;
-use App\Models\Invoice;
+use App\Repositories\Commission\CommissionRepository;
 
 class CommissionReportService
 {
+    public function __construct(
+        protected readonly CommissionRepository $repository,
+    ) {}
+
     /**
      * Báo cáo tổng hợp tài chính và hoa hồng dành cho Host.
+     * Tính toán hoàn toàn bằng BCMath trên chuỗi thập phân, không ép kiểu float (MONEY-01).
      *
      * @return array<string, mixed>
      */
     public function getHostFinancialSummary(int $hostId): array
     {
         // 1. Tổng doanh thu gộp từ các Hóa đơn PAID của Host
-        $invoiceQuery = Invoice::query()
-            ->where('payment_status', 'PAID')
-            ->whereHas('booking.room.property', function ($q) use ($hostId) {
-                $q->where('host_id', $hostId);
-            });
+        $invoiceTotals = $this->repository->getHostPaidInvoicesTotalAndCount($hostId);
+        $grossRevenue = $invoiceTotals['gross_revenue'];
+        $paidInvoicesCount = $invoiceTotals['count'];
 
-        $grossRevenue = number_format((float) $invoiceQuery->sum('total_amount'), 2, '.', '');
-        $paidInvoicesCount = $invoiceQuery->count();
+        // 2. Thống kê hoa hồng phát sinh và đã đối soát (SETTLED) của Host
+        $commTotals = $this->repository->getHostCommissionAmounts($hostId);
+        $assessedAmount = $commTotals['assessed'];
+        $settledAmount = $commTotals['settled'];
+        $settledCount = $commTotals['settled_count'];
 
-        // 2. Thống kê hoa hồng của Host
-        $commQuery = BookingCommission::query()->where('host_id', $hostId);
-
-        $assessedAmount = number_format((float) (clone $commQuery)->sum('commission_amount'), 2, '.', '');
-        $settledAmount = number_format((float) (clone $commQuery)->where('status', CommissionStatus::SETTLED)->sum('commission_amount'), 2, '.', '');
-        $settledCount = (clone $commQuery)->where('status', CommissionStatus::SETTLED)->count();
-
-        // Các khoản đang ở trạng thái DUE
-        $dueCommissions = (clone $commQuery)
-            ->where('status', CommissionStatus::DUE)
-            ->with(['remittances' => fn ($q) => $q->orderByDesc('id')])
-            ->get();
+        // 3. Phân nhóm các khoản đang ở trạng thái DUE
+        $dueCommissions = $this->repository->getHostDueCommissionsWithRemittances($hostId);
 
         $underReviewAmount = '0.00';
         $overdueAmount = '0.00';
@@ -51,7 +44,7 @@ class CommissionReportService
         $now = now();
         foreach ($dueCommissions as $comm) {
             $hasPending = $comm->remittances->contains(fn ($r) => $r->status === RemittanceStatus::SUBMITTED);
-            $amountStr = number_format((float) $comm->commission_amount, 2, '.', '');
+            $amountStr = bcadd((string) $comm->commission_amount, '0.00', 2);
 
             if ($hasPending) {
                 $underReviewAmount = bcadd($underReviewAmount, $amountStr, 2);
@@ -89,21 +82,20 @@ class CommissionReportService
 
     /**
      * Báo cáo tổng hợp đối soát hoa hồng toàn hệ thống dành cho Admin.
+     * Tính toán hoàn toàn bằng BCMath trên chuỗi thập phân, không ép kiểu float (MONEY-01).
      *
      * @return array<string, mixed>
      */
     public function getAdminCommissionSummary(): array
     {
         // 1. Tổng hoa hồng phát sinh và thực thu (SETTLED)
-        $totalAssessed = number_format((float) BookingCommission::query()->sum('commission_amount'), 2, '.', '');
-        $totalSettled = number_format((float) BookingCommission::query()->where('status', CommissionStatus::SETTLED)->sum('commission_amount'), 2, '.', '');
-        $settledCount = BookingCommission::query()->where('status', CommissionStatus::SETTLED)->count();
+        $commTotals = $this->repository->getAdminCommissionAmounts();
+        $totalAssessed = $commTotals['assessed'];
+        $totalSettled = $commTotals['settled'];
+        $settledCount = $commTotals['settled_count'];
 
         // 2. Thống kê theo trạng thái DUE
-        $dueCommissions = BookingCommission::query()
-            ->where('status', CommissionStatus::DUE)
-            ->with(['remittances' => fn ($q) => $q->orderByDesc('id')])
-            ->get();
+        $dueCommissions = $this->repository->getAdminDueCommissionsWithRemittances();
 
         $underReviewAmount = '0.00';
         $overdueAmount = '0.00';
@@ -116,7 +108,7 @@ class CommissionReportService
         $now = now();
         foreach ($dueCommissions as $comm) {
             $hasPending = $comm->remittances->contains(fn ($r) => $r->status === RemittanceStatus::SUBMITTED);
-            $amountStr = number_format((float) $comm->commission_amount, 2, '.', '');
+            $amountStr = bcadd((string) $comm->commission_amount, '0.00', 2);
 
             if ($hasPending) {
                 $underReviewAmount = bcadd($underReviewAmount, $amountStr, 2);
@@ -134,9 +126,7 @@ class CommissionReportService
         $totalOutstanding = bcadd($pureDueAmount, bcadd($underReviewAmount, $overdueAmount, 2), 2);
 
         // Số lượng yêu cầu đối soát đang chờ Admin duyệt trong hàng chờ
-        $pendingRemittancesCount = CommissionRemittance::query()
-            ->where('status', RemittanceStatus::SUBMITTED)
-            ->count();
+        $pendingRemittancesCount = $this->repository->countPendingRemittances();
 
         return [
             'total_assessed' => $totalAssessed,

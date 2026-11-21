@@ -356,6 +356,17 @@ class HostCommissionApiTest extends TestCase
         );
         $resMismatch->assertStatus(422);
 
+        // 4b. Nếu Host gửi cùng key, cùng amount nhưng sửa bank_transaction_reference khác -> Trả 422
+        $resRefMismatch = $this->actingAs($this->hostA)->postJson(
+            "/api/host/commissions/{$this->commissionA->id}/remittances",
+            [
+                'amount' => 200000,
+                'bank_transaction_reference' => 'SPOOFED-DIFFERENT-REF',
+                'idempotency_key' => 'IDEM-VERIFY-SETTLED-RETRY',
+            ]
+        );
+        $resRefMismatch->assertStatus(422);
+
         // 5. Nếu gửi key MỚI khi commission đã SETTLED -> Trả 409
         $resNewKey = $this->actingAs($this->hostA)->postJson(
             "/api/host/commissions/{$this->commissionA->id}/remittances",

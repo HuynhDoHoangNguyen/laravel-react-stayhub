@@ -3,29 +3,25 @@
 namespace App\Services\Agreement;
 
 use App\Models\HostAgreementAcceptance;
-use App\Models\PartnerAgreement;
+use App\Repositories\Agreement\PartnerAgreementRepository;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use InvalidArgumentException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class PartnerAgreementService
 {
+    public function __construct(
+        protected readonly PartnerAgreementRepository $repository,
+    ) {}
+
     /**
      * Lấy phiên bản hợp đồng đối tác đang có hiệu lực.
      */
     public function getCurrentAgreement(?int $hostId = null): ?array
     {
-        $agreement = PartnerAgreement::query()
-            ->where('status', 'PUBLISHED')
-            ->where('effective_at', '<=', now())
-            ->where(function ($query) {
-                $query->whereNull('retired_at')
-                    ->orWhere('retired_at', '>', now());
-            })
-            ->orderByDesc('effective_at')
-            ->first();
+        $agreement = $this->repository->findActivePublishedAgreement();
 
         if ($agreement === null) {
             return null;
@@ -33,10 +29,7 @@ class PartnerAgreementService
 
         $acceptance = null;
         if ($hostId !== null) {
-            $acceptance = HostAgreementAcceptance::query()
-                ->where('host_id', $hostId)
-                ->where('partner_agreement_id', $agreement->id)
-                ->first();
+            $acceptance = $this->repository->findHostAcceptance($hostId, (int) $agreement->id);
         }
 
         return [
@@ -58,7 +51,6 @@ class PartnerAgreementService
     {
         $current = $this->getCurrentAgreement($hostId);
         if ($current === null) {
-            // Nếu hệ thống chưa cấu hình hợp đồng nào thì không chặn
             return true;
         }
 
@@ -70,25 +62,23 @@ class PartnerAgreementService
      */
     public function getHostActiveAcceptance(int $hostId): ?HostAgreementAcceptance
     {
-        $agreement = PartnerAgreement::query()
-            ->where('status', 'PUBLISHED')
-            ->where('effective_at', '<=', now())
-            ->where(function ($query) {
-                $query->whereNull('retired_at')
-                    ->orWhere('retired_at', '>', now());
-            })
-            ->orderByDesc('effective_at')
-            ->first();
+        $agreement = $this->repository->findActivePublishedAgreement();
 
         if ($agreement === null) {
             return null;
         }
 
-        return HostAgreementAcceptance::query()
-            ->with('agreement')
-            ->where('host_id', $hostId)
-            ->where('partner_agreement_id', $agreement->id)
-            ->first();
+        return $this->repository->findHostAcceptanceWithAgreement($hostId, (int) $agreement->id);
+    }
+
+    /**
+     * Lấy danh sách lịch sử các phiên bản hợp đồng mà Host đã chấp thuận.
+     *
+     * @return Collection<int, HostAgreementAcceptance>
+     */
+    public function listHostAcceptances(int $hostId): Collection
+    {
+        return $this->repository->listHostAcceptances($hostId);
     }
 
     /**
@@ -96,7 +86,7 @@ class PartnerAgreementService
      */
     public function acceptAgreement(int $hostId, int $agreementId, string $contentSha256): HostAgreementAcceptance
     {
-        $agreement = PartnerAgreement::find($agreementId);
+        $agreement = $this->repository->findById($agreementId);
         if ($agreement === null || $agreement->status !== 'PUBLISHED') {
             throw new NotFoundHttpException('Phiên bản hợp đồng không tồn tại hoặc chưa được phát hành.');
         }
@@ -106,16 +96,11 @@ class PartnerAgreementService
         }
 
         return DB::transaction(function () use ($hostId, $agreement): HostAgreementAcceptance {
-            $acceptance = HostAgreementAcceptance::firstOrCreate(
-                [
-                    'host_id' => $hostId,
-                    'partner_agreement_id' => $agreement->id,
-                ],
-                [
-                    'accepted_content_sha256' => $agreement->content_sha256,
-                    'accepted_at' => now(),
-                    'method' => 'CHECKBOX_CLICKWRAP',
-                ]
+            $acceptance = $this->repository->firstOrCreateAcceptance(
+                $hostId,
+                (int) $agreement->id,
+                (string) $agreement->content_sha256,
+                'CHECKBOX_CLICKWRAP'
             );
 
             DB::afterCommit(fn () => Log::info('Host đã chấp thuận hợp đồng đối tác StayHub.', [

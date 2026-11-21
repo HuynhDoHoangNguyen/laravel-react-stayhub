@@ -43,7 +43,8 @@ class HostCommissionController extends Controller
     {
         $this->validator->authorizeHost($request->user());
 
-        $commission = $this->service->findForHost((int) $id, $request->user()->id);
+        $commissionId = $this->validator->validateId($id);
+        $commission = $this->service->findForHost($commissionId, $request->user()->id);
 
         return response()->json($this->mapper->toHostCommissionDetailResponse($commission));
     }
@@ -55,9 +56,10 @@ class HostCommissionController extends Controller
     {
         $this->validator->authorizeHost($request->user());
 
+        $commissionId = $this->validator->validateId($id);
         $validated = $this->validator->validateSubmitRemittancePayload($request->all());
 
-        $remittance = $this->service->submitRemittance((int) $id, $request->user()->id, $validated);
+        $remittance = $this->service->submitRemittance($commissionId, $request->user()->id, $validated);
 
         return response()->json($this->mapper->toRemittanceSubmissionResponse($remittance), 201);
     }

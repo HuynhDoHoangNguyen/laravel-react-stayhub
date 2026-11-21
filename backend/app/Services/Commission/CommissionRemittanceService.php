@@ -6,71 +6,33 @@ use App\Enums\CommissionStatus;
 use App\Enums\RemittanceStatus;
 use App\Models\BookingCommission;
 use App\Models\CommissionRemittance;
+use App\Repositories\Commission\CommissionRepository;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 class CommissionRemittanceService
 {
+    public function __construct(
+        protected readonly CommissionRepository $repository,
+    ) {}
+
     /**
-     * Danh sách hoa hồng của Host có phân trang, lọc và tính trạng thái dẫn xuất.
+     * Danh sách hoa hồng của Host có phân trang và lọc theo trạng thái.
      */
     public function listForHost(int $hostId, array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
-        $query = BookingCommission::query()
-            ->with([
-                'invoice:id,invoice_code,subtotal,discount_amount,extra_fee,total_amount,payment_status,paid_at',
-                'booking:id,booking_code,check_in_date,check_out_date,room_id',
-                'booking.room:id,name,property_id',
-                'booking.room.property:id,name',
-                'remittances' => function ($q) {
-                    $q->orderByDesc('id');
-                },
-            ])
-            ->where('host_id', $hostId);
-
-        $statusFilter = strtoupper((string) ($filters['status'] ?? 'ALL'));
-
-        if ($statusFilter !== 'ALL' && $statusFilter !== '') {
-            if ($statusFilter === 'OVERDUE') {
-                $query->where('status', CommissionStatus::DUE)
-                    ->whereNotNull('due_at')
-                    ->where('due_at', '<', now())
-                    ->whereDoesntHave('remittances', function ($q) {
-                        $q->where('status', RemittanceStatus::SUBMITTED);
-                    });
-            } elseif ($statusFilter === 'UNDER_REVIEW') {
-                $query->where('status', CommissionStatus::DUE)
-                    ->whereHas('remittances', function ($q) {
-                        $q->where('status', RemittanceStatus::SUBMITTED);
-                    });
-            } elseif (in_array($statusFilter, ['AWAITING_CUSTOMER_PAYMENT', 'DUE', 'SETTLED', 'DISPUTED', 'VOID'], true)) {
-                $query->where('status', $statusFilter);
-            }
-        }
-
-        return $query->orderByDesc('id')->paginate($perPage);
+        return $this->repository->paginateForHost($hostId, $filters, $perPage);
     }
 
     /**
-     * Lấy chi tiết khoản hoa hồng kèm thông tin tài khoản chuyển khoản và lịch sử nộp tiền.
+     * Lấy chi tiết khoản hoa hồng thuộc Host kèm relations.
      */
     public function findForHost(int $commissionId, int $hostId): BookingCommission
     {
-        /** @var BookingCommission|null $commission */
-        $commission = BookingCommission::query()
-            ->with([
-                'invoice',
-                'booking.room.property',
-                'booking.customer:id,name,email,phone',
-                'remittances' => function ($q) {
-                    $q->orderByDesc('id');
-                },
-            ])
-            ->where('host_id', $hostId)
-            ->where('id', $commissionId)
-            ->first();
+        $commission = $this->repository->findForHostWithRelations($commissionId, $hostId);
 
         if ($commission === null) {
             throw new NotFoundHttpException('Không tìm thấy khoản hoa hồng.');
@@ -81,41 +43,43 @@ class CommissionRemittanceService
 
     /**
      * Host nộp khai báo chuyển khoản đối soát (Remittance).
-     * Tuân thủ quy tắc Idempotency và State Machine (REM-01, AC-16).
+     * Tuân thủ quy tắc Idempotency, BCMath không ép float và State Machine (REM-01, MONEY-01, AC-16).
      */
     public function submitRemittance(int $commissionId, int $hostId, array $data): CommissionRemittance
     {
         return DB::transaction(function () use ($commissionId, $hostId, $data) {
-            /** @var BookingCommission|null $commission */
-            $commission = BookingCommission::query()
-                ->where('id', $commissionId)
-                ->where('host_id', $hostId)
-                ->lockForUpdate()
-                ->first();
+            // Khóa bản ghi cha BookingCommission trước theo thứ tự lock chuẩn: BookingCommission -> CommissionRemittance
+            $commission = $this->repository->findForHostForUpdate($commissionId, $hostId);
 
             if ($commission === null) {
                 throw new NotFoundHttpException('Không tìm thấy khoản hoa hồng cần nộp.');
             }
 
-            $submittedAmount = number_format((float) ($data['amount'] ?? 0), 2, '.', '');
+            $submittedAmount = $this->normalizeDecimalString((string) ($data['amount'] ?? '0.00'));
+            $submittedBankRef = isset($data['bank_transaction_reference']) && trim((string) $data['bank_transaction_reference']) !== ''
+                ? trim((string) $data['bank_transaction_reference'])
+                : null;
             $idempotencyKey = trim((string) ($data['idempotency_key'] ?? ''));
 
             // 1. Xử lý Idempotency TRƯỚC gate kiểm tra trạng thái DUE (REM-01, AC-16)
             if ($idempotencyKey !== '') {
-                $existing = CommissionRemittance::query()
-                    ->where('idempotency_key', $idempotencyKey)
-                    ->first();
+                $existing = $this->repository->findRemittanceByIdempotencyKey($idempotencyKey);
 
                 if ($existing !== null) {
                     // Kiểm tra đúng owner và đúng commission
                     if ($existing->booking_commission_id === $commission->id && $existing->host_id === $hostId) {
-                        // Kiểm tra tính nhất quán của payload: số tiền phải khớp với lần submit trước
-                        if (bccomp($existing->amount, $submittedAmount, 2) === 0) {
+                        $existingAmount = $this->normalizeDecimalString((string) $existing->amount);
+                        $existingBankRef = $existing->bank_transaction_reference !== null && trim((string) $existing->bank_transaction_reference) !== ''
+                            ? trim((string) $existing->bank_transaction_reference)
+                            : null;
+
+                        // Kiểm tra tính nhất quán của toàn bộ payload: cả số tiền và mã giao dịch phải khớp
+                        if (bccomp($existingAmount, $submittedAmount, 2) === 0 && $existingBankRef === $submittedBankRef) {
                             return $existing;
                         }
 
                         throw new UnprocessableEntityHttpException(
-                            'Khóa idempotency đã được sử dụng với số tiền khác.'
+                            'Khóa idempotency đã được sử dụng với dữ liệu đối soát khác.'
                         );
                     }
 
@@ -127,42 +91,60 @@ class CommissionRemittanceService
 
             // 2. Kiểm tra trạng thái: Phải đang DUE (State conflict dùng 409 theo plan §5.2)
             if ($commission->status !== CommissionStatus::DUE) {
-                throw new \Symfony\Component\HttpKernel\Exception\ConflictHttpException(
+                throw new ConflictHttpException(
                     'Chỉ có thể nộp đối soát cho khoản hoa hồng đang ở trạng thái Chờ thanh toán (DUE).'
                 );
             }
 
-            // 3. Kiểm tra số tiền: phải khớp 100% với số tiền hoa hồng cần nộp
-            $expectedAmount = number_format((float) $commission->commission_amount, 2, '.', '');
+            // 3. Kiểm tra số tiền: phải khớp 100% với số tiền hoa hồng cần nộp bằng BCMath thuần (không ép float)
+            $expectedAmount = $this->normalizeDecimalString((string) $commission->commission_amount);
             if (bccomp($expectedAmount, $submittedAmount, 2) !== 0) {
                 throw new UnprocessableEntityHttpException(
                     'Số tiền nộp phải khớp 100% với số tiền hoa hồng cần nộp (' .
-                    number_format((float) $commission->commission_amount, 0, ',', '.') . ' VND).'
+                    $this->formatWholeVndString($expectedAmount) . ' VND).'
                 );
             }
 
             // 4. Kiểm tra xem đã có submission pending chưa (State conflict dùng 409)
-            $hasPending = CommissionRemittance::query()
-                ->where('booking_commission_id', $commission->id)
-                ->where('status', RemittanceStatus::SUBMITTED)
-                ->exists();
-
-            if ($hasPending) {
-                throw new \Symfony\Component\HttpKernel\Exception\ConflictHttpException(
+            if ($this->repository->hasPendingRemittance((int) $commission->id)) {
+                throw new ConflictHttpException(
                     'Khoản hoa hồng này đã có một yêu cầu đối soát đang chờ Admin kiểm tra.'
                 );
             }
 
-            // 5. Tạo mới submission
-            return CommissionRemittance::query()->create([
+            // 5. Tạo mới submission qua Repository
+            return $this->repository->createRemittance([
                 'booking_commission_id' => $commission->id,
                 'host_id' => $hostId,
                 'amount' => $submittedAmount,
-                'bank_transaction_reference' => $data['bank_transaction_reference'] ?? null,
+                'bank_transaction_reference' => $submittedBankRef,
                 'idempotency_key' => $idempotencyKey,
                 'status' => RemittanceStatus::SUBMITTED,
                 'submitted_at' => now(),
             ]);
         });
+    }
+
+    /**
+     * Chuẩn hóa chuỗi thập phân 2 chữ số bằng BCMath, không ép kiểu float.
+     */
+    private function normalizeDecimalString(string $raw): string
+    {
+        $trimmed = trim($raw);
+        if ($trimmed === '' || ! preg_match('/^-?\d+(\.\d+)?$/', $trimmed)) {
+            return '0.00';
+        }
+
+        return bcadd($trimmed, '0.00', 2);
+    }
+
+    /**
+     * Định dạng phần nguyên tiền VND với dấu chấm phân cách hàng nghìn bằng thao tác chuỗi thuần (không ép float).
+     */
+    private function formatWholeVndString(string $decimalAmount): string
+    {
+        $integerPart = explode('.', $decimalAmount, 2)[0] ?: '0';
+
+        return strrev(implode('.', str_split(strrev($integerPart), 3)));
     }
 }

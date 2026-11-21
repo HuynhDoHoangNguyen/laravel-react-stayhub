@@ -18,18 +18,14 @@ use Psr\Log\LoggerInterface;
 
 class InvoiceService
 {
-    protected readonly CommissionChargeService $commissionChargeService;
-
     public function __construct(
         protected readonly InvoiceRepository $repository,
         protected readonly InvoiceValidator $validator,
         protected readonly InvoiceCalculationService $calculationService,
         protected readonly InvoiceMapper $mapper,
         protected readonly LoggerInterface $logger,
-        ?CommissionChargeService $commissionChargeService = null,
-    ) {
-        $this->commissionChargeService = $commissionChargeService ?? app(CommissionChargeService::class);
-    }
+        protected readonly CommissionChargeService $commissionChargeService,
+    ) {}
 
     /**
      * Lấy đối tượng Validator đang sử dụng.

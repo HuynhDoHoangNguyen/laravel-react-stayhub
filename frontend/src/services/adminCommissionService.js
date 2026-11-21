@@ -1,4 +1,10 @@
 import api from '../api/axios';
+import {
+    mapAdminCommissionSummaryResponse,
+    mapCommissionListResponse,
+    mapRemittanceActionResponse,
+    mapRemittanceQueueResponse,
+} from '../mappers/commissionMapper';
 
 export const adminCommissionService = {
     /**
@@ -6,7 +12,7 @@ export const adminCommissionService = {
      */
     async getAdminCommissions(params = {}, options = {}) {
         const response = await api.get('/api/admin/commissions', { params, ...options });
-        return response.data;
+        return mapCommissionListResponse(response.data);
     },
 
     /**
@@ -14,7 +20,7 @@ export const adminCommissionService = {
      */
     async getRemittanceQueue(params = {}, options = {}) {
         const response = await api.get('/api/admin/commission-remittances', { params, ...options });
-        return response.data;
+        return mapRemittanceQueueResponse(response.data);
     },
 
     /**
@@ -22,7 +28,7 @@ export const adminCommissionService = {
      */
     async verifyRemittance(id, payload, options = {}) {
         const response = await api.post(`/api/admin/commission-remittances/${id}/verify`, payload, options);
-        return response.data;
+        return mapRemittanceActionResponse(response.data);
     },
 
     /**
@@ -30,7 +36,7 @@ export const adminCommissionService = {
      */
     async rejectRemittance(id, payload, options = {}) {
         const response = await api.post(`/api/admin/commission-remittances/${id}/reject`, payload, options);
-        return response.data;
+        return mapRemittanceActionResponse(response.data);
     },
 
     /**
@@ -38,6 +44,6 @@ export const adminCommissionService = {
      */
     async getCommissionSummary(options = {}) {
         const response = await api.get('/api/admin/dashboard/commission-summary', options);
-        return response.data;
+        return mapAdminCommissionSummaryResponse(response.data);
     },
 };

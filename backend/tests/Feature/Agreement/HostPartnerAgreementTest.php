@@ -112,6 +112,13 @@ class HostPartnerAgreementTest extends TestCase
 
         // Đảm bảo chỉ có duy nhất 1 bản ghi trong DB
         $this->assertDatabaseCount('host_agreement_acceptances', 1);
+
+        // Kiểm tra API lịch sử chấp thuận hợp đồng của Host
+        $history = $this->actingAs($this->host)->getJson('/api/host/partner-agreements/acceptances');
+        $history->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.version', 'v1.0');
     }
 
     public function test_host_cannot_create_property_before_accepting_agreement(): void

@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class PartnerAgreementValidator
 {
@@ -17,6 +18,19 @@ class PartnerAgreementValidator
         if ($actor === null || ($actor->role?->value !== 'HOST' && $actor->role !== 'HOST')) {
             throw new AuthorizationException('Chỉ tài khoản Host mới có quyền truy cập.');
         }
+    }
+
+    /**
+     * Xác thực tham số định danh hợp đồng nguyên dương.
+     */
+    public function validateId(int|string $id): int
+    {
+        $str = trim((string) $id);
+        if (! preg_match('/^[1-9]\d*$/', $str)) {
+            throw new NotFoundHttpException('Phiên bản hợp đồng không tồn tại.');
+        }
+
+        return (int) $str;
     }
 
     /**

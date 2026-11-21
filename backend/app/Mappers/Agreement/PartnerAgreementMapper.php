@@ -3,6 +3,7 @@
 namespace App\Mappers\Agreement;
 
 use App\Models\HostAgreementAcceptance;
+use Illuminate\Database\Eloquent\Collection;
 
 class PartnerAgreementMapper
 {
@@ -32,5 +33,24 @@ class PartnerAgreementMapper
             'acceptance_id' => $acceptance->id,
             'accepted_at' => $acceptance->accepted_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * Chuyển đổi danh sách lịch sử chấp thuận hợp đồng của Host.
+     *
+     * @param Collection<int, HostAgreementAcceptance> $acceptances
+     */
+    public function toAcceptancesListResponse(Collection $acceptances): array
+    {
+        return $acceptances->map(fn (HostAgreementAcceptance $item) => [
+            'acceptance_id' => $item->id,
+            'partner_agreement_id' => $item->partner_agreement_id,
+            'version' => $item->agreement?->version,
+            'title' => $item->agreement?->title,
+            'commission_rate_bps' => $item->agreement?->commission_rate_bps,
+            'accepted_content_sha256' => $item->accepted_content_sha256,
+            'method' => $item->method,
+            'accepted_at' => $item->accepted_at?->toIso8601String(),
+        ])->values()->all();
     }
 }

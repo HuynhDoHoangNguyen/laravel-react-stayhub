@@ -58,9 +58,10 @@ class AdminCommissionController extends Controller
     {
         $this->validator->authorizeAdmin($request->user());
 
+        $remittanceId = $this->validator->validateId($id);
         $validated = $this->validator->validateVerifyRemittancePayload($request->all());
 
-        $result = $this->service->verifyRemittance((int) $id, $request->user()->id, $validated);
+        $result = $this->service->verifyRemittance($remittanceId, $request->user()->id, $validated);
 
         return response()->json($this->mapper->toRemittanceVerificationResponse($result));
     }
@@ -72,9 +73,10 @@ class AdminCommissionController extends Controller
     {
         $this->validator->authorizeAdmin($request->user());
 
+        $remittanceId = $this->validator->validateId($id);
         $validated = $this->validator->validateRejectRemittancePayload($request->all());
 
-        $result = $this->service->rejectRemittance((int) $id, $request->user()->id, $validated);
+        $result = $this->service->rejectRemittance($remittanceId, $request->user()->id, $validated);
 
         return response()->json($this->mapper->toRemittanceRejectionResponse($result));
     }

@@ -6,6 +6,7 @@ use App\Enums\CommissionStatus;
 use App\Models\Booking;
 use App\Models\BookingCommission;
 use App\Models\Invoice;
+use App\Repositories\Commission\CommissionRepository;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Str;
@@ -15,6 +16,7 @@ class CommissionChargeService
 {
     public function __construct(
         protected readonly CommissionCalculationService $calculationService,
+        protected readonly CommissionRepository $repository,
         protected readonly LoggerInterface $logger,
     ) {}
 
@@ -35,7 +37,7 @@ class CommissionChargeService
         }
 
         // 2. Kiểm tra nếu đã tồn tại commission cho Invoice này (Idempotency)
-        $existing = BookingCommission::query()->where('invoice_id', $invoice->id)->first();
+        $existing = $this->repository->findByInvoiceId((int) $invoice->id);
         if ($existing !== null) {
             return $existing;
         }
@@ -62,8 +64,8 @@ class CommissionChargeService
         // 5. Sinh mã chuyển khoản duy nhất (Unique Reference Code)
         $referenceCode = $this->generateUniqueReferenceCode();
 
-        // 6. Tạo bản ghi BookingCommission
-        $commission = BookingCommission::query()->create([
+        // 6. Tạo bản ghi BookingCommission qua Repository
+        $commission = $this->repository->createCharge([
             'invoice_id' => $invoice->id,
             'booking_id' => $booking->id,
             'host_id' => $hostId,
@@ -96,7 +98,7 @@ class CommissionChargeService
      */
     public function activateDue(int $invoiceId, CarbonInterface|string $paidAt): ?BookingCommission
     {
-        $commission = BookingCommission::query()->where('invoice_id', $invoiceId)->first();
+        $commission = $this->repository->findByInvoiceIdForUpdate($invoiceId);
 
         if ($commission === null) {
             return null;
@@ -111,7 +113,7 @@ class CommissionChargeService
         $windowHours = (int) config('commission.payment_window_hours', 72);
         $dueAt = $paidAtCarbon->copy()->addHours($windowHours);
 
-        $commission->update([
+        $this->repository->updateCharge($commission, [
             'status' => CommissionStatus::DUE,
             'due_at' => $dueAt,
         ]);
@@ -136,7 +138,7 @@ class CommissionChargeService
 
         for ($i = 0; $i < 5; $i++) {
             $candidate = $prefix . '-' . strtoupper(Str::random(8));
-            if (! BookingCommission::query()->where('reference_code', $candidate)->exists()) {
+            if (! $this->repository->referenceCodeExists($candidate)) {
                 return $candidate;
             }
         }

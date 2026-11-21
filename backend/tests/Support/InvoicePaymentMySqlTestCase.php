@@ -37,6 +37,7 @@ abstract class InvoicePaymentMySqlTestCase extends TestCase
             $this->app->make(\App\Repositories\Invoice\InvoiceRepository::class),
             $this->app->make(\App\Validators\Invoice\InvoicePaymentValidator::class),
             $mapper ?? $this->app->make(\App\Mappers\Invoice\InvoiceMapper::class), $logger,
+            $this->app->make(\App\Services\Commission\CommissionChargeService::class),
         );
     }
 
