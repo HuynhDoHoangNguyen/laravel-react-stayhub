@@ -25,12 +25,15 @@ const getOptions = signal => roomSearchService.filterOptions({ signal });
 // Keyed by URL so history navigation starts with the correct form and no stale results.
 function RoomResults({ search, navigate, view, onViewChange }) {
     const available = isAvailabilitySearch(search);
-    const availability = available ? parseAvailabilitySearchParams(search) : null;
-    const params = available ? { ...availability.params,
+    const searchUrl = new URLSearchParams(search);
+    const hasLocation = Boolean(searchUrl.get('city') || searchUrl.get('keyword') || searchUrl.get('q'));
+    const isRoomSearch = available || hasLocation;
+    const availability = isRoomSearch ? parseAvailabilitySearchParams(search) : null;
+    const params = isRoomSearch ? { ...availability.params,
         room_type_ids: availability.room_type_ids.map(String),
         amenity_ids: (availability.params.amenity_ids ?? []).map(String),
         min_rating: String(availability.min_rating) } : readRoomSearch(search).params;
-    const [request] = useState(() => signal => available
+    const [request] = useState(() => signal => isRoomSearch
         ? searchAvailableRooms(search, { signal }) : roomSearchService.list(search, { signal }));
     const checkoutChildren = available ? Math.min(Math.max(0, Number.isFinite(availability.children) ? availability.children : 0), availability.guests - 1) : 0;
     const forwardParams = available ? new URLSearchParams({ startDate: availability.checkIn, endDate: availability.checkOut,
@@ -51,8 +54,9 @@ function RoomResults({ search, navigate, view, onViewChange }) {
             behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start',
         });
     };
-    const reset = () => change({ min_price: null, max_price: null, guest_count: null, min_rating: null,
-        room_type_ids: [], amenity_ids: [], sort: null, per_page: null });
+    const reset = () => {
+        navigate({});
+    };
     return <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-[280px_minmax(0,1fr)_340px]">
         <FilterSidebar params={params} options={options.value} optionsLoading={options.loading} optionsError={options.error}
             onRetryOptions={options.retry} errors={errors} onApply={change} onReset={reset} />
@@ -93,7 +97,11 @@ export default function SearchResultsPage() {
     }, [view]);
     const search = searchParams.toString();
     const navigation = readSearchNavigation(search);
-    const unsupported = navigation.tab === 'rooms' && !isAvailabilitySearch(navigation.roomSearch)
+    const hasDates = isAvailabilitySearch(navigation.roomSearch);
+    const searchUrl = new URLSearchParams(navigation.roomSearch);
+    const hasLocation = Boolean(searchUrl.get('city') || searchUrl.get('keyword') || searchUrl.get('q'));
+    const isRoomSearch = hasDates || hasLocation;
+    const unsupported = navigation.tab === 'rooms' && !isRoomSearch
         ? readRoomSearch(navigation.roomSearch).unsupported : [];
     const switchTab = tab => setSearchParams(changeSearchTab(search, tab));
     return <div className="min-h-screen bg-background">

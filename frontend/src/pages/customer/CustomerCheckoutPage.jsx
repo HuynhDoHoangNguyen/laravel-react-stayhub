@@ -12,7 +12,24 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 
-export default function CustomerCheckoutPage() {
+function getTodayIso() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function getTomorrowIso() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+export function CustomerCheckoutPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -20,13 +37,15 @@ export default function CustomerCheckoutPage() {
   // 1. Phân giải an toàn tham số tìm kiếm (URL Context Preservation)
   const propertyId = searchParams.get('propertyId');
   const roomId = searchParams.get('roomId');
-  const startDate = searchParams.get('startDate') || searchParams.get('checkIn');
-  const endDate = searchParams.get('endDate') || searchParams.get('checkOut');
+  const urlStartDate = searchParams.get('startDate') || searchParams.get('checkIn') || '';
+  const urlEndDate = searchParams.get('endDate') || searchParams.get('checkOut') || '';
   const urlAdults = parseInt(searchParams.get('adults'), 10) || 2;
   const urlChildren = parseInt(searchParams.get('children'), 10) || 0;
 
   // 2. Local State của Checkout Form
   const [step, setStep] = useState('guests');
+  const [startDate, setStartDate] = useState(urlStartDate);
+  const [endDate, setEndDate] = useState(urlEndDate);
   const [adults, setAdults] = useState(urlAdults);
   const [children, setChildren] = useState(urlChildren);
   const [note, setNote] = useState('');
@@ -66,12 +85,46 @@ export default function CustomerCheckoutPage() {
 
       setIsLoading(true);
       try {
-        const res = await propertyService.getBookableProperty(propertyId, {
-          startDate,
-          endDate,
-          adults: urlAdults,
-          children: urlChildren,
-        });
+        const queryStartDate = startDate || getTodayIso();
+        const queryEndDate = endDate || getTomorrowIso();
+        let res = null;
+        try {
+          res = await propertyService.getBookableProperty(propertyId, {
+            startDate: queryStartDate,
+            endDate: queryEndDate,
+            adults: urlAdults,
+            children: urlChildren,
+          });
+        } catch {
+          res = null;
+        }
+
+        const roomFoundInSearch = res?.data?.rooms?.some((r) => String(r.id) === String(roomId));
+
+        if (!roomFoundInSearch) {
+          try {
+            const catalogRes = await propertyService.getPropertyById(propertyId);
+            if (catalogRes?.data?.rooms?.some((r) => String(r.id) === String(roomId))) {
+              const mappedRooms = (catalogRes.data.rooms || []).map((r) => ({
+                ...r,
+                price: Number(r.price ?? r.price_per_night) || 0,
+                price_per_night: Number(r.price_per_night ?? r.price) || 0,
+                roomTypeName: r.roomTypeName || r.room_type?.name || '',
+                room_type_name: r.roomTypeName || r.room_type?.name || '',
+              }));
+              res = {
+                data: {
+                  ...catalogRes.data,
+                  rooms: mappedRooms,
+                },
+                source: 'room-search',
+              };
+            }
+          } catch {
+            // Keep res
+          }
+        }
+
         if (!ignore) {
           setPropertySource(res?.source || null);
           if (res?.source === 'api') {
@@ -101,7 +154,8 @@ export default function CustomerCheckoutPage() {
     return () => {
       ignore = true;
     };
-  }, [propertyId, startDate, endDate, urlAdults, urlChildren]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propertyId, roomId, urlAdults, urlChildren]);
 
   // 4. Tìm hạng phòng tương ứng trong danh sách phòng của cơ sở
   const selectedRoom = useMemo(() => {
@@ -203,6 +257,17 @@ export default function CustomerCheckoutPage() {
     previewRequestIdRef.current += 1;
   };
 
+  const updateDates = (newStartDate, newEndDate) => {
+    setStartDate(newStartDate);
+    setEndDate(newEndDate);
+    setPreview(null);
+    setPreviewSnapshot(null);
+    setPreviewError('');
+    setCreateError('');
+    setIsPreviewing(false);
+    previewRequestIdRef.current += 1;
+  };
+
   const handleCreateBooking = async () => {
     if (createLock.current) return;
 
@@ -270,13 +335,11 @@ export default function CustomerCheckoutPage() {
     );
   }
 
-  // State: Thiếu hoặc Sai lệch dữ liệu cốt lõi (Missing Context / Invalid Room / Dates)
-  if (errorMsg || !property || !selectedRoom || !isValidDateRange) {
+  // State: Thiếu hoặc Sai lệch dữ liệu cốt lõi (Missing Context / Invalid Room)
+  if (errorMsg || !property || !selectedRoom) {
     let message = errorMsg;
     if (!message) {
-      if (!isValidDateRange) {
-        message = 'Khoảng thời gian nhận phòng và trả phòng không hợp lệ. Quý khách vui lòng chọn lại ngày lưu trú.';
-      } else if (!selectedRoom) {
+      if (!selectedRoom) {
         message = property?.hasMoreRooms
           ? 'Không tìm thấy hạng phòng yêu cầu trong danh sách phòng đã tải. Quý khách vui lòng chọn lại phòng từ trang tìm kiếm.'
           : 'Không tìm thấy hạng phòng yêu cầu hoặc hạng phòng không còn thuộc cơ sở này.';
@@ -391,13 +454,22 @@ export default function CustomerCheckoutPage() {
             <CheckoutGuestsStep
               user={user}
               room={selectedRoom}
+              startDate={startDate}
+              endDate={endDate}
+              isValidDateRange={isValidDateRange}
+              nights={nights}
+              onDatesChange={updateDates}
               adults={adults}
               children={children}
               note={note}
               onAdultsChange={(value) => updateGuestCount(setAdults, value)}
               onChildrenChange={(value) => updateGuestCount(setChildren, value)}
               onNoteChange={setNote}
-              onContinue={() => setStep('review')}
+              onContinue={() => {
+                if (isValidDateRange) {
+                  setStep('review');
+                }
+              }}
             />
           ) : (
             <CheckoutReviewStep
@@ -436,3 +508,5 @@ export default function CustomerCheckoutPage() {
     </div>
   );
 }
+
+export default CustomerCheckoutPage;

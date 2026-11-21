@@ -339,7 +339,8 @@ test('availability cards forward selected room, dates and guests to checkout whi
     for (const [key, value] of new URLSearchParams(query)) assert.equal(url.searchParams.get(key), value);
     assert.ok(!html.includes('Chưa kiểm tra phòng trống'));
     const catalog = await renderSearch('ResultsGrid', { rooms: [room], isLoading: false, searchParams: query });
-    assert.ok(!catalog.includes('/customer/checkout'));
+    assert.ok(catalog.includes('/customer/checkout'));
+    assert.ok(catalog.includes('Đặt phòng'));
     assert.ok(catalog.includes('Chưa kiểm tra phòng trống'));
     const loading = await renderSearch('ResultsGrid', { rooms: [room], isLoading: true, isAvailableDate: true, searchParams: query });
     assert.ok(!loading.includes('/customer/checkout'));

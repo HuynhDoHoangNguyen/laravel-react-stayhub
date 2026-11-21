@@ -52,12 +52,16 @@ export function SearchRoomCard({ room, view = 'grid', searchParams = '', isAvail
             <div className="mt-auto pt-4">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/40 pt-4">
                     <div className="min-w-0"><p className="break-words text-[16px] font-semibold tracking-tight text-ink sm:text-[17px]">{currency.format(room.price_per_night)}</p><p className="text-[11.5px] text-muted-foreground">{isAvailableDate ? '/ đêm' : '/ đêm · tham khảo'}</p></div>
-                    {isAvailableDate ? <>
-                        <Link to={checkoutHref} className="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-primary px-4 py-2 text-[12.5px] font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary-mid">Đặt ngay</Link>
+                    <div className="flex items-center gap-2.5">
+                        {isAvailableDate ? (
+                            <Link to={checkoutHref} className="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-primary px-4 py-2 text-[12.5px] font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary-mid">Đặt ngay</Link>
+                        ) : (
+                            <Link to={checkoutHref} className="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-primary px-4 py-2 text-[12.5px] font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary-mid">Đặt phòng</Link>
+                        )}
                         <Link to={propertyHref} state={{ searchPage: location.search }} className="text-[12.5px] font-medium text-primary underline">Xem cơ sở</Link>
-                    </> : <Link to={propertyHref} state={{ searchPage: location.search }} className="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-primary px-4 py-2 text-[12.5px] font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary-mid">Xem cơ sở lưu trú</Link>}
+                    </div>
                 </div>
-                <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">{isAvailableDate ? 'Có phòng trống trong khoảng ngày đã chọn. Giá cuối cùng được xác nhận khi đặt phòng.' : 'Chưa kiểm tra phòng trống theo ngày.'}</p>
+                <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">{isAvailableDate ? 'Có phòng trống trong khoảng ngày đã chọn. Giá cuối cùng được xác nhận khi đặt phòng.' : 'Chưa kiểm tra phòng trống theo ngày. Quý khách có thể chọn ngày cụ thể trong form đặt phòng.'}</p>
             </div>
         </div>
     </motion.article>;

@@ -4,6 +4,23 @@ import {
   mapAvailabilityRoomItem,
 } from '../mappers/roomAvailabilitySearchMapper.js';
 
+function getTodayIso() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function getTomorrowIso() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export function isAvailabilitySearch(search) {
   if (!search) return false;
   const url = typeof search === 'string' ? new URLSearchParams(search) : search;
@@ -23,8 +40,8 @@ export function parseAvailabilitySearchParams(search) {
   const keyword = url.get('city') || url.get('q') || url.get('keyword') || '';
 
   const params = {
-    check_in_date: checkIn,
-    check_out_date: checkOut,
+    check_in_date: checkIn || getTodayIso(),
+    check_out_date: checkOut || getTomorrowIso(),
     guest_count: Math.max(1, isNaN(guests) ? 2 : guests),
   };
 
