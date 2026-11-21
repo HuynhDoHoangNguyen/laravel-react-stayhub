@@ -50,6 +50,18 @@ class CatalogRepository
             || PropertyImage::query()->where('image_path', $path)->exists();
     }
 
+    public function findPublicRoom(int $id): ?Room
+    {
+        return $this->publicRoomCandidates()->with([
+            'property:id,name,type,address',
+            'roomType:id,property_id,name',
+            'images' => fn ($images) => $images->select(['id', 'room_id', 'image_path', 'is_primary'])
+                ->orderByDesc('is_primary')->orderBy('id'),
+            'amenities' => fn ($amenities) => $amenities->select(['amenities.id', 'amenities.name'])
+                ->where('amenities.status', true)->orderBy('amenities.id'),
+        ])->find($id, ['id', 'property_id', 'room_type_id', 'room_number', 'name', 'description', 'capacity', 'price_per_night']);
+    }
+
     /** Public catalog filtering; deliberately not a date-based availability query. */
     public function paginatePublicRooms(PublicRoomFilterQuery $filters): LengthAwarePaginator
     {

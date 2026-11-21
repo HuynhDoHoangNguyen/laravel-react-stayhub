@@ -10,6 +10,7 @@ use App\DTOs\Catalog\Responses\HostPropertyDetailResponse;
 use App\DTOs\Catalog\Responses\PublicPropertyDetailResponse;
 use App\DTOs\Catalog\Responses\PublicPropertyListItemResponse;
 use App\DTOs\Catalog\Responses\PublicRoomResponse;
+use App\DTOs\Catalog\Responses\PublicRoomDetailResponse;
 use App\DTOs\Catalog\Responses\PublicRoomListItemResponse;
 use App\DTOs\Catalog\Responses\PublicRoomFilterOptionsResponse;
 use App\Mappers\EloquentObjectMapper;
@@ -37,6 +38,20 @@ final class CatalogMapper
     }
 
     public function __construct(private readonly EloquentObjectMapper $objectMapper) {}
+
+    public function toPublicRoomDetail(Room $room): PublicRoomDetailResponse
+    {
+        if (!$room->relationLoaded('property')) {
+            throw new LogicException('Public room detail mapping requires a loaded property.');
+        }
+        $property = $room->getRelation('property');
+
+        return $this->objectMapper->map($room, PublicRoomDetailResponse::class, [], [
+            'room' => $this->toPublicRoom($room),
+            'property' => ['id' => $property->id, 'name' => $property->name,
+                'type' => $property->type->value, 'address' => $property->address],
+        ]);
+    }
 
     public function toPublicRoomListItem(Room $room): PublicRoomListItemResponse
     {

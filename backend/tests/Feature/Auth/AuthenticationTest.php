@@ -603,6 +603,8 @@ class AuthenticationTest extends TestCase
             ['PATCH', 'api/profile/password'],
             ['GET', 'api/profile/avatar'],
             ['POST', 'api/profile/avatar'],
+            ['GET', 'api/admin/dashboard'],
+            ['GET', 'api/admin/statistics'],
             ['GET', 'api/admin/invoices/filter-options'],
             ['GET', 'api/admin/invoices'],
             ['GET', 'api/host/invoices'],

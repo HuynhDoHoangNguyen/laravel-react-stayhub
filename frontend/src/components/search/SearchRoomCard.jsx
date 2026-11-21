@@ -14,7 +14,8 @@ export function SearchRoomCard({ room, view = 'grid', searchParams = '', isAvail
     const photos = room.images;
     const activePhoto = photoIndex % Math.max(photos.length, 1);
     const checkoutHref = `/customer/checkout?propertyId=${room.property.id}&roomId=${room.id}${searchParams ? `&${searchParams}` : ''}`;
-    const propertyHref = '/properties/' + room.property.id + (isAvailableDate && searchParams ? '?' + searchParams : '');
+    const detailParams = new URLSearchParams(isAvailableDate ? searchParams : location.search);
+    const roomHref = '/rooms/' + room.id + (detailParams.size ? '?' + detailParams.toString() : '');
     useEffect(() => {
         if (!hovered || reducedMotion || photos.length <= 1) return;
         const interval = setInterval(() => setPhotoIndex(index => (index + 1) % photos.length), 1400);
@@ -50,12 +51,12 @@ export function SearchRoomCard({ room, view = 'grid', searchParams = '', isAvail
             {room.amenities.length > 0 && <ul className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12px] text-muted-foreground">{room.amenities.map(item =>
                 <li key={item.id} className="inline-flex min-w-0 max-w-full items-start gap-1"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden /><span className="break-words">{item.name}</span></li>)}</ul>}
             <div className="mt-auto pt-4">
-                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/40 pt-4">
+                <div className={['border-t border-border/40 pt-4', isAvailableDate ? 'space-y-3' : 'flex flex-wrap items-center justify-between gap-3'].join(' ')}>
                     <div className="min-w-0"><p className="break-words text-[16px] font-semibold tracking-tight text-ink sm:text-[17px]">{currency.format(room.price_per_night)}</p><p className="text-[11.5px] text-muted-foreground">{isAvailableDate ? '/ đêm' : '/ đêm · tham khảo'}</p></div>
-                    {isAvailableDate ? <>
-                        <Link to={checkoutHref} className="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-primary px-4 py-2 text-[12.5px] font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary-mid">Đặt ngay</Link>
-                        <Link to={propertyHref} state={{ searchPage: location.search }} className="text-[12.5px] font-medium text-primary underline">Xem cơ sở</Link>
-                    </> : <Link to={propertyHref} state={{ searchPage: location.search }} className="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-primary px-4 py-2 text-[12.5px] font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary-mid">Xem cơ sở lưu trú</Link>}
+                    {isAvailableDate ? <div className="grid grid-cols-2 items-stretch gap-2">
+                        <Link to={checkoutHref} className="inline-flex min-h-10 min-w-0 items-center justify-center rounded-full bg-primary px-3 py-2 text-center text-xs font-medium leading-tight text-primary-foreground shadow-sm transition-colors hover:bg-primary-mid focus-visible:outline-2 focus-visible:outline-primary">Đặt ngay</Link>
+                        <Link to={roomHref} state={{ searchPage: location.search }} className="inline-flex min-h-10 min-w-0 items-center justify-center rounded-full border border-primary/25 bg-primary/5 px-3 py-2 text-center text-xs font-medium leading-tight text-primary shadow-sm transition-colors hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-primary">Xem chi tiết phòng</Link>
+                    </div> : <Link to={roomHref} state={{ searchPage: location.search }} className="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-primary px-4 py-2 text-[12.5px] font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary-mid">Xem chi tiết phòng</Link>}
                 </div>
                 <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">{isAvailableDate ? 'Có phòng trống trong khoảng ngày đã chọn. Giá cuối cùng được xác nhận khi đặt phòng.' : 'Chưa kiểm tra phòng trống theo ngày.'}</p>
             </div>
