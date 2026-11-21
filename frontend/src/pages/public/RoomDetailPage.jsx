@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import CatalogImage from '../../components/catalog/CatalogImage';
 import { roomService } from '../../services/roomService.js';
 import { normalizeApiError } from '../../api/apiError.js';
+import { readPropertyBooking } from '../../utils/propertyBooking.js';
+import { RoomBookingPanel } from '../../components/hotel/RoomBookingPanel.jsx';
 
 const currency = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 2 });
 
@@ -12,6 +14,8 @@ export default function RoomDetailPage() {
 }
 
 function RoomView({ roomId }) {
+    const location = useLocation();
+    const context = readPropertyBooking(location.search);
     const [state, setState] = useState({ status: 'loading', room: null, error: null });
     const [attempt, setAttempt] = useState(0);
 
@@ -41,7 +45,7 @@ function RoomView({ roomId }) {
 
     const room = state.room;
     return <div className="mx-auto max-w-[1360px] px-6 py-8 md:px-10">
-        <Link to={room ? `/properties/${room.property.id}` : '/properties'} className="text-sm font-semibold text-primary underline">
+        <Link to={room ? `/properties/${room.property.id}${location.search}` : '/properties'} state={location.state} className="text-sm font-semibold text-primary underline">
             {room ? '← Về cơ sở lưu trú' : '← Khám phá cơ sở lưu trú'}
         </Link>
         {state.status === 'loading' && <p role="status" className="py-20">Đang tải thông tin phòng...</p>}
@@ -56,7 +60,7 @@ function RoomView({ roomId }) {
         </section>}
         {state.status === 'ready' && room && <article className="mt-6 min-w-0 space-y-8">
             <header className="space-y-3">
-                <p className="text-sm text-muted-foreground">{room.property.type === 'HOTEL' ? 'Khách sạn' : 'Homestay'} · <Link className="text-primary underline" to={`/properties/${room.property.id}`}>{room.property.name}</Link></p>
+                <p className="text-sm text-muted-foreground">{room.property.type === 'HOTEL' ? 'Khách sạn' : 'Homestay'} · <Link className="text-primary underline" to={`/properties/${room.property.id}${location.search}`} state={location.state}>{room.property.name}</Link></p>
                 <h1 className="break-words font-display text-3xl text-primary md:text-4xl">{room.name}</h1>
                 <p className="break-words text-sm text-muted-foreground">{room.property.address || 'Chưa cập nhật địa chỉ'}</p>
                 <p className="break-words text-sm">Mã phòng: {room.room_number} · Loại phòng: {room.room_type.name}</p>
@@ -83,7 +87,8 @@ function RoomView({ roomId }) {
                     <h2 className="font-display text-xl text-primary">Giá tham khảo mỗi đêm</h2>
                     <p className="break-words text-2xl font-semibold text-primary">{currency.format(room.price_per_night)} <span className="text-sm font-normal text-muted-foreground">/ đêm</span></p>
                     <p className="text-sm">Sức chứa tối đa: {room.capacity.toLocaleString('vi-VN')} khách / phòng</p>
-                    <p className="text-sm leading-relaxed text-muted-foreground">Giá tham khảo mỗi đêm, chưa kiểm tra phòng trống theo ngày.</p>
+                    <p className="text-sm leading-relaxed text-muted-foreground">Giá tham khảo mỗi đêm. Tổng tiền được xác nhận tại Checkout.</p>
+                    <RoomBookingPanel room={room} context={context} />
                 </aside>
             </div>
         </article>}

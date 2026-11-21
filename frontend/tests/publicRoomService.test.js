@@ -10,6 +10,31 @@ mock.module(new URL('../src/api/axios.js', import.meta.url).href, { defaultExpor
 const { roomService, createRoomService } = await import('../src/services/roomService.js');
 test.after(() => mock.restoreAll());
 
+test('room availability uses the existing public GET with guest sum and AbortSignal', async () => {
+    const calls = [];
+    adapter = async config => { calls.push(config); return success({ success: true, data: { available: false,
+        reasons: ['CAPACITY_EXCEEDED'], blocked_ranges: [] } }, config); };
+    const signal = new AbortController().signal;
+    const context = { status: 'valid', checkIn: '2027-01-01', checkOut: '2027-01-03', adults: 2, children: 1 };
+    const result = await roomService.checkAvailability(12, context, { signal });
+    assert.deepEqual(result, { available: false, reasons: ['CAPACITY_EXCEEDED'], blockedRanges: [] });
+    assert.equal(calls[0].url, '/api/public/rooms/12/availability');
+    assert.equal(calls[0].method, 'get');
+    assert.equal(calls[0].signal, signal);
+    assert.deepEqual(calls[0].params, { check_in_date: '2027-01-01', check_out_date: '2027-01-03', guest_count: 3 });
+    await assert.rejects(roomService.checkAvailability(12, { status: 'invalid' }));
+    assert.equal(calls.length, 1);
+});
+
+test('availability preserves HTTP failures and rejects malformed success', async () => {
+    const failure = new AxiosError('Validation', 'ERR_BAD_REQUEST', undefined, undefined, { status: 422, data: { errors: { check_in_date: ['Ngày không hợp lệ.'] } } });
+    const context = { status: 'valid', checkIn: '2027-01-01', checkOut: '2027-01-03', adults: 2, children: 0 };
+    adapter = async () => { throw failure; };
+    await assert.rejects(roomService.checkAvailability(12, context), error => error === failure);
+    adapter = async config => success({ success: true, data: { available: 'true' } }, config);
+    await assert.rejects(roomService.checkAvailability(12, context), /không hợp lệ/);
+});
+
 const fixture = () => ({ data: {
     id: 12, room_number: '201', name: 'Phòng Deluxe', description: null, capacity: 2,
     price_per_night: '850000.25', room_type: { id: 3, name: 'Deluxe' },
