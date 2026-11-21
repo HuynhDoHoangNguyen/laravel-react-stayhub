@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/public/rooms', [PublicRoomController::class, 'index']);
 Route::get('/public/rooms/filter-options', [PublicRoomController::class, 'filterOptions']);
+Route::get('/public/rooms/{room}', [PublicRoomController::class, 'show']);
 
 Route::get('/public/properties', [PublicPropertyController::class, 'index']);
 Route::get('/public/properties/{property}', [PublicPropertyController::class, 'show'])->whereNumber('property');
