@@ -2,6 +2,7 @@ import api from '../api/axios.js';
 import { createAdminDashboardApi } from '../api/adminDashboardApi.js';
 import { normalizeApiError } from '../api/apiError.js';
 import { isDashboardDecimal, mapAdminDashboardResponse } from '../mappers/adminDashboardMapper.js';
+import { formatVnd } from '../utils/formatVnd.js';
 
 export function createAdminDashboardService(dashboardApi) {
   return {
@@ -14,15 +15,10 @@ const service = createAdminDashboardService(createAdminDashboardApi(api));
 export const getAdminDashboard = (options = {}) => service.getOverview(options);
 export const parseDashboardError = normalizeApiError;
 
-const moneyFormat = new Intl.NumberFormat('vi-VN', {
-  style: 'currency', currency: 'VND', minimumFractionDigits: 2, maximumFractionDigits: 2,
-});
-/** Presentation only: preserve all integer digits and the stored decimal cents. */
+/** Presentation only: round whole dong without changing the source decimal or chart values. */
 export function formatDashboardRevenue(amount) {
   if (!isDashboardDecimal(amount)) throw new TypeError('Giá trị doanh thu không hợp lệ.');
-  const [whole, fraction] = amount.split('.');
-  return moneyFormat.formatToParts(BigInt(whole))
-    .map((part) => part.type === 'fraction' ? fraction : part.value).join('');
+  return formatVnd(amount);
 }
 
 /** Percent widths for presentation only; raw decimal amounts are never converted to Number. */

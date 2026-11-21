@@ -30,6 +30,7 @@ final class GlobalExceptionHandler
     ];
 
     private const ROUTES = [
+        'admin.statistics.show',
         'admin.dashboard.show',
         'admin.invoices.index',
         'admin.invoices.filter-options',

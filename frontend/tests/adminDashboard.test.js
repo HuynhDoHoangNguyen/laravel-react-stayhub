@@ -58,10 +58,15 @@ test('empty data is zero, malformed data is a contract error', () => {
   for (const value of [null, [], {}, { data: null }]) assert.throws(() => mapAdminDashboardResponse(value));
 });
 
-test('large decimal and fractional VND formatting preserve every digit', () => {
-  assert.equal(formatDashboardRevenue('9007199254740993.01'), '9.007.199.254.740.993,01\u00a0₫');
-  assert.equal(formatDashboardRevenue('0.00'), '0,00\u00a0₫');
-  assert.equal(formatDashboardRevenue('19999999999.98'), '19.999.999.999,98\u00a0₫');
+test('whole VND display rounds exactly while mapped decimal amounts remain unchanged', () => {
+  assert.equal(formatDashboardRevenue('9007199254740993.01'), '9.007.199.254.740.993\u00a0₫');
+  assert.equal(formatDashboardRevenue('9007199254740993.50'), '9.007.199.254.740.994\u00a0₫');
+  assert.equal(formatDashboardRevenue('0.00'), '0\u00a0₫');
+  assert.equal(formatDashboardRevenue('19999999999.98'), '20.000.000.000\u00a0₫');
+  assert.equal(formatDashboardRevenue('300.76'), '301\u00a0₫');
+  const value = body();
+  assert.equal(mapAdminDashboardResponse(value).summary.revenue_total, '19999999999.98');
+  assert.equal(value.data.summary.revenue_total, '19999999999.98');
   for (const value of [null, 10, 'invalid']) assert.throws(() => formatDashboardRevenue(value));
 });
 

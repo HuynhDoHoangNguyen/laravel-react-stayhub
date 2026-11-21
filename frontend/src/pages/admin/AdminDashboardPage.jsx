@@ -48,7 +48,7 @@ function Dashboard({ user, captureAuth, isAuthCurrent }) {
     setRevision((value) => value + 1);
   }
 
-  return <section className="uc47-dashboard min-w-0 space-y-6" aria-labelledby="dashboard-title" aria-busy={loading}>
+  return <section className="admin-dashboard min-w-0 space-y-6" aria-labelledby="dashboard-title" aria-busy={loading}>
     <header className="flex flex-wrap items-start justify-between gap-4">
       <div><h1 id="dashboard-title" className="text-2xl font-bold">Tổng quan hệ thống</h1>
         <p className="mt-2 text-muted-foreground">Toàn thời gian · Dữ liệu toàn hệ thống, gồm mọi trạng thái tài khoản và tài nguyên.</p></div>
@@ -64,12 +64,12 @@ function Dashboard({ user, captureAuth, isAuthCurrent }) {
       {result && <div className="space-y-5">
         <p className="flex items-center gap-2 text-xs text-muted-foreground"><Clock3 size={14} className="shrink-0" aria-hidden="true" />Cập nhật lúc {dateFormat.format(new Date(result.generated_at))} (giờ Việt Nam).</p>
         <dl className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {metrics.map(([field, label, Icon, tone]) => <div key={field} data-tone={tone} className={`uc47-metric${field === 'revenue_total' ? ' uc47-metric-revenue' : ''}`}>
-            <dt className="uc47-metric-top"><span className="text-sm text-muted-foreground">{label}</span><span className="uc47-metric-icon"><Icon size={21} aria-hidden="true" /></span></dt>
+          {metrics.map(([field, label, Icon, tone]) => <div key={field} data-tone={tone} className={`admin-dashboard__metric${field === 'revenue_total' ? ' admin-dashboard__metric--revenue' : ''}`}>
+            <dt className="admin-dashboard__metric-top"><span className="text-sm text-muted-foreground">{label}</span><span className="admin-dashboard__metric-icon"><Icon size={21} aria-hidden="true" /></span></dt>
             <dd className="mt-4 break-words text-3xl font-semibold tracking-tight tabular-nums [overflow-wrap:anywhere]">
               {field === 'revenue_total' ? formatDashboardRevenue(result.summary[field]) : countFormat.format(result.summary[field])}
-              <div className="uc47-metric-footer">{field === 'revenue_total'
-                ? <Link className="uc47-dashboard-link" to="/admin/invoices">Xem hóa đơn <ArrowUpRight size={15} aria-hidden="true" /></Link>
+              <div className="admin-dashboard__metric-footer">{field === 'revenue_total'
+                ? <Link className="admin-dashboard__link" to="/admin/invoices">Xem hóa đơn <ArrowUpRight size={15} aria-hidden="true" /></Link>
                 : 'Toàn hệ thống · Mọi trạng thái'}</div>
             </dd>
           </div>)}
