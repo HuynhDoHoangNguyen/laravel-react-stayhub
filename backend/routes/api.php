@@ -20,3 +20,4 @@ require __DIR__ . '/api/reviews.php';
 require __DIR__ . '/api/profile.php';
 require __DIR__ . '/api/catalog.php';
 require __DIR__ . '/api/agreements.php';
+require __DIR__ . '/api/commissions.php';

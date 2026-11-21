@@ -39,6 +39,7 @@ import HostInvoiceListPage from '../pages/host/HostInvoiceListPage';
 import HostInvoiceDetailPage from '../pages/host/HostInvoiceDetailPage';
 import HostInvoiceCreationPage from '../pages/host/HostInvoiceCreationPage';
 import HostReviewsPage from '../pages/host/HostReviewsPage';
+import HostCommissionsPage from '../pages/host/HostCommissionsPage';
 
 import AdminDashboardPage from '../pages/admin/AdminDashboardPage';
 import AdminInvoiceListPage from '../pages/admin/AdminInvoiceListPage';
@@ -95,6 +96,7 @@ function AppRouter() {
                     <Route path="invoices/:invoiceId" element={<HostInvoiceDetailPage />} />
                     <Route path="bookings/:bookingId/create-invoice" element={<HostInvoiceCreationPage />} />
                     <Route path="invoices/create" element={<HostInvoiceCreationPage />} />
+                    <Route path="commissions" element={<HostCommissionsPage />} />
                     <Route path="reviews" element={<HostReviewsPage />} />
                 </Route>
             </Route>
