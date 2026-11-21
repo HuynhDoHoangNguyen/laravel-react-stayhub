@@ -11,6 +11,7 @@ import LoginPage from '../pages/public/LoginPage';
 import SearchResultsPage from '../pages/public/SearchResultsPage';
 import PropertyDetailPage from '../pages/public/PropertyDetailPage';
 import PropertiesPage from '../pages/public/PropertiesPage';
+import RoomDetailPage from '../pages/public/RoomDetailPage';
 import ApiTestPage from '../pages/public/ApiTestPage';
 import LoginTestPage from '../pages/public/LoginTestPage';
 
@@ -53,6 +54,7 @@ function AppRouter() {
                 <Route path="/search" element={<SearchResultsPage />} />
                 <Route path="/properties" element={<PropertiesPage />} />
                 <Route path="/properties/:propertyId" element={<PropertyDetailPage />} />
+                <Route path="/rooms/:roomId" element={<RoomDetailPage />} />
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/api-test" element={<ApiTestPage />} />
                 {/* Cổng test chỉ khả dụng trong môi trường development, không xuất hiện ở production */}

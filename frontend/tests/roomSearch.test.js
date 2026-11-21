@@ -221,14 +221,14 @@ test('refinement field errors survive the real API and loader for both input pan
 });
 
 // Compile production JSX with the project's Vite config; these are SSR checks, not browser interaction tests.
-async function renderSearch(component, props) {
+async function renderSearch(component, props, entry = '/search') {
     if (!uiServer) {
         const { createServer } = await import('vite');
         uiServer = await createServer({ root: fileURLToPath(new URL('..', import.meta.url)), logLevel: 'error',
             server: { middlewareMode: true, hmr: false, watch: null } });
     }
     const module = await uiServer.ssrLoadModule('/src/components/search/' + component + '.jsx');
-    return renderToStaticMarkup(createElement(MemoryRouter, null, createElement(module[component], props)));
+    return renderToStaticMarkup(createElement(MemoryRouter, { initialEntries: [entry] }, createElement(module[component], props)));
 }
 
 test('restored room card renders real room facts, property rating and a safe image placeholder', async () => {
@@ -237,7 +237,8 @@ test('restored room card renders real room facts, property rating and a safe ima
     for (const text of ['Fixture room', 'Fixture property', 'Suite', 'Wifi', '2 đánh giá cơ sở', 'khách / phòng', 'Chưa có ảnh']) {
         assert.ok(markup.includes(text), text);
     }
-    assert.match(markup, /href="\/properties\/2"/);
+    assert.match(markup, /href="\/rooms\/3"/);
+    assert.ok(markup.includes('Xem chi tiết phòng'));
     assert.ok(markup.includes('100,25'));
     assert.ok(!markup.includes('unsplash.com'));
     assert.ok(!markup.includes('Lưu yêu thích'));
@@ -337,12 +338,30 @@ test('availability cards forward selected room, dates and guests to checkout whi
     assert.equal(url.searchParams.get('roomId'), '3');
     assert.equal(url.searchParams.get('propertyId'), '2');
     for (const [key, value] of new URLSearchParams(query)) assert.equal(url.searchParams.get(key), value);
+    const roomHref = html.match(/href="(\/rooms\/3\?[^"]+)"/)[1].replaceAll('&amp;', '&');
+    const detail = new URL(roomHref, url);
+    for (const [key, value] of new URLSearchParams(query)) assert.equal(detail.searchParams.get(key), value);
+    assert.ok(html.includes('Xem chi tiết phòng'));
+    assert.ok(!html.includes('Xem cơ sở'));
     assert.ok(!html.includes('Chưa kiểm tra phòng trống'));
     const catalog = await renderSearch('ResultsGrid', { rooms: [room], isLoading: false, searchParams: query });
     assert.ok(!catalog.includes('/customer/checkout'));
     assert.ok(catalog.includes('Chưa kiểm tra phòng trống'));
     const loading = await renderSearch('ResultsGrid', { rooms: [room], isLoading: true, isAvailableDate: true, searchParams: query });
     assert.ok(!loading.includes('/customer/checkout'));
+});
+
+test('catalog room links preserve URL criteria without enabling checkout and property cards still link to properties', async () => {
+    const room = mapRoomSearchPage(page).data[0];
+    const query = 'guest_count=3&min_price=0.00&amenity_ids[]=7&page=2';
+    const html = await renderSearch('SearchRoomCard', { room }, '/search?' + query);
+    const href = html.match(/href="(\/rooms\/3\?[^"]+)"/)[1].replaceAll('&amp;', '&');
+    const detail = new URL(href, 'https://example.test');
+    for (const [key, value] of new URLSearchParams(query)) assert.equal(detail.searchParams.get(key), value);
+    assert.ok(!html.includes('/customer/checkout'));
+    assert.ok(!html.includes('Xem cơ sở lưu trú'));
+    const property = await renderSearch('SearchPropertyCard', { property: { id: 2, name: 'Cơ sở thật', propertyType: 'HOTEL', price: null, averageRating: null, reviewCount: 0, photos: [] } });
+    assert.match(property, /href="\/properties\/2"/);
 });
 
 test('newest sorting is offered consistently only for availability and metadata tolerates missing from/to', async () => {

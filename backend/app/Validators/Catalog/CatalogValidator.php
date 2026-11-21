@@ -24,6 +24,7 @@ use App\DTOs\Catalog\Requests\UploadHostPropertyImageRequest;
 use App\DTOs\Catalog\Requests\HostPropertyImageRequest;
 use App\Models\User;
 use App\DTOs\Catalog\Requests\PublicPropertyDetailQuery;
+use App\DTOs\Catalog\Requests\PublicRoomDetailQuery;
 use App\DTOs\Catalog\Requests\PublicPropertyListQuery;
 use App\DTOs\Catalog\Requests\PublicPropertyListInputRequest;
 use App\Validators\AttributeValidator;
@@ -491,6 +492,24 @@ final class CatalogValidator
             page: (int) $raw->page,
             perPage: (int) $raw->per_page,
         );
+    }
+
+    public function validatePublicRoomDetail(string $room, array $query): ?PublicRoomDetailQuery
+    {
+        $validator = $this->validation->make($query, []);
+        $validator->after(static function (Validator $validator) use ($query): void {
+            foreach (array_keys($query) as $field) {
+                $validator->errors()->add($field, 'Chi tiết phòng không nhận tham số truy vấn hoặc kiểm tra phòng trống theo ngày.');
+            }
+        });
+        $validator->validate();
+
+        if (preg_match('/\A[1-9][0-9]*\z/', $room) !== 1) {
+            return null;
+        }
+        $id = filter_var($room, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+
+        return $id === false ? null : new PublicRoomDetailQuery($id);
     }
 
     public function validatePublicPropertyDetail(string $property, array $query): ?PublicPropertyDetailQuery
