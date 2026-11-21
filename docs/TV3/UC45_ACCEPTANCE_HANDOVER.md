@@ -1,8 +1,8 @@
 # UC45 — Hồ sơ đối chiếu nghiệm thu và bàn giao
 
-Ngày tổng hợp: 2026-11-18 (Asia/Bangkok). Owner: TV3. Task: **UC45-CLOSE-01**.
+Biên tập: 2026-11-21 (Asia/Bangkok); tổng hợp/owner nghiệm thu gốc: 2026-11-18. Owner: TV3. Task: **UC45-CLOSE-01**.
 
-**Trạng thái:** TECHNICAL PASS; owner đã nghiệm thu UC45-CLOSE-01 và quyết định đóng toàn UC45 trong phạm vi TV3 bên dưới ngày 2026-11-18. Các task thành phần đã được owner nghiệm thu; nguồn UI thủ công và các giới hạn vẫn giữ nguyên.
+**UC45 CLOSED TV3 — TECHNICAL PASS / OWNER ACCEPTED.** Các task thành phần đã nghiệm thu; UI thủ công theo owner, giữ giới hạn §8. Bản biên tập không bổ sung runtime evidence.
 
 ## 1. Baseline và phạm vi
 
@@ -63,11 +63,9 @@ Thông tin hiển thị khách/cơ sở/phòng dùng snapshot Invoice; lọc own
 | UC45-AC10 | Không mutation nghiệp vụ; hồi quy Host/Customer và cleanup | Business/dev fingerprints, privacy404 API; runner cleanup; owner cleanup | PASS tự động + owner |
 | UC45-AC11 | Cấu hình chung và bảo vệ secrets trong phạm vi test | ENV-ROOT-01A/B, process overrides, HTTP env và bundle canary | PASS tự động + owner |
 
-AC được tổng hợp để truy vết scope đã duyệt, không bổ sung yêu cầu mới. UI owner-reported không phải agent tự quan sát và không bị thay bằng test service/API.
+AC truy vết scope đã duyệt, không thêm yêu cầu; UI owner-reported tách khỏi API/service tests.
 
 ## 5. Hồ sơ kiểm thử đã có — không phải vừa chạy lại tại CLOSE-01
-
-Tất cả mốc dưới đây được tổng hợp ngày 2026-11-18; kết quả chỉ áp dụng baseline và phạm vi đã ghi.
 
 | Gate | Kết quả và môi trường | Nguồn evidence local ignored |
 | --- | --- | --- |
@@ -83,8 +81,10 @@ Các file kết quả lịch sử có thể còn trạng thái pending tại th�
 
 ## 6. Đối chiếu baseline tại CLOSE-01
 
-- 331 file core thuộc backend/app, backend/routes, backend/database và frontend/src trong baseline QA-API khớp SHA256 hiện tại.
-- Thay đổi loader/config root sau QA-API đã được bao phủ bởi lần hồi quy MySQL/API sau ENV-ROOT-01; protected-after của lần đó khớp hiện tại ngoại trừ checklist tiến độ.
+Các từ “hiện tại/khớp” trong checkpoint này chỉ filesystem ngày CLOSE-01 (2026-11-18), không phải source tại lần đọc hồ sơ.
+
+- 331 file core thuộc backend/app, backend/routes, backend/database và frontend/src khớp SHA256 baseline QA-API tại CLOSE-01.
+- Thay đổi loader/config root sau QA-API đã được bao phủ bởi lần hồi quy MySQL/API sau ENV-ROOT-01; protected-after của lần đó khớp source tại CLOSE-01 ngoại trừ checklist tiến độ.
 - Baseline đầy đủ của browser C (gồm file untracked và root env) khớp trước CLOSE-01 ngoại trừ checklist được cập nhật nghiệm thu.
 - Runner API đổi trong QA-API theo scope đã ghi; không giả định nó phải khớp snapshot trước khi triển khai chính task QA-API.
 - CLOSE-01 chỉ sửa ba file tài liệu theo scope; không chạy database, runner, lint/build hoặc toàn bộ test suite lại vì không có thay đổi implementation cần hồi quy. Kiểm tra mới là hash, liên kết, nội dung và Git diff/scope.
@@ -132,4 +132,4 @@ Frontend logic test, nếu cần chạy lại sau thay đổi source: `node --ex
 
 ## 9. Quyết định nghiệm thu
 
-UC45-CLOSE-01: **TECHNICAL PASS và OWNER ACCEPTED**. Owner đã chỉ thị rõ trên chat ngày 2026-11-18: nghiệm thu UC45-CLOSE-01 và đóng UC45 phạm vi TV3. Checklist toàn UC45 được đánh dấu đã nghiệm thu theo phạm vi và giới hạn trong hồ sơ này. Không commit/push/merge hoặc mở PR trong task này.
+Owner nghiệm thu UC45-CLOSE-01 và đóng **UC45 phạm vi TV3** trên chat ngày 2026-11-18, theo phạm vi/giới hạn hồ sơ này. [Checklist](TV3_CHECKLIST.md) giữ trạng thái hiện hành; nghiệm thu không xác nhận commit/push/merge hoặc mở PR.

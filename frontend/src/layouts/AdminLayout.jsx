@@ -32,6 +32,7 @@ import {
 
 const ADMIN_NAV = [
   { to: "/admin", label: "Tổng quan", icon: ConsoleIcon, exact: true },
+  { to: "/admin/statistics", label: "Thống kê hệ thống", icon: ConsoleIcon },
   { to: "/admin/users", label: "Người dùng", icon: UsersIcon },
   { to: "/admin/properties", label: "Cơ sở lưu trú", icon: HotelIcon },
   { to: "/admin/bookings", label: "Đơn đặt phòng", icon: BookingsIcon },

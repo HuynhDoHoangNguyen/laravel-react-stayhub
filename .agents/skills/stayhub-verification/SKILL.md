@@ -21,7 +21,7 @@ Use independent expected values and negative controls where they establish actua
 
 ## Task Result on chat
 
-State Task ID, goal, technical status and owner acceptance separately. Use these seven parts:
+State Task ID, goal, technical status and owner acceptance separately. Use these eight parts:
 
 1. Implemented or verified Backend and Frontend outcomes.
 2. Files changed with exact paths, actions and deviations.
@@ -29,6 +29,7 @@ State Task ID, goal, technical status and owner acceptance separately. Use these
 4. Business and contract fidelity from code and observed behavior.
 5. Acceptance criteria checklist with status and evidence per ID.
 6. Remaining risks, dependencies and deviations.
-7. One proposed next task. Wait for its own scope.
+7. Skills used: name and link each skill actually applied, and state its concrete contribution to the task. Distinguish skills read only for reference from skills applied; do not present available or merely mentioned skills as used. If no skill was applied, say so.
+8. One proposed next task. Wait for its own scope.
 
 Use TECHNICAL PASS when every mandatory AC has supporting evidence. Mark an item closed only when its required checks passed and the owner accepted that scope. Keep refactor approval and use-case closure distinct. Update authorized checklists with evidence and remaining action. Report Mini Plan and Task Result on chat.
