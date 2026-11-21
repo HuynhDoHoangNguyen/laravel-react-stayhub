@@ -30,6 +30,7 @@ final class GlobalExceptionHandler
     ];
 
     private const ROUTES = [
+        'host.dashboard.show',
         'admin.statistics.show',
         'admin.dashboard.show',
         'admin.invoices.index',
@@ -67,6 +68,12 @@ final class GlobalExceptionHandler
         }
 
         if ($exception instanceof AppException) {
+            // This endpoint accepts arbitrary decoded field names, including "0".
+            // Preserve a JSON object even when PHP represents those names as integer keys.
+            if ($request->routeIs('host.dashboard.show') && $exception->errors !== []) {
+                return response()->json(['message' => $exception->getMessage(), 'code' => $exception->errorCode,
+                    'errors' => (object) $exception->errors], $exception->status);
+            }
             return ApiResponse::error(
                 $exception->getMessage(), $exception->errorCode, $exception->status, $exception->errors,
             );

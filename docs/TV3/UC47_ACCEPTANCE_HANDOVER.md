@@ -1,11 +1,17 @@
 # UC47 — Nghiệm thu và bàn giao
 
-Cập nhật hồ sơ: 2026-11-20; kết quả nghiệm thu gốc ngày2026-11-18. Baseline gốc `feature/tv3-uc47-admin-dashboard`, HEAD `5001a61` cộng working tree đã nghiệm thu; không dùng gói HEAD-only thay baseline.
+Biên tập: 2026-11-21 (Asia/Bangkok); nghiệm thu gốc: 2026-11-18. Baseline gốc `feature/tv3-uc47-admin-dashboard`, HEAD `5001a61` cộng working tree đã nghiệm thu; không dùng gói HEAD-only thay baseline.
 **UC47 ACCEPTED / CLOSED phạm vi TV3 đã thống nhất.** ENV/FIX/CORE/CHART/QA-01A/QA-01B theo phạm vi điều chỉnh/QA-01C/UI-01 đều đã được owner nghiệm thu. Screen reader thực **NOT VERIFIED, được owner loại khỏi phạm vi**, không PASS/WCAG compliance. Không xác nhận commit/push/merge/deploy từ nghiệm thu.
 
 ## Contract dashboard hiện hành
 
-GET `/api/admin/dashboard`, ADMIN ACTIVE, cookie/session Sanctum. Response `data` gồm summary (users/hosts/properties/rooms/bookings counts và revenue_total), excluded_paid_invoices_count, generated_at UTC, booking_status_counts đủ sáu trạng thái, revenue_by_month đủ 12 tháng, report_timezone Asia/Ho_Chi_Minh.
+| Thành phần | Contract |
+| --- | --- |
+| Endpoint / quyền | `GET /api/admin/dashboard`; ADMIN ACTIVE; Sanctum cookie/session |
+| Envelope | `data` |
+| Summary | users/hosts/properties/rooms/bookings counts và revenue_total |
+| Metadata | excluded_paid_invoices_count, generated_at UTC, report_timezone Asia/Ho_Chi_Minh |
+| Charts | booking_status_counts đủ sáu trạng thái; revenue_by_month đủ 12 tháng |
 
 KPI toàn thời gian, mọi trạng thái tài nguyên hiện tồn tại. Doanh thu từ PAID có paid_at; loại UNPAID/REFUNDED/PAID thiếu ngày. Biểu đồ theo paid_at ở tháng hiện tại và 11 tháng trước, cutoff generated_at. Tổng 12 tháng không thay KPI toàn thời gian; refund hiện tại có thể đổi tổng lịch sử. Không mutation nghiệp vụ, không live payment hoặc workflow Booking TV2 trong QA này.
 
@@ -28,13 +34,13 @@ Populated PAID 100.25 ở tháng trước, 200.50 ở đầu tháng hiện tại
 
 | Checkpoint | Kết quả / nguồn |
 | --- | --- |
-| QA-01A | Unit49/105; fullSQLite1487passed/102skipped/7298assertions;4positive HTTP scenarios215status assertions/16oracle comparisons; hai expected negatives Prepare/Ready exit1 |
-| QA-01B/FIX-01 | F-B01 focus trap/Escape/overlay và F-B02 nhãn tiếng Việt đã sửa/tái kiểm; Populated/Zero/NoRevenue/Large, desktop/mobile/keyboard evidence tách owner phần zoom. Node184/lint/buildexit0 |
+| QA-01A | Unit49/105; fullSQLite1487 passed/102 skipped/7298 assertions;4 positive HTTP scenarios215status assertions/16 oracle comparisons; hai expected negatives Prepare/Ready exit 1 |
+| QA-01B/FIX-01 | F-B01 focus trap/Escape/overlay và F-B02 nhãn tiếng Việt đã sửa/tái kiểm; Populated/Zero/NoRevenue/Large, desktop/mobile/keyboard evidence tách owner phần zoom. Node 184/lint/buildexit0 |
 | NATIVE-01 | Owner xác nhận zoom200%/keyboard đạt; screen reader miễn. Run `cf640cbf69464ee7a2554904ab9f987c` passed=false do còn session khi stop, cleanup0/0/0/null; không phải manual PASS mới |
-| QA-01C | SQLite1487passed/102skipped/7298assertions; MySQL66passed/185assertions run `b7fa18d6d73c41a7a65657d11b4011a9`; Node184/lint/buildexit0; C04–C08 và cleanup UI theo owner |
-| UI-01 | Node184passed/0failed/skipped; lint0errors/3FastRefresh warnings; buildexit0/chunk>500kB; SSR4/4fixtures. UI01–UI06 PASS theo owner, không có ảnh/Network/viewport mới gửi kèm |
+| QA-01C | SQLite 1487 passed/102 skipped/7298 assertions; MySQL 66 passed/185 assertions run `b7fa18d6d73c41a7a65657d11b4011a9`; Node 184/lint/buildexit0; C04–C08 và cleanup UI theo owner |
+| UI-01 | Node 184 passed/0 failed/skipped; lint0errors/3FastRefresh warnings; buildexit0/chunk>500kB; SSR4/4fixtures. UI01–UI06 PASS theo owner, không có ảnh/Network/viewport mới gửi kèm |
 
-Runtime QA: MySQL Docker8.4.13/loopback3307, PHP XAMPP8.2.12; schema `stayhub_uc47_test_<guid>`, user `uc47_<run-prefix>` mới, database session/cookie/CSRF/CORS thật, migrate schema rỗng không seed dev. QA-01A chỉ HTTP cookie jar/CLI, readiness/source transform không chứng minh React render.
+Runtime QA: MySQL Docker 8.4.13/loopback3307, PHP XAMPP8.2.12; schema `stayhub_uc47_test_<guid>`, user `uc47_<run-prefix>` mới, database session/cookie/CSRF/CORS thật, migrate schema rỗng không seed dev. QA-01A chỉ HTTP cookie jar/CLI, readiness/source transform không chứng minh React render.
 
 | Scenario / run và verdict lịch sử |
 | --- |
@@ -51,8 +57,15 @@ Runtime QA: MySQL Docker8.4.13/loopback3307, PHP XAMPP8.2.12; schema `stayhub_uc
 | Root: `pwsh -NoProfile -File backend/tests/Support/RunUc47MySqlTests.ps1 -Provision` — exit 0; 66 passed, 185 assertions. MySQL Docker qua runner schema/user riêng; run `b7fa18d6d73c41a7a65657d11b4011a9`. |
 
 Run IDs và verdict gốc được giữ; negative/intermediate không đổi thành PASS.
-Positive runs đã ghi business9tables/dev/source/env hashes khớp,authenticated sessions0/processes exited/ports released/schema-user-connections0/0/0. Negative controls cleanup đạt không làm test thành positive. Lease-expiry/hardkill/Dockeroutage/portcollision/performance/load và mọi identity fallback chưa được chứng minh.
+Positive runs đã ghi business9 tables/dev/source/env hashes khớp,authenticated sessions 0/processes exited/ports released/schema-user-connections0/0/0. Negative controls cleanup đạt không làm test thành positive. Lease-expiry/hardkill/Dockeroutage/portcollision/performance/load và mọi identity fallback chưa được chứng minh.
 
+### Run provenance bổ sung — lịch sử
+
+Ngày 2026-11-18, **PARTIAL; không phải TECHNICAL PASS**. Run `685296bf324342bf900c24bee3fff55e`, Populated, React/Vite và Laravel thật trên loopback, database session ở schema MySQL QA riêng. Dùng ChatGPT in-app browser trong context của task, ban đầu không có tab; không điều khiển cửa sổ Brave của người dùng. Login/logout thực hiện qua UI, không inject session/token.
+
+Evidence local ignored `.agent-workspace/tv3/uc47-qa-01b/`: `browser-result.json`, baseline hashes, desktop/tablet/mobile JPEG, DOM snapshots theo actor và keyboard/focus JSON. Harness audit ở `.agent-workspace/tv3/uc47-qa-01a/685296bf324342bf900c24bee3fff55e/` gồm result, business/session snapshots, fingerprint và cleanup. Đề xuất xử lý findings ở thời điểm run này đã được tiếp nối bằng FIX/NATIVE/QA-01C; không còn là việc chờ thực hiện. Verdict run gốc vẫn PARTIAL.
+
+Run Large thử trước `c7b5dae9b1724b8cb4784f64b76ef4a9` hết lease trong gián đoạn: result passed false, failure lease expired, cleanup_failure null; process/port/schema/user/connections đã cleanup. Giữ evidence lịch sử, không cộng vào positive matrix hoặc nói audit sau browser đạt cho run này. Sau đó bổ sung guard loại BODY/HTML và chạy lại trên source cuối như bảng trên.
 
 ### QA-01B — cases lịch sử trước cập nhật owner
 
@@ -86,7 +99,7 @@ Positive runs đã ghi business9tables/dev/source/env hashes khớp,authenticate
 | B16/B17 — bàn phím | PASS — owner xác nhận thủ công, bổ sung evidence FIX trước | Owner báo kiểm tra bàn phím ổn. Không ghi thành một lượt automation hoặc tái chạy toàn bộ ma trận focus. |
 | B18 — screen reader thực | NOT VERIFIED — loại khỏi phạm vi nghiệm thu theo yêu cầu owner | Chưa nghe/kiểm đầu ra screen reader; không ghi PASS, không yêu cầu kiểm tiếp trong task này. Evidence nhãn/semantics trước đó vẫn giữ nguyên; không tuyên bố WCAG compliance. |
 
-Trạng thái hiện hành áp dụng bổ sung FIX/NATIVE/QA-01C bên dưới; PARTIAL/NOT VERIFIED gốc không đổi thành runtime PASS.
+Các bổ sung FIX/NATIVE/QA-01C cập nhật kết luận nghiệm thu, không đổi PARTIAL/NOT VERIFIED gốc thành runtime PASS.
 
 ## AC và UI hiện hành
 
@@ -130,15 +143,7 @@ QA-01B B12/B14/B16/B17 đã tái kiểm sau FIX; B18 semantics/nhãn PASS nhưng
 - AdminDashboardPage: sáu KPI/icon/card/hover/timestamp; hai link Invoice thực tới `/admin/invoices`, không giả link/filter cho UC chưa triển khai.
 - AdminDashboardCharts và CSS prefixuc47: sáu cột,12điểm/tháng, keyboard/aria-pressed, hai bảng native details/headers; responsive/focus-visible/reducedmotion. Tỷ lệ từ BigInt hiện có, tiền gốc decimal string/formatVND, không float tiền hoặc thêm dependency.
 - HTTP/feature500 là fault giả lập; Node là mocked transport; SSR là in-memory render, không DB/API/browser. Manual owner không suy thành mọi fixture Zero/Large đã browser-recheck.
-- Ba warnings FastRefresh và bundle>500kB lịch sử còn ghi nhận; không còn finding bắt buộc mở trong phạm vi đã thống nhất. Không mở rộng sang UC44/UC48 hay mutation Booking production TV2.
-
-### Run provenance bổ sung — lịch sử
-
-Ngày 2026-11-18, **PARTIAL; không phải TECHNICAL PASS**. Run `685296bf324342bf900c24bee3fff55e`, Populated, React/Vite và Laravel thật trên loopback, database session ở schema MySQL QA riêng. Dùng ChatGPT in-app browser trong context của task, ban đầu không có tab; không điều khiển cửa sổ Brave của người dùng. Login/logout thực hiện qua UI, không inject session/token.
-
-Evidence local ignored `.agent-workspace/tv3/uc47-qa-01b/`: `browser-result.json`, baseline hashes, desktop/tablet/mobile JPEG, DOM snapshots theo actor và keyboard/focus JSON. Harness audit ở `.agent-workspace/tv3/uc47-qa-01a/685296bf324342bf900c24bee3fff55e/` gồm result, business/session snapshots, fingerprint và cleanup. Đề xuất tiếp theo: Mini Plan xử lý findings và hoàn tất phần QA-01B còn thiếu, chờ scope/approval riêng; chưa chuyển QA-01C.
-
-Run Large thử trước `c7b5dae9b1724b8cb4784f64b76ef4a9` hết lease trong gián đoạn: result passed false, failure lease expired, cleanup_failure null; process/port/schema/user/connections đã cleanup. Giữ evidence lịch sử, không cộng vào positive matrix hoặc nói audit sau browser đạt cho run này. Sau đó bổ sung guard loại BODY/HTML và chạy lại trên source cuối như bảng trên.
+- Ba warnings FastRefresh và bundle>500kB lịch sử còn ghi nhận; không còn finding bắt buộc mở trong phạm vi đã thống nhất. UC44/UC48 và mutation Booking production TV2 nằm ngoài phạm vi nghiệm thu UC47; UC48 đã đóng theo [hồ sơ riêng](UC48_ACCEPTANCE_HANDOVER.md).
 
 ## Nguồn evidence và tái kiểm khi được giao
 
@@ -160,4 +165,4 @@ Mặc định probe xong tự cleanup. `-KeepAlive -MaxMinutes 30` cho task brow
 
 Không sửa source/env/docs lúc runner còn giữ fingerprint; không chạy full suite với browser overrides. Nếu Docker/ports/cache sai thì dừng/báo, không tự start/recreate container/xóa cache/volume. Kiểm result, session/business/dev/source hashes, process/port và schema/user/connections cleanup của đúng run. Không ghi cookie/token/password.
 
-QA-01C/UI tái kiểm cần plan riêng theo C01–C09/UI01–UI07, ghi đúng nguồn quan sát. Lần dọn hồ sơ này chỉ đọc/gom tài liệu, không chạy QA/CI/remote/DB. Trạng thái tổng tại [checklist](TV3_CHECKLIST.md).
+Tái kiểm QA-01C/UI cần plan riêng theo C01–C09/UI01–UI07 và ghi đúng nguồn quan sát. Quy tắc evidence/tài liệu tại [README](README.md#quy-tắc-sử-dụng-evidence); trạng thái tổng tại [checklist](TV3_CHECKLIST.md). Lần biên tập này không chạy QA/CI/remote/DB.

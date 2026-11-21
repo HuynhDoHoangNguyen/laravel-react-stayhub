@@ -1,40 +1,43 @@
-# Tài liệu TV3
+# Tài liệu TV3 — Hướng dẫn tra cứu
 
-**14/18 UC CLOSED phạm vi TV3**, không phải end-to-end toàn hệ thống. Đọc checklist để biết tiến độ, ma trận để truy evidence/fixture/UI; contract riêng ở hồ sơ tương ứng.
+Cập nhật 2026-11-21 (Asia/Bangkok). **15/18 UC CLOSED TV3**; còn UC17/44/61. FAQ Management và Chat History nằm ngoài số đếm 18 UC. Trạng thái này không phải nghiệm thu end-to-end toàn hệ thống.
 
-**UC48 CLOSED TV3:** owner đã nghiệm thu UC48-CLOSE-01 trên chat ngày 2026-11-20, đủ 8/8 task và hai task bổ sung ADMIN-CSS-NAMING-01/ADMIN-VND-DISPLAY-01. Còn UC17/39/44/61; FAQ Management và Chat History ngoài số đếm 18 UC. Chưa triển khai UC tiếp theo.
+## Đọc tài liệu nào?
 
-| File giữ lại | Nội dung |
+| Nhu cầu | Hồ sơ chính |
 | --- | --- |
-| [TV3_CHECKLIST.md](TV3_CHECKLIST.md) | 18UC, FAQ/History, trạng thái hiện hành, việc còn lại và T01–T03 |
-| [TV3_FUNCTIONAL_ACCEPTANCE_MATRIX.md](TV3_FUNCTIONAL_ACCEPTANCE_MATRIX.md) | Nghiệm thu10UC; AC, run ledger,74UIchecks,fixture/oracle và hướng dẫn QA chung |
-| [BASELINE_HANDOVER.md](BASELINE_HANDOVER.md) | Refactor đã nghiệm thu, ranh giới owner/tương thích, evidenceindex lịch sử |
-| [INVOICE_PAYMENT_WORKFLOW.md](INVOICE_PAYMENT_WORKFLOW.md) | Contract UC36 đang dùng; giữ nguyên |
-| [UC36_TV2_HANDOVER.md](UC36_TV2_HANDOVER.md) | UC36 CLOSED TV3; gates/evidence/PREP/tích hợp TV2 hoãn |
-| [UC45_ACCEPTANCE_HANDOVER.md](UC45_ACCEPTANCE_HANDOVER.md) | UC45 đã nghiệm thu; giữ nguyên |
-| [UC47_ACCEPTANCE_HANDOVER.md](UC47_ACCEPTANCE_HANDOVER.md) | DashboardAdmin đã nghiệm thu, contract/evidence và ngoại lệ screenreader |
-| [UC48_STATISTICS_CONTRACT.md](UC48_STATISTICS_CONTRACT.md) | Contract V1 đã triển khai API/UI; có amendment VND 0 phần lẻ. Các trạng thái mục tiêu ban đầu giữ như lịch sử |
-| [UC48_DATA_QA.md](UC48_DATA_QA.md) | Oracle/fixtures, MySQL và hồi quy QA-DATA đã nghiệm thu; không thay browser evidence |
-| [UC48_UI_QA.md](UC48_UI_QA.md) | Manual M01–M12 trên dev được owner chấp nhận với giới hạn; audit PARTIAL/runner FAIL và cleanup PASS giữ nguyên |
-| [UC48_ACCEPTANCE_HANDOVER.md](UC48_ACCEPTANCE_HANDOVER.md) | UC48 CLOSED TV3; implementation/contract, AC, evidence ledger, owner acceptance và giới hạn được bảo toàn |
+| Tiến độ, việc còn lại và dependency | [TV3_CHECKLIST.md](TV3_CHECKLIST.md) |
+| Baseline kiến trúc/refactor và tương thích liên nhóm | [BASELINE_HANDOVER.md](BASELINE_HANDOVER.md) |
+| Invoice/Review: 10 UC, AC, fixture/oracle, 74 mục UI và ledger | [TV3_FUNCTIONAL_ACCEPTANCE_MATRIX.md](TV3_FUNCTIONAL_ACCEPTANCE_MATRIX.md) |
+| Contract thanh toán Invoice hiện hành | [INVOICE_PAYMENT_WORKFLOW.md](INVOICE_PAYMENT_WORKFLOW.md) |
+| UC36: nghiệm thu, 12 gate và tích hợp TV2 | [UC36_TV2_HANDOVER.md](UC36_TV2_HANDOVER.md) |
+| UC39: Dashboard Host, contract, QA và giới hạn | [UC39_ACCEPTANCE_HANDOVER.md](UC39_ACCEPTANCE_HANDOVER.md) |
+| UC45: Admin Invoice Monitoring | [UC45_ACCEPTANCE_HANDOVER.md](UC45_ACCEPTANCE_HANDOVER.md) |
+| UC47: Admin Dashboard | [UC47_ACCEPTANCE_HANDOVER.md](UC47_ACCEPTANCE_HANDOVER.md) |
+| UC48: Admin Statistics, contract, QA và giới hạn | [UC48_ACCEPTANCE_HANDOVER.md](UC48_ACCEPTANCE_HANDOVER.md) |
 
-Bảng trên có 11 hồ sơ cộng README này: **12 file**. Checklist lưu trạng thái hiện hành và kết quả task; Mini Plan/Task Result cũng được báo trên chat theo scope đã duyệt. Khi hồ sơ lịch sử còn ghi PENDING/chưa triển khai, tra trạng thái mới tại checklist và handover, không sửa ngược verdict gốc.
+Thư mục có **10 file**, gồm README này. Checklist chỉ giữ hiện trạng; contract/AC/evidence riêng nằm tại hồ sơ chức năng. Không ghi lại toàn bộ Mini Plan/Task Result vào checklist.
 
-## Evidence và bảo toàn
+## Hồ sơ đã hợp nhất
 
-- UI01–16/CUI01–18/RUI01–20/RCUI01–20 PASS theo owner; audit đúng lượt manual PARTIAL/NOTVERIFIED độc lập đã được chấp nhận. Không dùng run01A/SQLite/Node/SSR thay browsermanual.
-- T01–T03 vẫn **BLOCKED TV2**. Refactor/fixture/synthetic Review entry không chứng minh Bookingproduction hoặc integrationPASS.
-- Artifacts local/ignored không đi theo Git; giữ ngày/engine/verdict/nguồn gốc, không coi log cũ là QA mới. Backup dọn hồ sơ: `.agent-workspace/tv3/doc-cleanup-01/`.
-- UC48: không dùng manual dev như manual trên schema QA riêng. Naming/VND đã được owner nghiệm thu nhưng chưa có browser visual mới; API/raw decimal vẫn scale 2, UI làm tròn half-up đến đồng và không có phần lẻ. CLOSE chỉ kiểm tài liệu, không chạy lại suites hoặc mở QA.
-- Đọc [AGENTS.md](../../AGENTS.md), [kiến trúc](../../ARCHITECTURE.md), [phân công](../stayhub-team-work-assignment.md) và [skills](../../.agents/skills). Giữ accepted tracked/untracked/env/data; không tự commit/push/merge.
-
-## Hồ sơ đã gom
-
-| File không còn độc lập | Nơi tra cứu hiện hành |
+| Đường dẫn cũ trong docs/TV3 | Nơi tra cứu thay thế |
 | --- | --- |
-| INVOICE_READ_UI_ACCEPTANCE.md | [Ma trận](TV3_FUNCTIONAL_ACCEPTANCE_MATRIX.md#9-invoice-read--uc153537), nhóm Invoice read: fixture/oracle, UI01–UI16, evidence01A/01B |
-| INVOICE_CREATE_UI_ACCEPTANCE.md | [Ma trận](TV3_FUNCTIONAL_ACCEPTANCE_MATRIX.md#10-invoice-create--uc34565758), nhóm Invoice create: fixture/oracle, CUI01–CUI18, mutation/recovery/evidence |
-| REVIEW_READ_UI_ACCEPTANCE.md | [Ma trận](TV3_FUNCTIONAL_ACCEPTANCE_MATRIX.md#11-review-read--uc38), nhóm Review read: summaryoracle, RUI01–RUI20, evidence |
-| REVIEW_CREATE_UI_ACCEPTANCE.md | [Ma trận](TV3_FUNCTIONAL_ACCEPTANCE_MATRIX.md#12-review-create--uc1660), nhóm Review create: syntheticentry, RCUI01–RCUI20, UNKNOWN/evidence |
+| UC39_HOST_DASHBOARD_CONTRACT.md | [UC39: contract và HTTP](UC39_ACCEPTANCE_HANDOVER.md#contract-hiện-hành) |
+| UC39_DATA_QA.md | [UC39: oracle và DATA QA](UC39_ACCEPTANCE_HANDOVER.md#oracle-và-data-qa) |
+| UC39_UI_QA.md | [UC39: HTTP và browser QA](UC39_ACCEPTANCE_HANDOVER.md#http-và-browser-qa) |
+| UC48_STATISTICS_CONTRACT.md | [UC48: contract và HTTP](UC48_ACCEPTANCE_HANDOVER.md#contract-hiện-hành) |
+| UC48_DATA_QA.md | [UC48: oracle và DATA QA](UC48_ACCEPTANCE_HANDOVER.md#oracle-và-data-qa) |
+| UC48_UI_QA.md | [UC48: HTTP và manual UI](UC48_ACCEPTANCE_HANDOVER.md#http-và-manual-ui) |
+| Checklist cũ mục 7–18 / 19–28 | [Ledger UC48](UC48_ACCEPTANCE_HANDOVER.md#ledger-và-hồi-quy) / [ledger UC39](UC39_ACCEPTANCE_HANDOVER.md#ledger-và-hồi-quy) |
 
-Các đợt trước: BASELINE_PR_CHECKLIST đã gom vào BASELINE_HANDOVER; UC36_BROWSER_QA/UC36_INTEGRATION_PREPARATION đã gom vào UC36_TV2_HANDOVER. Không khôi phục thành hồ sơ lặp.
+Lịch sử gom trước đó: INVOICE_READ_UI_ACCEPTANCE → [ma trận §9](TV3_FUNCTIONAL_ACCEPTANCE_MATRIX.md#9-invoice-read--uc153537); INVOICE_CREATE_UI_ACCEPTANCE → [§10](TV3_FUNCTIONAL_ACCEPTANCE_MATRIX.md#10-invoice-create--uc34565758); REVIEW_READ_UI_ACCEPTANCE → [§11](TV3_FUNCTIONAL_ACCEPTANCE_MATRIX.md#11-review-read--uc38); REVIEW_CREATE_UI_ACCEPTANCE → [§12](TV3_FUNCTIONAL_ACCEPTANCE_MATRIX.md#12-review-create--uc1660). BASELINE_PR_CHECKLIST → baseline; UC36_BROWSER_QA/UC36_INTEGRATION_PREPARATION → handover UC36. Không khôi phục các hồ sơ lặp.
+
+## Quy tắc sử dụng evidence
+
+- Owner acceptance tách khỏi technical verdict; giữ FAIL/PARTIAL/NOT VERIFIED và ngày/engine/run gốc. Không dùng SQLite skips, Node mocks, SSR hoặc build thay browser/MySQL.
+- T01–T03 vẫn **BLOCKED TV2**. Reporting fixtures và synthetic Review entry không chứng minh Booking production end-to-end.
+- Artifacts dưới `.agent-workspace/tv3/` là local/ignored, không theo Git. Đường dẫn/run lịch sử không phải môi trường đang chạy; tái QA cần task được duyệt riêng.
+- Giữ accepted tracked/untracked, env và dữ liệu dev; không tự commit/push/merge. Đọc [AGENTS.md](../../AGENTS.md), [ARCHITECTURE.md](../../ARCHITECTURE.md) và [phân công](../stayhub-team-work-assignment.md).
+- **02A OWNER ACCEPTED ngày 2026-11-21**: gom 6 hồ sơ vào UC39/48; backup/content-map/verification tại `.agent-workspace/tv3/doc-cleanup-02a/2db97ded3e67452a99c8fc0e37826c6e/`.
+- **02B**: biên tập baseline, ma trận Invoice/Review và handover UC36/45/47; đồng bộ README/checklist. Giữ 10 file, giữ payment contract và handover UC39/48. Evidence kiểm tài liệu tại `.agent-workspace/tv3/doc-cleanup-02b/52813b1cc81d4bd3886c3312f411fe2f/`; kết quả/owner acceptance theo checklist.
+- Nhận định về TV1/TV2 và từ “source khớp” trong ledger áp dụng SHA/ngày checkpoint gốc. Khi tích hợp lại phải kiểm source/contract hiện tại; route tồn tại không tự đóng dependency.
