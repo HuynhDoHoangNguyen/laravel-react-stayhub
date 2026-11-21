@@ -526,9 +526,20 @@ test('PR12-02: SearchRoomCard wires "Đặt ngay" CTA directly to customer check
   // Verify direct link to checkout for available dates
   assert.match(code, /<Link\s+to=\{checkoutHref\}[^>]*>Đặt ngay<\/Link>/);
 
-  // Verify secondary link to property overview
-  assert.match(code, /<Link\s+to=\{propertyHref\}[^>]*>Xem cơ sở<\/Link>/);
+  // Both availability and catalog room cards lead to UC8; checkout stays unchanged.
+  assert.match(code, /const\s+roomHref\s*=\s*'\/rooms\/'\s*\+\s*room\.id/);
+  assert.match(code, /<Link\s+to=\{roomHref\}[^>]*>Xem chi tiết phòng<\/Link>/);
 
   // Verify fallback for non-availability search
-  assert.match(code, /<Link\s+to=\{propertyHref\}[^>]*>Xem cơ sở lưu trú<\/Link>/);
+  assert.equal((code.match(/<Link\s+to=\{roomHref\}[^>]*>Xem chi tiết phòng<\/Link>/g) ?? []).length, 2);
+});
+
+test('UC8 room header and breadcrumb use the owning property link with query and navigation state', async () => {
+  const path = fileURLToPath(new URL('../src/pages/public/RoomDetailPage.jsx', import.meta.url));
+  const code = await readFile(path, 'utf8');
+  assert.ok(code.includes('`/properties/${room.property.id}${location.search}`'));
+  assert.match(code, /label: room\.property\.name, to: propertyHref, state: location\.state/);
+  assert.match(code, /<Link to=\{propertyHref\} state=\{location\.state\}/);
+  assert.ok(code.includes('Thuộc cơ sở:'));
+  assert.match(code, /<span[^>]*>\{room\.property\.name\}<\/span>/);
 });

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useLocation, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { roomService } from '../../services/roomService.js';
 import { normalizeApiError } from '../../api/apiError.js';
 import { readPropertyBooking } from '../../utils/propertyBooking.js';
@@ -7,7 +7,7 @@ import { RoomBookingPanel } from '../../components/hotel/RoomBookingPanel.jsx';
 import { PropertyGallery } from '../../components/hotel/PropertyGallery.jsx';
 import { DetailAction } from '../../components/hotel/DetailAction.jsx';
 import { DetailBreadcrumbs } from '../../components/hotel/DetailBreadcrumbs.jsx';
-import { MapPin, BedDouble } from 'lucide-react';
+import { MapPin, BedDouble, ArrowUpRight } from 'lucide-react';
 import { RelatedPropertyRooms } from '../../components/hotel/RelatedPropertyRooms.jsx';
 
 export default function RoomDetailPage() {
@@ -46,10 +46,11 @@ function RoomView({ roomId }) {
     }
 
     const room = state.room;
+    const propertyHref = room ? `/properties/${room.property.id}${location.search}` : '/properties';
     return <div className="mx-auto max-w-[1360px] px-6 py-8 md:px-10">
         <DetailBreadcrumbs items={[
             { label: 'Cơ sở lưu trú', to: '/properties' },
-            ...(room ? [{ label: room.property.name, to: `/properties/${room.property.id}${location.search}`, state: location.state }] : []),
+            ...(room ? [{ label: room.property.name, to: propertyHref, state: location.state }] : []),
             { label: room?.name || 'Chi tiết phòng' },
         ]} />
         {state.status === 'loading' && <p role="status" className="py-20">Đang tải thông tin phòng...</p>}
@@ -66,6 +67,12 @@ function RoomView({ roomId }) {
             <header className="space-y-3">
                 <p className="text-xs uppercase tracking-[0.2em] text-accent">{room.property.type === 'HOTEL' ? 'Khách sạn' : 'Homestay'} · {room.room_type.name}</p>
                 <h1 className="break-words font-display text-3xl text-primary md:text-5xl">{room.name}</h1>
+                <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+                    <span>Thuộc cơ sở:</span>
+                    <Link to={propertyHref} state={location.state} className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-lg px-2 py-1 font-medium text-primary transition-colors hover:bg-surface hover:underline focus-visible:outline-2 focus-visible:outline-primary">
+                        <span className="min-w-0 break-words">{room.property.name}</span><ArrowUpRight className="h-4 w-4 shrink-0" aria-hidden />
+                    </Link>
+                </p>
                 <p className="flex items-start gap-2 text-sm text-muted-foreground"><MapPin className="mt-0.5 h-4 w-4 shrink-0" aria-hidden /><span className="min-w-0 break-words">{room.property.address || 'Chưa cập nhật địa chỉ'}</span></p>
                 <p className="flex items-center gap-2 text-sm"><BedDouble className="h-4 w-4 shrink-0 text-primary" aria-hidden /><span>Mã phòng: {room.room_number}</span></p>
             </header>
