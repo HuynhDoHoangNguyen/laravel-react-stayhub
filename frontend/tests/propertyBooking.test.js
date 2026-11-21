@@ -86,7 +86,8 @@ test('booking panel renders missing and invalid guidance and no premature checko
     try {
         const { RoomBookingPanel } = await server.ssrLoadModule('/src/components/hotel/RoomBookingPanel.jsx');
         const render = context => renderToStaticMarkup(createElement(MemoryRouter, null,
-            createElement(RoomBookingPanel, { room: { id: 12, property: { id: 5 } }, context })));
+            createElement(RoomBookingPanel, { room: { id: 12, name: 'Phòng Deluxe', price_per_night: '850000.25', capacity: 3,
+                room_type: { id: 3, name: 'Deluxe' }, property: { id: 5 } }, context })));
         const missing = render(read(''));
         assert.ok(missing.includes('Vui lòng chọn ngày'));
         assert.ok(!missing.includes('/customer/checkout'));
@@ -96,6 +97,8 @@ test('booking panel renders missing and invalid guidance and no premature checko
         const pending = render(read(dates + '&adults=2&children=1'));
         assert.ok(pending.includes('Đang kiểm tra phòng trống'));
         assert.ok(pending.includes('2 người lớn'));
+        for (const text of ['Phòng Deluxe', 'Deluxe', '850.000,25', 'Sức chứa tối đa: 3', 'Nhận phòng', 'Trả phòng']) assert.ok(pending.includes(text), text);
+        assert.ok(pending.includes('<aside'));
         assert.ok(!pending.includes('/customer/checkout'));
     } finally { await server.close(); }
 });
