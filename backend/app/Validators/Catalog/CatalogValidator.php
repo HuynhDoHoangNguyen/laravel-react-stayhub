@@ -2,6 +2,7 @@
 
 namespace App\Validators\Catalog;
 
+use App\DTOs\Catalog\Requests\HostRoomAmenityTarget;
 use App\Enums\UserRole;
 use App\Enums\RoomStatus;
 use App\DTOs\Catalog\Requests\ChangeHostRoomStatusRequest;
@@ -324,6 +325,37 @@ final class CatalogValidator
         $validator->validate();
 
         return new HostRoomDetailQuery($id);
+    }
+
+    public function validateHostRoomAmenityQuery(User $actor, string $room, array $input): ?HostRoomDetailQuery
+    {
+        $target = $this->validateHostRoomDetail($actor, $room, []);
+        if ($target !== null) {
+            $this->validateEmptyHostRoomAmenityInput($input);
+        }
+
+        return $target;
+    }
+
+    public function validateHostRoomAmenityTarget(User $actor, string $room, string $amenity, array $input): ?HostRoomAmenityTarget
+    {
+        $target = $this->validateHostRoomDetail($actor, $room, []);
+        $amenityId = (int) $amenity;
+        if ($target === null || $amenityId < 1 || (string) $amenityId !== $amenity) {
+            return null;
+        }
+        $this->validateEmptyHostRoomAmenityInput($input);
+
+        return new HostRoomAmenityTarget($target->roomId, $amenityId);
+    }
+
+    private function validateEmptyHostRoomAmenityInput(array $input): void
+    {
+        if ($input !== []) {
+            throw ValidationException::withMessages(array_fill_keys(
+                array_keys($input), 'Thao tác tiện nghi phòng không nhận thêm tham số.',
+            ));
+        }
     }
 
     public function validateHostRoomList(User $actor, string $property, array $query): ?HostRoomListQuery

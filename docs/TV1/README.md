@@ -17,6 +17,7 @@ Thư mục này lưu kết quả khảo sát và báo cáo triển khai của **
 | [UC19-REPORT.md](UC19-REPORT.md) | UC19-01 audit/QA; UI-01; FINAL chốt phạm vi | Nghiệm thu CRUD/UI đã kiểm, technical checks và owner browser PASS; concurrency/collation MariaDB và browser negative cases còn NOT VERIFIED, chưa CLOSED toàn runtime |
 | [UC20-REPORT.md](UC20-REPORT.md) | UC20-01 audit/QA, UI-01 danh sách/form thêm, UI-02 chi tiết/form sửa và đổi trạng thái, FINAL | Nghiệm thu luồng quản lý phòng và UI đã kiểm với Host thật. Kiểm tra kỹ thuật đạt. Thứ tự khóa TV2, collation MariaDB và các ca lỗi runtime còn mở |
 | [UC21-REPORT.md](UC21-REPORT.md) | UC21-01/02, QA và QA-DB-01/02 | Chức năng/owner browser PASS; MariaDB 10.11 smoke, 8 concurrency cases và cleanup PASS; chờ review bàn giao |
+| [UC22-REPORT.md](UC22-REPORT.md) | UC22-01 xem/gán, UC22-02 gỡ và UC22-FINAL | Đã nghiệm thu xem/gán/gỡ/gán lại, kể cả gỡ tiện nghi đã ngưng. Gán/gỡ đồng thời trên MySQL/MariaDB và mất phản hồi với Laravel thật còn mở |
 | [UC51-REPORT.md](UC51-REPORT.md) | UC51: query kiểm tra lịch bảo trì theo khoảng lưu trú, contract bàn giao TV2 | Lõi query và automated tests PASS; chưa tích hợp Availability/Booking TV2 |
 | [UC52-REPORT.md](UC52-REPORT.md) | UC52: validator kiểm tra sức chứa một phòng, contract bàn giao TV2 và unit tests | Lõi validator và automated tests PASS; chưa tích hợp Availability/Booking TV2 |
 

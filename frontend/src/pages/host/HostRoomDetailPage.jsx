@@ -7,6 +7,7 @@ import { formatCatalogPrice } from '../../services/catalog';
 import HostRoomEditForm from '../../components/catalog/HostRoomEditForm';
 import HostRoomStatusForm from '../../components/catalog/HostRoomStatusForm';
 import HostRoomImageManager from '../../components/catalog/HostRoomImageManager';
+import HostRoomAmenityPanel from '../../components/catalog/HostRoomAmenityPanel';
 
 const roomStatuses = {
     ACTIVE: { label: 'Đang hoạt động', color: 'border-emerald-200 bg-emerald-50 text-emerald-800' },
@@ -167,16 +168,7 @@ function RoomDetail({ roomId }) {
                 </div>
             </section>
             <HostRoomImageManager roomId={room.id} />
-            <section aria-labelledby="room-amenities-title" className="space-y-3 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6">
-                <h2 id="room-amenities-title" className="text-lg font-semibold text-primary">Tiện nghi</h2>
-                {room.amenities.length === 0 ? <p className="text-sm text-muted-foreground">Chưa gán tiện nghi.</p>
-                    : <ul className="grid gap-3 sm:grid-cols-2">
-                        {room.amenities.map((item) => <li key={item.id} className="min-w-0 rounded-xl border border-border/70 bg-surface/50 p-3.5">
-                            <p className="break-words text-sm font-medium">{item.name}</p>
-                            <p className="mt-1 text-sm text-muted-foreground">{item.status ? 'Đang hoạt động' : 'Ngưng hoạt động'}</p>
-                        </li>)}
-                    </ul>}
-            </section>
+            <HostRoomAmenityPanel roomId={room.id} amenities={room.amenities} ready={state.status === 'ready'} />
         </div>}
     </div>;
 }

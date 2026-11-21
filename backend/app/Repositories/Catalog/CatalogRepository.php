@@ -19,6 +19,7 @@ use App\Models\Review;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Query\JoinClause;
 
 class CatalogRepository
 {
@@ -169,6 +170,39 @@ class CatalogRepository
     public function lockPropertyRoom(Property $property, int $roomId): ?Room
     {
         return $property->rooms()->whereKey($roomId)->lockForUpdate()->first();
+    }
+
+    /** @return Collection<int, Amenity> */
+    public function getHostRoomAmenityOptions(int $roomId): Collection
+    {
+        return Amenity::query()
+            ->leftJoin('room_amenities', function (JoinClause $join) use ($roomId): void {
+                $join->on('room_amenities.amenity_id', '=', 'amenities.id')
+                    ->where('room_amenities.room_id', $roomId);
+            })
+            ->where(fn (Builder $query) => $query->where('amenities.status', true)
+                ->orWhereNotNull('room_amenities.room_id'))
+            ->select(['amenities.id', 'amenities.name', 'amenities.status'])
+            ->selectRaw('CASE WHEN room_amenities.room_id IS NULL THEN 0 ELSE 1 END AS assigned_to_room')
+            ->withCasts(['assigned_to_room' => 'boolean'])
+            ->orderBy('amenities.name')->orderBy('amenities.id')->get();
+    }
+
+    public function lockAmenity(int $amenityId): ?Amenity
+    {
+        return Amenity::query()->whereKey($amenityId)->lockForUpdate()->first();
+    }
+
+    /** The caller holds the room lock. */
+    public function assignRoomAmenity(Room $room, Amenity $amenity): bool
+    {
+        return $room->amenities()->syncWithoutDetaching([$amenity->id])['attached'] !== [];
+    }
+
+    /** The caller holds the room lock. */
+    public function removeRoomAmenity(Room $room, int $amenityId): bool
+    {
+        return $room->amenities()->detach($amenityId) !== 0;
     }
 
     public function updateHostRoom(Room $room, RoomType $type, UpdateHostRoomRequest $input): bool
