@@ -66,6 +66,32 @@ class PartnerAgreementService
     }
 
     /**
+     * Lấy bản ghi chấp thuận hợp đồng đang có hiệu lực của Host (nếu có).
+     */
+    public function getHostActiveAcceptance(int $hostId): ?HostAgreementAcceptance
+    {
+        $agreement = PartnerAgreement::query()
+            ->where('status', 'PUBLISHED')
+            ->where('effective_at', '<=', now())
+            ->where(function ($query) {
+                $query->whereNull('retired_at')
+                    ->orWhere('retired_at', '>', now());
+            })
+            ->orderByDesc('effective_at')
+            ->first();
+
+        if ($agreement === null) {
+            return null;
+        }
+
+        return HostAgreementAcceptance::query()
+            ->with('agreement')
+            ->where('host_id', $hostId)
+            ->where('partner_agreement_id', $agreement->id)
+            ->first();
+    }
+
+    /**
      * Ghi nhận việc Host chấp thuận hợp đồng (Clickwrap).
      */
     public function acceptAgreement(int $hostId, int $agreementId, string $contentSha256): HostAgreementAcceptance
