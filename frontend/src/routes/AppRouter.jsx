@@ -43,6 +43,7 @@ import HostCommissionsPage from '../pages/host/HostCommissionsPage';
 
 import AdminDashboardPage from '../pages/admin/AdminDashboardPage';
 import AdminInvoiceListPage from '../pages/admin/AdminInvoiceListPage';
+import AdminCommissionsPage from '../pages/admin/AdminCommissionsPage';
 import ProfilePage from '../components/profile/ProfilePage';
 
 function AppRouter() {
@@ -106,6 +107,7 @@ function AppRouter() {
                 <Route path="/admin" element={<AdminLayout />}>
                     <Route index element={<AdminDashboardPage />} />
                     <Route path="invoices" element={<AdminInvoiceListPage />} />
+                    <Route path="commissions" element={<AdminCommissionsPage />} />
                     <Route path="profile" element={<ProfilePage />} />
                 </Route>
             </Route>
