@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Commission;
 
 use App\Http\Controllers\Controller;
 use App\Services\Commission\CommissionRemittanceService;
+use App\Services\Commission\CommissionReportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -95,5 +96,23 @@ class HostCommissionController extends Controller
                 'submitted_at' => $remittance->submitted_at?->toIso8601String(),
             ],
         ], 201);
+    }
+
+    /**
+     * Báo cáo tổng hợp tài chính và hoa hồng dành cho Host (RPT-01).
+     */
+    public function financialSummary(Request $request, CommissionReportService $reportService): JsonResponse
+    {
+        $actor = $request->user();
+        if ($actor->role?->value !== 'HOST' && $actor->role !== 'HOST') {
+            return response()->json(['message' => 'Chỉ tài khoản Host mới có quyền truy cập.'], 403);
+        }
+
+        $summary = $reportService->getHostFinancialSummary($actor->id);
+
+        return response()->json([
+            'success' => true,
+            'data' => $summary,
+        ]);
     }
 }

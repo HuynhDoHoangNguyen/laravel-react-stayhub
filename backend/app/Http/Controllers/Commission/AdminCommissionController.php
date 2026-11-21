@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Commission;
 
 use App\Http\Controllers\Controller;
 use App\Services\Commission\AdminCommissionService;
+use App\Services\Commission\CommissionReportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -130,6 +131,24 @@ class AdminCommissionController extends Controller
                 'review_note' => $result['remittance']->review_note,
                 'reviewed_at' => $result['remittance']->reviewed_at?->toIso8601String(),
             ],
+        ]);
+    }
+
+    /**
+     * Báo cáo tổng hợp đối soát hoa hồng toàn hệ thống dành cho Admin (RPT-02).
+     */
+    public function commissionSummary(Request $request, CommissionReportService $reportService): JsonResponse
+    {
+        $actor = $request->user();
+        if ($actor->role?->value !== 'ADMIN' && $actor->role !== 'ADMIN') {
+            return response()->json(['message' => 'Chỉ tài khoản Admin mới có quyền truy cập.'], 403);
+        }
+
+        $summary = $reportService->getAdminCommissionSummary();
+
+        return response()->json([
+            'success' => true,
+            'data' => $summary,
         ]);
     }
 }

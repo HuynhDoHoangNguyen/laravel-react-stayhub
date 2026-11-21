@@ -32,4 +32,12 @@ export const adminCommissionService = {
         const response = await api.post(`/api/admin/commission-remittances/${id}/reject`, payload, options);
         return response.data;
     },
+
+    /**
+     * Lấy báo cáo tổng hợp đối soát hoa hồng toàn hệ thống (RPT-02).
+     */
+    async getCommissionSummary(options = {}) {
+        const response = await api.get('/api/admin/dashboard/commission-summary', options);
+        return response.data;
+    },
 };

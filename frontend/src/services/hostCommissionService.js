@@ -24,4 +24,12 @@ export const hostCommissionService = {
         const response = await api.post(`/api/host/commissions/${id}/remittances`, payload, options);
         return response.data;
     },
+
+    /**
+     * Lấy báo cáo tổng hợp tài chính và hoa hồng của Host (RPT-01).
+     */
+    async getFinancialSummary(options = {}) {
+        const response = await api.get('/api/host/commissions/dashboard/financial-summary', options);
+        return response.data;
+    },
 };
