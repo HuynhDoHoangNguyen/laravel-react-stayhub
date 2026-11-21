@@ -1,6 +1,6 @@
 # StayHub TV3 — Tiến độ và việc còn lại
 
-Cập nhật: 2026-11-21 (Asia/Bangkok). **15/18 UC CLOSED TV3; còn 3 UC.**
+Cập nhật: 2026-11-22 (Asia/Bangkok). **16/18 UC CLOSED TV3, còn UC17 và UC61.**
 Owner: TV3. [Phân công](../stayhub-team-work-assignment.md) · [Mục lục hồ sơ](README.md).
 
 ## 1. Cách đọc trạng thái
@@ -23,7 +23,7 @@ Owner: TV3. [Phân công](../stayhub-team-work-assignment.md) · [Mục lục h�
 | UC37 — Quản lý Invoice | [x] | [x] TV3 | List/filter/search/pagination/no-write; T01 |
 | UC38 — Host xem Review | [x] | [x] TV3 | Scope/summary/UI; T03 |
 | UC39 — Dashboard Host | [x] | [x] TV3 | CLOSED ngày 2026-11-21; 10 task đã nghiệm thu, giữ giới hạn QA-UI |
-| UC44 — Admin xem toàn bộ Booking | [ ] | [ ] | Còn contract TV2, query/API/UI, filter/pagination/authorization |
+| UC44 — Admin xem toàn bộ Booking | [x] | [x] TV3 | **V1 CLOSED TV3 ngày 2026-11-22.** Danh sách chỉ đọc, tìm kiếm, bộ lọc và phân trang qua quyền Admin phía server. [Hồ sơ UC44](UC44_ACCEPTANCE_HANDOVER.md#21-uc44-close-01) |
 | UC45 — Admin xem toàn bộ Invoice | [x] | [x] TV3 | CLOSE-01 nghiệm thu ngày 2026-11-18 |
 | UC47 — Dashboard Admin | [x] | [x] TV3 | Sáu KPI/charts/UI; screen reader được miễn |
 | UC48 — Thống kê hệ thống | [x] | [x] TV3 | CLOSED ngày 2026-11-20; 8 task + CSS/VND, giữ giới hạn manual dev |
@@ -33,7 +33,7 @@ Owner: TV3. [Phân công](../stayhub-team-work-assignment.md) · [Mục lục h�
 | UC60 — Kiểm tra điều kiện Review | [x] | [x] TV3 | Qua UC16; ownership/COMPLETED/validation/unique/race, T03 |
 | UC61 — Ngữ cảnh nội bộ chatbot | [ ] | [ ] | Còn allowlist, authorization và context service |
 
-UC56/57/58 qua UC34; UC60 qua UC16, không cần API/UI riêng. Còn mở: **UC17/44/61**.
+UC56/57/58 qua UC34; UC60 qua UC16, không cần API/UI riêng. Còn mở **UC17 và UC61**.
 
 ## 3. FAQ và Chat History
 
@@ -55,6 +55,7 @@ UC56/57/58 qua UC34; UC60 qua UC16, không cần API/UI riêng. Còn mở: **UC1
 | Đóng 10 UC | TV3-AC-CLOSE-01 — OWNER ACCEPTED | Ma trận: UC15/16/34/35/37/38/56/57/58/60 |
 | Payment | UC36 CLOSED TV3 | [Handover](UC36_TV2_HANDOVER.md), [contract](INVOICE_PAYMENT_WORKFLOW.md) |
 | Host Dashboard | UC39 CLOSED TV3; CONTRACT→CLOSE đã nghiệm thu ngày 2026-11-21 | [Handover UC39](UC39_ACCEPTANCE_HANDOVER.md) |
+| Admin Booking | CLOSE44-01–06 PASS / OWNER ACCEPTED. UC44 V1 CLOSED TV3 ngày 2026-11-22 | [Hồ sơ CLOSE-01](UC44_ACCEPTANCE_HANDOVER.md#21-uc44-close-01) |
 | Admin Invoice | UC45 CLOSED TV3 | [Handover UC45](UC45_ACCEPTANCE_HANDOVER.md) |
 | Admin Dashboard | UC47 CLOSED TV3 | [Handover UC47](UC47_ACCEPTANCE_HANDOVER.md) |
 | Statistics | UC48 CLOSED TV3; CSS/VND cũng đã nghiệm thu | [Handover UC48](UC48_ACCEPTANCE_HANDOVER.md) |
@@ -82,8 +83,10 @@ PR #9 đã được owner close; PR #10 không được suy là đã sửa findi
 
 ## 7. Việc tiếp theo và quy tắc cập nhật
 
-1. **TV3-DOC-CLEANUP-02A đã được owner nghiệm thu ngày 2026-11-21**; **02B** đã được duyệt và thực hiện theo scope 7 file; chờ nghiệm thu kết quả tài liệu.
-2. UC44-CONTRACT-01 là task chức năng được đề xuất sau dọn tài liệu; chưa được triển khai. UC17/61/FAQ/Chat History cũng chưa mở scope mới.
+1. **TV3-DOC-CLEANUP-02A và 02B đã được owner nghiệm thu**; acceptance 02B được xác nhận lại trong yêu cầu UC44-START-01, đồng bộ checkpoint ngày 2026-11-21; giữ technical evidence gốc.
+2. **UC44 V1 đã nghiệm thu.** Phần rút gọn checklist và hồ sơ UC44 được owner nghiệm thu ngày 2026-11-22. MySQL HTTP **135 pass / 543 assertions**. Edge/Laravel/Sanctum thật **11/11 checkpoint PASS** sau FIX-RESP-01. Hồi quy SQLite **2.855 pass / 493 skip**, Node **434 pass**, lint/build và cleanup đạt. **UI44-06 FAIL ở lượt gốc**, PASS khi chạy lại. L44-01/06/07 giữ PARTIAL lịch sử. [Ledger và bằng chứng](UC44_ACCEPTANCE_HANDOVER.md#21-uc44-close-01)
+
+   **NOT VERIFIED:** orphan DB thực, rời route độc lập ngoài logout, runtime riêng UC45/39/47/48, browser khác, screen reader, cảm ứng thật, cookie/HTTPS ở domain triển khai và phục hồi sau hard-kill/mất điện. Đăng nhập từ deep link hiện về /admin. **T01–T03 BLOCKED TV2**, xem §5.
 3. Mỗi task cần Mini Plan/exact scope, owner duyệt rồi mới thực hiện; code/QA/tích hợp TV2 không nằm trong task tài liệu.
 4. Checklist chỉ cập nhật trạng thái và liên kết kết quả; contract/evidence đặt trong hồ sơ chức năng, không nối thêm báo cáo nhiều trang.
 5. Giữ accepted tracked/untracked, env và dữ liệu dev; không tự commit/push/merge/rebase.
@@ -94,7 +97,7 @@ PR #9 đã được owner close; PR #10 không được suy là đã sửa findi
 | --- | --- | --- |
 | TV3-DOC-CLEANUP-01 | Technical result đã báo; owner acceptance riêng chưa ghi nhận | Đợt trước: 6 viết lại/4 gom-xóa/3 giữ; `.agent-workspace/tv3/doc-cleanup-01/` |
 | TV3-DOC-CLEANUP-02A | TECHNICAL PASS tài liệu; OWNER ACCEPTED ngày 2026-11-21 | 4 viết lại + 6 gom-xóa; backup/content-map/verification tại đường dẫn dưới |
-| TV3-DOC-CLEANUP-02B | TECHNICAL PASS tài liệu; chờ owner nghiệm thu | 5 hồ sơ biên tập + README/checklist; DCB01–07 PASS kiểm tài liệu, giữ 10 file; artifacts `doc-cleanup-02b/52813b1cc81d4bd3886c3312f411fe2f/` |
+| TV3-DOC-CLEANUP-02B | TECHNICAL PASS tài liệu; OWNER ACCEPTED theo xác nhận trong UC44-START-01 | 5 hồ sơ biên tập + README/checklist; DCB01–07 PASS kiểm tài liệu, giữ 10 file; artifacts `doc-cleanup-02b/52813b1cc81d4bd3886c3312f411fe2f/` |
 
 Artifacts 02A: `.agent-workspace/tv3/doc-cleanup-02a/2db97ded3e67452a99c8fc0e37826c6e/`.
 Baseline 02A: `feature/tv3-uc39-host-dashboard`, HEAD `8532d02285bc2e3b466cb230b10c090c55974365` cộng accepted working tree.
@@ -111,4 +114,4 @@ Baseline 02A: `feature/tv3-uc39-host-dashboard`, HEAD `8532d02285bc2e3b466cb230b
 | DCA07 | PASS | Bốn file viết lại theo vai trò, giảm lặp và sửa câu chữ |
 | DCA08 | PASS | Hash ngoài scope/Git status/whitespace; không chạy QA hoặc truy cập DB |
 
-Skills áp dụng: [Planning](../../.agents/skills/stayhub-task-planning/SKILL.md) cho scope/baseline; [Verification](../../.agents/skills/stayhub-verification/SKILL.md) cho coverage/evidence/static checks. Technical PASS trên là kết quả kiểm tài liệu, không phải test chức năng chạy mới; owner đã nghiệm thu 02A; 02B chờ nghiệm thu. DCB01–07 đối chiếu scope/hash, content-map, AC/gate/oracle/ledger, lịch sử/hiện trạng, links/anchors và độ gọn tại verification-summary run 02B; không QA/DB. Còn một link hỏng có sẵn ngoài scope: `docs/TV2/BASELINE_HANDOVER.md:7` → `../TV3/BASELINE_PR_CHECKLIST.md`; hồ sơ thay thế là baseline TV3, không sửa file TV2 trong task này.
+Skills áp dụng: [Planning](../../.agents/skills/stayhub-task-planning/SKILL.md) cho scope/baseline; [Verification](../../.agents/skills/stayhub-verification/SKILL.md) cho coverage/evidence/static checks. Technical PASS trên là kết quả kiểm tài liệu, không phải test chức năng chạy mới; owner đã nghiệm thu 02A và 02B, checkpoint 02B được đồng bộ theo xác nhận trong UC44-START-01. DCB01–07 đối chiếu scope/hash, content-map, AC/gate/oracle/ledger, lịch sử/hiện trạng, links/anchors và độ gọn tại verification-summary run 02B; không QA/DB. Còn một link hỏng có sẵn ngoài scope: `docs/TV2/BASELINE_HANDOVER.md:7` → `../TV3/BASELINE_PR_CHECKLIST.md`; hồ sơ thay thế là baseline TV3, không sửa file TV2 trong task này.
