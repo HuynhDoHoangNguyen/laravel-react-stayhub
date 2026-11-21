@@ -9,21 +9,21 @@ import { CalendarDays, Users, BedDouble, ArrowRight, RefreshCw, SlidersHorizonta
 
 const currency = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 2 });
 
+export function RoomAvailabilityError({ failure, onRetry }) {
+    return <div role="alert" className="space-y-3 text-sm">
+        <p>{failure.message}</p>
+        {Object.entries(failure.fields).map(([key, messages]) => <p key={key}>{messages.join(' ')}</p>)}
+        <DetailAction tone="secondary" type="button" onClick={onRetry} className="w-full"><RefreshCw aria-hidden />Thử lại kiểm tra phòng trống</DetailAction>
+    </div>;
+}
+
 function AvailabilityResult({ room, context }) {
     const [loader] = useState(createRoomSearchLoader);
     const state = useSyncExternalStore(loader.subscribe, loader.getSnapshot, loader.getSnapshot);
     const [request] = useState(() => signal => roomService.checkAvailability(room.id, context, { signal }));
     useEffect(() => { loader.load(request); return () => loader.cancel(); }, [loader, request]);
     if (state.loading) return <p role="status">Đang kiểm tra phòng trống…</p>;
-    if (state.error) {
-        const failure = normalizeApiError(state.error);
-        const errors = state.error.response?.data?.errors ?? {};
-        return <div role="alert" className="space-y-3 text-sm">
-            <p>{failure.message}</p>
-            {Object.entries(errors).map(([key, values]) => <p key={key}>{Array.isArray(values) ? values.join(' ') : String(values)}</p>)}
-            <DetailAction tone="secondary" type="button" onClick={() => loader.load(request)} className="w-full"><RefreshCw aria-hidden />Thử lại kiểm tra phòng trống</DetailAction>
-        </div>;
-    }
+    if (state.error) return <RoomAvailabilityError failure={normalizeApiError(state.error)} onRetry={() => loader.load(request)} />;
     return <div className="space-y-3 text-sm">
         <p role="status">{state.value?.available ? 'Phòng còn trống theo ngày và số khách đã chọn.' : 'Phòng không khả dụng theo ngày hoặc số khách đã chọn.'}</p>
         {state.value?.available && <DetailAction asChild className="w-full"><Link to={checkoutTarget(room.property.id, room.id, context)}>Đặt phòng<ArrowRight aria-hidden /></Link></DetailAction>}

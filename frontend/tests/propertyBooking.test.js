@@ -2,6 +2,7 @@ import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { readPropertyBooking, checkoutTarget, bookingSearchTarget } from '../src/utils/propertyBooking.js';
 import { mapRoomAvailability } from '../src/mappers/roomAvailabilityMapper.js';
+import { normalizeApiError } from '../src/api/apiError.js';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
@@ -100,5 +101,35 @@ test('booking panel renders missing and invalid guidance and no premature checko
         for (const text of ['Phòng Deluxe', 'Deluxe', '850.000,25', 'Sức chứa tối đa: 3', 'Nhận phòng', 'Trả phòng']) assert.ok(pending.includes(text), text);
         assert.ok(pending.includes('<aside'));
         assert.ok(!pending.includes('/customer/checkout'));
+    } finally { await server.close(); }
+});
+
+test('availability error UI consumes normalized fields without requiring an Axios response', async () => {
+    const { createServer } = await import('vite');
+    const server = await createServer({ root: fileURLToPath(new URL('..', import.meta.url)), logLevel: 'error',
+        server: { middlewareMode: true, hmr: false, watch: null } });
+    try {
+        const { RoomAvailabilityError } = await server.ssrLoadModule('/src/components/hotel/RoomBookingPanel.jsx');
+        const render = failure => renderToStaticMarkup(createElement(MemoryRouter, null,
+            createElement(RoomAvailabilityError, { failure, onRetry() {} })));
+        const failure = normalizeApiError({ response: { status: 422, data: { errors: {
+            check_in_date: ['Ngày nhận phòng không hợp lệ.'], guest_count: ['Số khách vượt giới hạn.', 'Hãy chọn lại số khách.'],
+            malformed: 'RAW_INVALID_FIELD',
+        } } } });
+        assert.equal(failure.response, undefined);
+        const html = render(failure);
+        for (const text of ['role="alert"', 'Ngày nhận phòng không hợp lệ.', 'Số khách vượt giới hạn.',
+            'Hãy chọn lại số khách.', 'Thử lại kiểm tra phòng trống']) assert.ok(html.includes(text), text);
+        assert.ok(!html.includes('RAW_INVALID_FIELD'));
+        assert.ok(!html.includes('/customer/checkout'));
+        const alreadyNormalized = render(normalizeApiError(failure));
+        assert.equal(alreadyNormalized, html);
+        for (const status of [401, 403, 404, 409, 500]) {
+            const error = normalizeApiError({ response: { status, data: { errors: { internal: ['RAW_INTERNAL_DETAIL'] } } } });
+            const view = render(error);
+            assert.ok(view.includes(error.message));
+            assert.ok(!view.includes('RAW_INTERNAL_DETAIL'));
+            assert.ok(!view.includes('/customer/checkout'));
+        }
     } finally { await server.close(); }
 });
