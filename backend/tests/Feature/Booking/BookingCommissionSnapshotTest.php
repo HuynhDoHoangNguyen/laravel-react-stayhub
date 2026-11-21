@@ -179,4 +179,29 @@ class BookingCommissionSnapshotTest extends TestCase
         $this->assertNull($booking->commission_rate_bps);
         $this->assertNull($booking->host_agreement_acceptance_id);
     }
+
+    /**
+     * BIZ-01: Có agreement PUBLISHED nhưng Host chưa accept thì API phải chặn với 422 và không tạo Booking.
+     */
+    public function test_booking_fails_when_published_agreement_exists_but_host_has_not_accepted(): void
+    {
+        $this->seed(PartnerAgreementSeeder::class);
+
+        // Host chưa accept thỏa thuận v1.0 đã PUBLISHED
+        $checkIn = Carbon::now()->addDays(10)->format('Y-m-d');
+        $checkOut = Carbon::now()->addDays(12)->format('Y-m-d');
+
+        $bookingResponse = $this->actingAs($this->customer)->postJson('/api/customer/bookings', [
+            'room_id' => $this->room->id,
+            'check_in_date' => $checkIn,
+            'check_out_date' => $checkOut,
+            'guest_count' => 2,
+        ]);
+
+        $bookingResponse->assertStatus(422);
+        $bookingResponse->assertJsonValidationErrors(['room_id']);
+
+        // Xác nhận không có bản ghi booking nào được chèn vào DB
+        $this->assertDatabaseCount('bookings', 0);
+    }
 }

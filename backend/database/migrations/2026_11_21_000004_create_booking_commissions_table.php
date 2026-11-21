@@ -20,6 +20,7 @@ return new class extends Migration
             $table->decimal('commission_amount', 12, 2);
             $table->char('currency', 3)->default('VND');
             $table->string('status', 32)->default('AWAITING_CUSTOMER_PAYMENT');
+            $table->string('void_reason', 64)->nullable();
             $table->dateTime('due_at')->nullable();
             $table->dateTime('settled_at')->nullable();
             $table->timestamps();

@@ -119,6 +119,15 @@ class BookingService
             // Snapshot commission rate from Host active partner agreement
             $room->loadMissing('property');
             $hostId = (int) ($room->property?->host_id ?? 0);
+
+            // BIZ-01: Bắt buộc Host phải hoàn tất thỏa thuận đối tác PUBLISHED đang có hiệu lực
+            $currentAgreement = $this->agreementService->getCurrentAgreement($hostId);
+            if ($currentAgreement !== null && empty($currentAgreement['is_accepted'])) {
+                throw ValidationException::withMessages([
+                    'room_id' => ['Host sở hữu cơ sở lưu trú chưa hoàn tất thỏa thuận hợp đồng đối tác. Không thể tạo đơn đặt phòng lúc này.'],
+                ]);
+            }
+
             $activeAcceptance = $hostId > 0 ? $this->agreementService->getHostActiveAcceptance($hostId) : null;
             $commissionRateBps = $activeAcceptance?->agreement?->commission_rate_bps;
             $acceptanceId = $activeAcceptance?->id;

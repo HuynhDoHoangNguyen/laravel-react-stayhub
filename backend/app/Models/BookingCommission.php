@@ -25,6 +25,7 @@ class BookingCommission extends Model
         'commission_amount',
         'currency',
         'status',
+        'void_reason',
         'due_at',
         'settled_at',
     ];

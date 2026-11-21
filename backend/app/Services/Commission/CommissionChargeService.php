@@ -74,6 +74,7 @@ class CommissionChargeService
             'commission_amount' => $calc['commission_amount'],
             'currency' => 'VND',
             'status' => $calc['status'],
+            'void_reason' => $calc['void_reason'] ?? null,
             'due_at' => null,
             'settled_at' => null,
         ]);
