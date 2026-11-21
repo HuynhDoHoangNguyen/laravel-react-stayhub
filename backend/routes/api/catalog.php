@@ -9,6 +9,11 @@ use App\Http\Controllers\Catalog\HostRoomController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Catalog\HostRoomImageController;
 
+Route::patch('/host/rooms/{room}/images/{image}/primary', [HostRoomImageController::class, 'primary'])
+    ->middleware(['auth:sanctum', 'account.active']);
+Route::delete('/host/rooms/{room}/images/{image}', [HostRoomImageController::class, 'destroy'])
+    ->middleware(['auth:sanctum', 'account.active']);
+
 Route::get('/host/rooms/{room}/images', [HostRoomImageController::class, 'index'])
     ->middleware(['auth:sanctum', 'account.active']);
 Route::post('/host/rooms/{room}/images', [HostRoomImageController::class, 'store'])

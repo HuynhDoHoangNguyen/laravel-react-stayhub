@@ -2,6 +2,21 @@ import { requireApiId } from './apiId.js';
 
 export function createHostRoomImageApi(client) {
     return {
+        async mutate(roomId, imageId, kind, { signal } = {}) {
+            const room = requireApiId(roomId, 'Mã phòng');
+            const image = requireApiId(imageId, 'Mã ảnh');
+            const url = '/api/host/rooms/' + room + '/images/' + image;
+            const options = { signal, timeout: 10000 };
+            await client.get('/sanctum/csrf-cookie', options);
+            try {
+                return kind === 'primary' ? await client.patch(url + '/primary', undefined, options)
+                    : await client.delete(url, options);
+            } catch (error) {
+                const status = error.response?.status;
+                error.outcomeUnknown = !status || status >= 500;
+                throw error;
+            }
+        },
         list(roomId, { signal } = {}) {
             const id = requireApiId(roomId, 'Mã phòng');
             return client.get('/api/host/rooms/' + id + '/images', { signal, timeout: 10000 });

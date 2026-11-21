@@ -1,11 +1,24 @@
 import client from '../api/axios.js';
 import { createHostRoomImageApi } from '../api/hostRoomImageApi.js';
 import { localValidationError } from '../api/apiError.js';
-import { mapHostRoomImages, mapUploadedHostRoomImage } from '../mappers/hostRoomImageMapper.js';
+import { mapHostRoomImages, mapUploadedHostRoomImage, mapPrimaryHostRoomImage, mapDeletedHostRoomImage } from '../mappers/hostRoomImageMapper.js';
 
 export function createHostRoomImageService(transport) {
     const api = createHostRoomImageApi(transport);
+    async function mutate(roomId, imageId, kind, options) {
+        const response = await api.mutate(roomId, imageId, kind, options);
+        try {
+            if (response.status !== 200) throw new Error('Phản hồi thao tác ảnh phòng không hợp lệ.');
+            return kind === 'primary' ? mapPrimaryHostRoomImage(response.data, imageId)
+                : mapDeletedHostRoomImage(response.data, imageId);
+        } catch (error) {
+            error.outcomeUnknown = true;
+            throw error;
+        }
+    }
     return {
+        makePrimary: (roomId, imageId, options) => mutate(roomId, imageId, 'primary', options),
+        deleteImage: (roomId, imageId, options) => mutate(roomId, imageId, 'delete', options),
         async list(roomId, options) {
             const response = await api.list(roomId, options);
             if (response.status !== 200) throw new Error('Phản hồi danh sách ảnh phòng không hợp lệ.');

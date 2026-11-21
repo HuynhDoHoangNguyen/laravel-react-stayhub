@@ -10,6 +10,24 @@ use Illuminate\Http\Request;
 
 final class HostRoomImageController extends Controller
 {
+    public function primary(Request $request, string $room, string $image, CatalogValidator $validator, HostRoomImageService $service): JsonResponse
+    {
+        $input = $validator->validateHostRoomImageAction($request->user(), $room, $image, $request->all());
+        $result = $input === null ? null : $service->makePrimary($request->user(), $input);
+
+        return $result === null ? response()->json(['message' => 'Không tìm thấy hình ảnh phòng.'], 404)
+            : response()->json(['success' => true, 'message' => 'Đã cập nhật ảnh đại diện phòng.', 'data' => $result]);
+    }
+
+    public function destroy(Request $request, string $room, string $image, CatalogValidator $validator, HostRoomImageService $service): JsonResponse
+    {
+        $input = $validator->validateHostRoomImageAction($request->user(), $room, $image, $request->all());
+        $result = $input === null ? null : $service->delete($request->user(), $input);
+
+        return $result === null ? response()->json(['message' => 'Không tìm thấy hình ảnh phòng.'], 404)
+            : response()->json(['success' => true, 'message' => 'Đã xóa ảnh khỏi phòng.', 'data' => $result]);
+    }
+
     public function index(Request $request, string $room, CatalogValidator $validator, HostRoomImageService $service): JsonResponse
     {
         $input = $validator->validateHostRoomImageQuery($request->user(), $room, $request->all());

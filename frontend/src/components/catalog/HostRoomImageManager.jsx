@@ -4,17 +4,18 @@ import { normalizeApiError } from '../../api/apiError';
 import CatalogImage from './CatalogImage';
 
 export function HostRoomImageView({ state, file, preview, pending, uncertain, error, success,
-    inputRef, onChoose, onSubmit, onReload }) {
+    inputRef, onChoose, onSubmit, onReload, deleting = null, onDeleteRequest, onDeleteCancel, onPrimary, onDeleteConfirm, warning, titleRef }) {
     const id = useId();
     const disabled = pending || uncertain || state.status !== 'ready';
     return <section aria-labelledby={id + '-title'} aria-busy={pending || state.status === 'loading'}
         className="min-w-0 space-y-5 rounded-2xl border border-border bg-card p-4 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 id={id + '-title'} className="text-xl font-semibold">Hình ảnh phòng</h2>
+            <h2 ref={titleRef} tabIndex={-1} id={id + '-title'} className="text-xl font-semibold">Hình ảnh phòng</h2>
             <button type="button" disabled={pending || state.status === 'loading'} onClick={onReload}
                 className="rounded-xl border border-border px-3 py-2 text-sm text-primary disabled:opacity-50">Tải lại danh sách</button>
         </div>
         {success && <p role="status" className="text-sm text-primary">{success}</p>}
+        {warning && <p role="status" className="rounded-xl bg-muted p-3 text-sm">{warning}</p>}
         {state.status === 'loading' && <p role="status">Đang tải danh sách ảnh phòng...</p>}
         {state.status === 'error' && <p role="alert">{state.message}</p>}
         {state.status === 'ready' && <>
@@ -25,6 +26,21 @@ export function HostRoomImageView({ state, file, preview, pending, uncertain, er
                         <CatalogImage src={image.url} alt={'Ảnh phòng ' + (index + 1)} />
                     </div>
                     {image.is_primary && <figcaption className="text-sm font-medium text-primary">Ảnh đại diện</figcaption>}
+                    <div className="flex flex-wrap gap-2">
+                        {!image.is_primary && <button type="button" disabled={disabled || deleting !== null}
+                            onClick={() => onPrimary(image.id)} className="rounded-xl border border-border px-3 py-2 text-sm text-primary disabled:opacity-50">Đặt làm ảnh đại diện</button>}
+                        <button type="button" disabled={disabled || deleting !== null}
+                            onClick={event => onDeleteRequest(image.id, event.currentTarget)} className="rounded-xl border border-border px-3 py-2 text-sm text-red-700 disabled:opacity-50">Xóa ảnh</button>
+                    </div>
+                    {deleting === image.id && <div role="group" aria-label={'Xác nhận xóa ảnh ' + (index + 1)} className="space-y-3 rounded-xl bg-muted p-3">
+                        <p className="text-sm">Xóa ảnh này khỏi phòng?{image.is_primary ? ' Ảnh còn lại sẽ được chọn làm đại diện nếu có.' : ''}</p>
+                        <div className="flex flex-wrap gap-2">
+                            <button type="button" autoFocus disabled={disabled} onClick={() => onDeleteConfirm(image.id)}
+                                className="rounded-xl bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50">{pending ? 'Đang xử lý...' : 'Xác nhận xóa'}</button>
+                            <button type="button" disabled={disabled} onClick={onDeleteCancel}
+                                className="rounded-xl border border-border px-3 py-2 text-sm disabled:opacity-50">Hủy</button>
+                        </div>
+                    </div>}
                 </figure>)}
             </div>
         </>}
@@ -36,7 +52,7 @@ export function HostRoomImageView({ state, file, preview, pending, uncertain, er
                 className="rounded-xl border border-border px-3 py-2 text-sm text-primary disabled:opacity-50">Kiểm tra danh sách ảnh</button>
         </div>}
         <form onSubmit={onSubmit}>
-            <fieldset disabled={disabled} className="min-w-0 space-y-4 disabled:opacity-60">
+            <fieldset disabled={disabled || deleting !== null} className="min-w-0 space-y-4 disabled:opacity-60">
                 <label htmlFor={id + '-file'} className="block text-sm font-medium">Chọn ảnh phòng</label>
                 <input ref={inputRef} id={id + '-file'} type="file" name="image" accept="image/jpeg,image/png,image/webp"
                     onChange={onChoose} aria-invalid={Boolean(error)}
@@ -67,10 +83,14 @@ function ImageManager({ roomId }) {
     const [uncertain, setUncertain] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    const [warning, setWarning] = useState('');
+    const [deleting, setDeleting] = useState(null);
     const input = useRef(null);
     const active = useRef(false);
     const locked = useRef(false);
     const mutation = useRef(null);
+    const deleteTrigger = useRef(null);
+    const title = useRef(null);
 
     useEffect(() => {
         active.current = true;
@@ -100,7 +120,7 @@ function ImageManager({ roomId }) {
     }
     function reload() {
         if (locked.current) return;
-        clearFile(); setError('');
+        clearFile(); setError(''); setDeleting(null);
         setState({ status: 'loading', images: [] });
         setAttempt(value => value + 1);
     }
@@ -118,8 +138,8 @@ function ImageManager({ roomId }) {
     }
     async function submit(event) {
         event.preventDefault();
-        if (locked.current || uncertain || state.status !== 'ready' || !file) return;
-        locked.current = true; setPending(true); setError(''); setSuccess('');
+        if (locked.current || uncertain || deleting !== null || state.status !== 'ready' || !file) return;
+        locked.current = true; setPending(true); setError(''); setSuccess(''); setWarning('');
         mutation.current = new AbortController();
         try {
             await hostRoomImageService.upload(roomId, file, { signal: mutation.current.signal });
@@ -140,6 +160,35 @@ function ImageManager({ roomId }) {
             if (active.current) { setPending(false); locked.current = false; }
         }
     }
+    async function mutate(kind, imageId) {
+        if (locked.current || uncertain || state.status !== 'ready') return;
+        if (kind === 'delete' && deleting !== imageId) return;
+        locked.current = true; setPending(true); setError(''); setSuccess(''); setWarning('');
+        mutation.current = new AbortController();
+        try {
+            const options = { signal: mutation.current.signal };
+            const result = kind === 'primary' ? await hostRoomImageService.makePrimary(roomId, imageId, options)
+                : await hostRoomImageService.deleteImage(roomId, imageId, options);
+            if (!active.current) return;
+            setState({ status: 'ready', images: kind === 'primary' ? result : result.images });
+            setDeleting(null);
+            requestAnimationFrame(() => title.current?.focus());
+            setSuccess(kind === 'primary' ? 'Đã cập nhật ảnh đại diện phòng.' : 'Đã xóa ảnh khỏi phòng.');
+            if (kind === 'delete' && result.cleanup_status === 'failed') {
+                setWarning('Ảnh đã được xóa khỏi danh sách nhưng chưa dọn được tệp. Không cần xóa lại; cần kiểm tra cleanup.');
+            }
+        } catch (failure) {
+            if (!active.current) return;
+            const normalized = normalizeApiError(failure);
+            setUncertain(Boolean(failure.outcomeUnknown) || normalized.status === 404);
+            setError(failure.outcomeUnknown ? 'Chưa xác định được kết quả thao tác ảnh.' : normalized.message);
+        } finally {
+            if (active.current) { setPending(false); locked.current = false; }
+        }
+    }
     return <HostRoomImageView state={state} file={file} preview={preview} pending={pending} uncertain={uncertain}
-        error={error} success={success} inputRef={input} onChoose={choose} onSubmit={submit} onReload={reload} />;
+        error={error} success={success} warning={warning} deleting={deleting} inputRef={input} titleRef={title} onChoose={choose} onSubmit={submit} onReload={reload}
+        onPrimary={imageId => mutate('primary', imageId)} onDeleteConfirm={imageId => mutate('delete', imageId)}
+        onDeleteRequest={(imageId, trigger) => { deleteTrigger.current = trigger; setDeleting(imageId); }}
+        onDeleteCancel={() => { setDeleting(null); requestAnimationFrame(() => deleteTrigger.current?.focus()); }} />;
 }

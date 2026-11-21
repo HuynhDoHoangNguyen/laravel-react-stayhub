@@ -23,6 +23,7 @@ use App\DTOs\Catalog\Requests\HostRoomDetailQuery;
 use App\DTOs\Catalog\Requests\UploadHostPropertyImageRequest;
 use App\DTOs\Catalog\Requests\HostPropertyImageRequest;
 use App\DTOs\Catalog\Requests\HostRoomImageQuery;
+use App\DTOs\Catalog\Requests\HostRoomImageRequest;
 use App\DTOs\Catalog\Requests\UploadHostRoomImageRequest;
 use App\Models\User;
 use App\DTOs\Catalog\Requests\PublicPropertyDetailQuery;
@@ -37,6 +38,16 @@ use App\Exceptions\AppException;
 
 final class CatalogValidator
 {
+    public function validateHostRoomImageAction(User $actor, string $room, string $image, array $input): ?HostRoomImageRequest
+    {
+        $target = $this->validateHostRoomImageQuery($actor, $room, []);
+        $id = filter_var($image, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        if ($target === null || $id === false || (string) $id !== $image) return null;
+        $this->validateHostRoomImageQuery($actor, $room, $input);
+
+        return new HostRoomImageRequest($target->roomId, $id);
+    }
+
     public function validateHostRoomImageQuery(User $actor, string $room, array $input): ?HostRoomImageQuery
     {
         $this->authorizeHost($actor);

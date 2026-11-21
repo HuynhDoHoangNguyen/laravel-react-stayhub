@@ -71,6 +71,126 @@ class HostRoomImagesTest extends TestCase
 
     private function endpoint(int|string $id): string { return '/api/host/rooms/'.$id.'/images'; }
 
+    public function test_primary_selection_is_idempotent_and_visible_on_public_room(): void
+    {
+        $host = $this->actor(); $room = $this->room($host);
+        $a = $room->images()->create(['image_path' => 'rooms/a.png', 'is_primary' => true]);
+        $b = $room->images()->create(['image_path' => 'rooms/b.png', 'is_primary' => false]);
+        $url = $this->endpoint($room->id).'/'.$b->id.'/primary';
+        $this->actingAs($host);
+        for ($i = 0; $i < 2; $i++) $this->patchJson($url)->assertOk()->assertJsonPath('data.0.id', $b->id)->assertJsonPath('data.0.is_primary', true);
+        $this->assertFalse($a->fresh()->is_primary);
+        $this->assertSame(1, $room->images()->where('is_primary', true)->count());
+        $this->getJson('/api/public/rooms/'.$room->id)->assertOk()->assertJsonPath('data.images.0', Storage::disk('public')->url('rooms/b.png'));
+    }
+
+    public function test_delete_primary_replaces_by_lowest_eligible_id_then_deletes_last_image(): void
+    {
+        $host = $this->actor(); $room = $this->room($host); $this->actingAs($host);
+        $a = $room->images()->create(['image_path' => 'rooms/a.png', 'is_primary' => false]);
+        $b = $room->images()->create(['image_path' => 'rooms/b.png', 'is_primary' => true]);
+        $this->deleteJson($this->endpoint($room->id).'/'.$b->id)->assertOk()->assertJsonPath('data.deleted_image_id', $b->id)
+            ->assertJsonPath('data.cleanup_status', 'not_managed')->assertJsonPath('data.images.0.id', $a->id)->assertJsonPath('data.images.0.is_primary', true);
+        $this->deleteJson($this->endpoint($room->id).'/'.$a->id)->assertOk()->assertJsonPath('data.images', []);
+        $this->deleteJson($this->endpoint($room->id).'/'.$a->id)->assertNotFound();
+    }
+
+    public function test_delete_secondary_keeps_primary_and_deletes_managed_file_after_commit(): void
+    {
+        $host = $this->actor(); $room = $this->room($host); $this->actingAs($host);
+        $primary = $room->images()->create(['image_path' => 'rooms/a.png', 'is_primary' => true]);
+        $path = 'rooms/'.$room->id.'/11111111-1111-4111-8111-111111111111.png';
+        Storage::disk('public')->put($path, 'fixture');
+        $image = $room->images()->create(['image_path' => $path]);
+        $disk = Storage::disk('public'); $fake = \Mockery::mock($disk)->makePartial();
+        $fake->shouldReceive('delete')->once()->with($path)->andReturnUsing(function ($target) use ($image, $disk) {
+            $this->assertSame(0, DB::transactionLevel());
+            $this->assertNull(RoomImage::find($image->id));
+            return $disk->delete($target);
+        });
+        Storage::shouldReceive('disk')->with('public')->andReturn($fake);
+        $this->deleteJson($this->endpoint($room->id).'/'.$image->id)->assertOk()->assertJsonPath('data.cleanup_status', 'deleted');
+        $this->assertTrue($primary->fresh()->is_primary);
+        $disk->assertMissing($path);
+    }
+
+    public static function cleanupCases(): array { return [['missing'], ['shared'], ['failed'], ['not_managed']]; }
+
+    #[DataProvider('cleanupCases')]
+    public function test_delete_cleanup_outcomes_do_not_replay_mutation(string $outcome): void
+    {
+        $host = $this->actor(); $room = $this->room($host);
+        $path = 'rooms/'.$room->id.'/11111111-1111-4111-8111-111111111111.png';
+        if ($outcome === 'not_managed') $path = 'rooms/legacy.png';
+        if ($outcome !== 'missing') Storage::disk('public')->put($path, 'fixture');
+        $image = $room->images()->create(['image_path' => $path, 'is_primary' => true]);
+        if ($outcome === 'shared') {
+            $other = $this->room($this->actor());
+            $other->images()->create(['image_path' => $path, 'is_primary' => true]);
+        }
+        if ($outcome === 'failed') {
+            $disk = Storage::disk('public'); $fake = \Mockery::mock($disk)->makePartial();
+            $fake->shouldReceive('delete')->once()->andReturn(false);
+            Storage::shouldReceive('disk')->with('public')->andReturn($fake);
+        }
+        $this->actingAs($host)->deleteJson($this->endpoint($room->id).'/'.$image->id)->assertOk()->assertJsonPath('data.cleanup_status', $outcome);
+        $this->assertNull($image->fresh());
+        if (in_array($outcome, ['shared', 'failed', 'not_managed'], true)) Storage::disk('public')->assertExists($path);
+    }
+
+    public function test_action_validation_ownership_and_invalid_url_are_enforced(): void
+    {
+        $host = $this->actor(); $room = $this->room($host); $other = $this->room($this->actor());
+        $image = $room->images()->create(['image_path' => 'rooms/a.png', 'is_primary' => true]);
+        $foreign = $other->images()->create(['image_path' => 'rooms/foreign.png', 'is_primary' => true]);
+        $private = $room->images()->create(['image_path' => 'profile-avatars/private.png']);
+        $this->actingAs($host);
+        foreach ([$foreign->id, '01', '0', '999999', '1e2', '9223372036854775808'] as $id) {
+            $url = $this->endpoint($room->id).'/'.$id;
+            $this->patchJson($url.'/primary')->assertNotFound(); $this->deleteJson($url)->assertNotFound();
+        }
+        $this->patchJson($this->endpoint($room->id).'/'.$image->id.'/primary', ['is_primary' => true])->assertUnprocessable();
+        $this->deleteJson($this->endpoint($room->id).'/'.$image->id.'?force=1')->assertUnprocessable();
+        $this->patchJson($this->endpoint($room->id).'/'.$private->id.'/primary')->assertConflict();
+        $this->assertTrue($image->fresh()->is_primary);
+        $this->assertTrue($foreign->fresh()->is_primary);
+        $this->deleteJson($this->endpoint($other->id).'/'.$foreign->id)->assertNotFound();
+    }
+
+    public function test_action_auth_and_root_transaction_guards(): void
+    {
+        $host = $this->actor(); $room = $this->room($host);
+        $image = $room->images()->create(['image_path' => 'rooms/a.png', 'is_primary' => true]);
+        $url = $this->endpoint($room->id).'/'.$image->id;
+        $this->patchJson($url.'/primary')->assertUnauthorized(); $this->deleteJson($url)->assertUnauthorized();
+        foreach ([$this->actor('CUSTOMER'), $this->actor('ADMIN'), $this->actor('HOST', 'BLOCKED')] as $actor) {
+            $this->actingAs($actor)->patchJson($url.'/primary')->assertForbidden(); $this->deleteJson($url)->assertForbidden();
+        }
+        DB::beginTransaction();
+        try {
+            app(HostRoomImageService::class)->delete($host, new \App\DTOs\Catalog\Requests\HostRoomImageRequest($room->id, $image->id));
+            $this->fail('Expected root transaction guard');
+        } catch (LogicException $failure) { $this->assertSame('Room image mutations require a root transaction.', $failure->getMessage()); }
+        finally { DB::rollBack(); }
+    }
+
+    public function test_delete_failure_after_row_removal_rolls_back_before_file_cleanup(): void
+    {
+        $host = $this->actor(); $room = $this->room($host);
+        $path = 'rooms/'.$room->id.'/11111111-1111-4111-8111-111111111111.png';
+        Storage::disk('public')->put($path, 'fixture');
+        $image = $room->images()->create(['image_path' => $path, 'is_primary' => true]);
+        $this->mock(CatalogRepository::class, function ($mock) {
+            $mock->makePartial()->shouldReceive('setRoomImagePrimary')->once()->andThrow(new RuntimeException('Fixture primary failure'));
+        });
+        try {
+            $this->withoutExceptionHandling()->actingAs($host)->deleteJson($this->endpoint($room->id).'/'.$image->id);
+            $this->fail('Expected failure');
+        } catch (RuntimeException $failure) { $this->assertSame('Fixture primary failure', $failure->getMessage()); }
+        $this->assertTrue($image->fresh()->is_primary);
+        Storage::disk('public')->assertExists($path);
+    }
+
     private function image(): UploadedFile
     {
         return UploadedFile::fake()->createWithContent('untrusted-name.png', base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGMQSTkBAAHQAUHAZ3dkAAAAAElFTkSuQmCC'));

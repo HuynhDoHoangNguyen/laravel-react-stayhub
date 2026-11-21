@@ -11,6 +11,64 @@ const image = { id: 4, url: 'https://example.test/room.png', is_primary: true };
 const envelope = data => ({ success: true, message: 'Fixture', data });
 const file = () => new File(['fixture'], 'room.png', { type: 'image/png' });
 
+test('primary/delete use production transport, CSRF and mapper without body or automatic replay', async () => {
+    for (const kind of ['primary', 'delete']) {
+        const signal = new AbortController().signal;
+        const calls = [];
+        const client = {
+            get: async (url, options) => { calls.push(url); assert.deepEqual(options, { signal, timeout: 10000 }); },
+            patch: async (url, body, options) => {
+                calls.push(url); assert.equal(body, undefined); assert.deepEqual(options, { signal, timeout: 10000 });
+                return { status: 200, data: envelope([image]) };
+            },
+            delete: async (url, options) => {
+                calls.push(url); assert.deepEqual(options, { signal, timeout: 10000 });
+                return { status: 200, data: envelope({ deleted_image_id: 4, images: [], cleanup_status: 'failed' }) };
+            },
+        };
+        const service = createHostRoomImageService(client);
+        const result = kind === 'primary' ? await service.makePrimary(7, 4, { signal }) : await service.deleteImage(7, 4, { signal });
+        assert.deepEqual(calls, ['/sanctum/csrf-cookie', '/api/host/rooms/7/images/4' + (kind === 'primary' ? '/primary' : '')]);
+        assert.deepEqual(result, kind === 'primary' ? [image] : { deleted_image_id: 4, images: [], cleanup_status: 'failed' });
+    }
+});
+
+test('action validation, CSRF failure and HTTP/cancellation identity preserve retry boundaries', async () => {
+    for (const method of ['makePrimary', 'deleteImage']) {
+        for (const id of ['01', '0', '1e2', -1, {}, null]) {
+            await assert.rejects(createHostRoomImageService({ get: () => assert.fail('Unexpected request') })[method](7, id), error => error.isLocalValidation);
+        }
+        const csrf = new AxiosError('csrf'); csrf.response = { status: 419 };
+        await assert.rejects(createHostRoomImageService({ get: async () => { throw csrf; } })[method](7, 4), error => error === csrf && !error.outcomeUnknown);
+        for (const status of [401, 403, 404, 409, 419, 422, 500, 0]) {
+            const failure = new AxiosError('fixture'); if (status) failure.response = { status };
+            let calls = 0;
+            const send = async () => { calls++; throw failure; };
+            await assert.rejects(createHostRoomImageService({ get: async () => {}, patch: send, delete: send })[method](7, 4),
+                error => error === failure && error.outcomeUnknown === (!status || status >= 500));
+            assert.equal(calls, 1);
+        }
+        const canceled = new CanceledError();
+        const send = async () => { throw canceled; };
+        await assert.rejects(createHostRoomImageService({ get: async () => {}, patch: send, delete: send })[method](7, 4),
+            error => error === canceled && error.outcomeUnknown);
+    }
+});
+
+test('malformed action success is uncertain, including wrong IDs, stale lists and invalid cleanup status', async () => {
+    for (const [method, bodies] of [
+        ['makePrimary', [envelope([]), envelope([{ ...image, is_primary: false }]), envelope([{ ...image, id: 5 }]), envelope([image, { ...image, id: 5 }])]],
+        ['deleteImage', [envelope({ deleted_image_id: 5, images: [], cleanup_status: 'deleted' }),
+            envelope({ deleted_image_id: 4, images: [image], cleanup_status: 'deleted' }),
+            envelope({ deleted_image_id: 4, images: [], cleanup_status: 'unknown' })]],
+    ]) {
+        for (const body of bodies) {
+            const send = async () => ({ status: 200, data: body });
+            await assert.rejects(createHostRoomImageService({ get: async () => {}, patch: send, delete: send })[method](7, 4), error => error.outcomeUnknown);
+        }
+    }
+});
+
 test('list uses production API/service/mapper with signal and no unrelated query', async () => {
     const signal = new AbortController().signal;
     const original = envelope([image]);

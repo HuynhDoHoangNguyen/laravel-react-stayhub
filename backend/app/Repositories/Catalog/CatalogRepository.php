@@ -36,12 +36,18 @@ class CatalogRepository
         return RoomImage::create($attributes)->refresh();
     }
 
-    public function setRoomImagePrimary(int $roomId, int $imageId): void
+    public function setRoomImagePrimary(int $roomId, ?int $imageId): void
     {
-        RoomImage::query()->where('room_id', $roomId)->whereKeyNot($imageId)
-            ->where('is_primary', true)->update(['is_primary' => false]);
-        RoomImage::query()->where('room_id', $roomId)->whereKey($imageId)
+        $others = RoomImage::query()->where('room_id', $roomId)->where('is_primary', true);
+        if ($imageId !== null) $others->whereKeyNot($imageId);
+        $others->update(['is_primary' => false]);
+        if ($imageId !== null) RoomImage::query()->where('room_id', $roomId)->whereKey($imageId)
             ->where('is_primary', false)->update(['is_primary' => true]);
+    }
+
+    public function deleteRoomImage(RoomImage $image): void
+    {
+        if (!$image->delete()) throw new \RuntimeException('Room image deletion failed.');
     }
 
     public function roomImagePathReferenced(string $path): bool
