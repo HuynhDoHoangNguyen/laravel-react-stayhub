@@ -526,17 +526,15 @@ test('PR12-02: SearchRoomCard wires "Đặt ngay" CTA directly to customer check
   // Verify direct link to checkout for available dates
   assert.match(code, /<Link\s+to=\{checkoutHref\}[^>]*>Đặt ngay<\/Link>/);
 
-  // Verify secondary link to property overview
-  assert.match(code, /<Link\s+to=\{propertyHref\}[^>]*>Xem cơ sở<\/Link>/);
+  // Both availability and catalog room cards lead to UC8; checkout stays unchanged.
+  assert.match(code, /const\s+roomHref\s*=\s*'\/rooms\/'\s*\+\s*room\.id/);
+  assert.match(code, /<Link\s+to=\{roomHref\}[^>]*>Xem chi tiết phòng<\/Link>/);
+
+  // Verify fallback for non-availability search
+  assert.equal((code.match(/<Link\s+to=\{roomHref\}[^>]*>Xem chi tiết phòng<\/Link>/g) ?? []).length, 2);
 });
 
-test('UX-ENHANCE-01: Direct booking CTA and date picker in checkout form when dates not preselected', async () => {
-  const searchCardPath = fileURLToPath(new URL('../src/components/search/SearchRoomCard.jsx', import.meta.url));
-  const cardCode = await readFile(searchCardPath, 'utf8');
-
-  // Verify non-availability search offers "Đặt phòng" CTA
-  assert.match(cardCode, /<Link\s+to=\{checkoutHref\}[^>]*>Đặt phòng<\/Link>/);
-
+test('UX-ENHANCE-01: Direct date picker in checkout form when dates not preselected', async () => {
   // Verify CheckoutGuestsStep contains date inputs and date validation
   const guestsStepPath = fileURLToPath(new URL('../src/components/checkout/CheckoutGuestsStep.jsx', import.meta.url));
   const guestsCode = await readFile(guestsStepPath, 'utf8');
@@ -550,4 +548,14 @@ test('UX-ENHANCE-01: Direct booking CTA and date picker in checkout form when da
   assert.match(checkoutCode, /setStartDate\(newStartDate\);/);
   assert.match(checkoutCode, /setEndDate\(newEndDate\);/);
   assert.match(checkoutCode, /previewRequestIdRef\.current\s*\+=\s*1;/);
+});
+
+test('UC8 room header and breadcrumb use the owning property link with query and navigation state', async () => {
+  const path = fileURLToPath(new URL('../src/pages/public/RoomDetailPage.jsx', import.meta.url));
+  const code = await readFile(path, 'utf8');
+  assert.ok(code.includes('`/properties/${room.property.id}${location.search}`'));
+  assert.match(code, /label: room\.property\.name, to: propertyHref, state: location\.state/);
+  assert.match(code, /<Link to=\{propertyHref\} state=\{location\.state\}/);
+  assert.ok(code.includes('Thuộc cơ sở:'));
+  assert.match(code, /<span[^>]*>\{room\.property\.name\}<\/span>/);
 });
