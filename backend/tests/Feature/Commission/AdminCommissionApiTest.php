@@ -292,13 +292,62 @@ class AdminCommissionApiTest extends TestCase
             ['verified_bank_reference' => 'VCB-VERIFIED-FIRST']
         )->assertStatus(200);
 
-        // Attempt reject
+        // Attempt reject -> State conflict 409
         $response = $this->actingAs($this->admin)->postJson(
             "/api/admin/commission-remittances/{$this->remittance->id}/reject",
             ['reason' => 'Muốn từ chối lại']
         );
 
-        $response->assertStatus(422)
+        $response->assertStatus(409)
             ->assertJsonFragment(['message' => 'Không thể từ chối giao dịch đã được xác minh thành công.']);
+    }
+
+    /**
+     * REM-01: Admin không thể verify khi khoản hoa hồng không ở trạng thái DUE (trả về 409).
+     */
+    public function test_admin_cannot_verify_when_commission_is_not_due(): void
+    {
+        $this->commission->update(['status' => CommissionStatus::AWAITING_CUSTOMER_PAYMENT]);
+
+        $response = $this->actingAs($this->admin)->postJson(
+            "/api/admin/commission-remittances/{$this->remittance->id}/verify",
+            ['verified_bank_reference' => 'VCB-NOT-DUE-01']
+        );
+
+        $response->assertStatus(409)
+            ->assertJsonFragment(['message' => 'Khoản hoa hồng liên kết không ở trạng thái Chờ thanh toán (DUE) để xác minh.']);
+    }
+
+    /**
+     * REM-01: Admin không thể verify khi số tiền remittance không khớp với commission (trả về 422).
+     */
+    public function test_admin_cannot_verify_when_remittance_amount_does_not_match_commission(): void
+    {
+        // Sửa amount remittance thành 150000 trong khi commission là 200000
+        $this->remittance->update(['amount' => '150000.00']);
+
+        $response = $this->actingAs($this->admin)->postJson(
+            "/api/admin/commission-remittances/{$this->remittance->id}/verify",
+            ['verified_bank_reference' => 'VCB-MISMATCH-01']
+        );
+
+        $response->assertStatus(422)
+            ->assertJsonFragment(['message' => 'Số tiền đối soát không khớp với số tiền hoa hồng cần nộp.']);
+    }
+
+    /**
+     * REM-01: Admin không thể verify khi remittance đã bị REJECTED (trả về 409).
+     */
+    public function test_admin_cannot_verify_when_remittance_is_already_rejected(): void
+    {
+        $this->remittance->update(['status' => RemittanceStatus::REJECTED, 'review_note' => 'Đã từ chối']);
+
+        $response = $this->actingAs($this->admin)->postJson(
+            "/api/admin/commission-remittances/{$this->remittance->id}/verify",
+            ['verified_bank_reference' => 'VCB-REJECTED-01']
+        );
+
+        $response->assertStatus(409)
+            ->assertJsonFragment(['message' => 'Không thể xác minh yêu cầu nộp tiền không ở trạng thái chờ duyệt (SUBMITTED).']);
     }
 }

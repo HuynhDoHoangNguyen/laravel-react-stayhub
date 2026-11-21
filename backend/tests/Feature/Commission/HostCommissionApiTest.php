@@ -252,7 +252,7 @@ class HostCommissionApiTest extends TestCase
             $payload
         );
 
-        $response->assertStatus(422)
+        $response->assertStatus(409)
             ->assertJsonFragment(['message' => 'Chỉ có thể nộp đối soát cho khoản hoa hồng đang ở trạng thái Chờ thanh toán (DUE).']);
     }
 
@@ -279,7 +279,7 @@ class HostCommissionApiTest extends TestCase
             $payload
         );
 
-        $response->assertStatus(422)
+        $response->assertStatus(409)
             ->assertJsonFragment(['message' => 'Khoản hoa hồng này đã có một yêu cầu đối soát đang chờ Admin kiểm tra.']);
     }
 
@@ -305,5 +305,65 @@ class HostCommissionApiTest extends TestCase
         );
         $res2->assertSuccessful();
         $this->assertSame($remittanceId, $res2->json('data.id'));
+    }
+
+    /**
+     * REM-01: Sau khi Admin verify và commission SETTLED, Host retry cùng key/payload
+     * phải trả về submission cũ thành công (idempotent), không bị lỗi 422 hay 409.
+     */
+    public function test_submit_remittance_retry_is_idempotent_after_admin_verify_and_settlement(): void
+    {
+        $payload = [
+            'amount' => 200000,
+            'idempotency_key' => 'IDEM-VERIFY-SETTLED-RETRY',
+        ];
+
+        // 1. Host nộp lần đầu
+        $res1 = $this->actingAs($this->hostA)->postJson(
+            "/api/host/commissions/{$this->commissionA->id}/remittances",
+            $payload
+        );
+        $res1->assertStatus(201);
+        $remittanceId = $res1->json('data.id');
+
+        // 2. Admin verify và commission chuyển thành SETTLED
+        $remittance = CommissionRemittance::query()->findOrFail($remittanceId);
+        $remittance->update([
+            'status' => RemittanceStatus::VERIFIED,
+            'verified_bank_reference' => 'VCB-RETRY-001',
+            'reviewed_at' => now(),
+        ]);
+        $this->commissionA->update([
+            'status' => CommissionStatus::SETTLED,
+            'settled_at' => now(),
+        ]);
+
+        // 3. Host retry cùng idempotency key và cùng payload -> Thành công trả về bản ghi cũ
+        $resRetry = $this->actingAs($this->hostA)->postJson(
+            "/api/host/commissions/{$this->commissionA->id}/remittances",
+            $payload
+        );
+        $resRetry->assertSuccessful();
+        $this->assertSame($remittanceId, $resRetry->json('data.id'));
+
+        // 4. Nếu Host gửi cùng key nhưng sửa amount khác -> Trả 422
+        $resMismatch = $this->actingAs($this->hostA)->postJson(
+            "/api/host/commissions/{$this->commissionA->id}/remittances",
+            [
+                'amount' => 150000,
+                'idempotency_key' => 'IDEM-VERIFY-SETTLED-RETRY',
+            ]
+        );
+        $resMismatch->assertStatus(422);
+
+        // 5. Nếu gửi key MỚI khi commission đã SETTLED -> Trả 409
+        $resNewKey = $this->actingAs($this->hostA)->postJson(
+            "/api/host/commissions/{$this->commissionA->id}/remittances",
+            [
+                'amount' => 200000,
+                'idempotency_key' => 'IDEM-BRAND-NEW-KEY',
+            ]
+        );
+        $resNewKey->assertStatus(409);
     }
 }

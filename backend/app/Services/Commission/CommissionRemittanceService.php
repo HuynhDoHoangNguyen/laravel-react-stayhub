@@ -128,6 +128,7 @@ class CommissionRemittanceService
 
     /**
      * Host nộp khai báo chuyển khoản đối soát (Remittance).
+     * Tuân thủ quy tắc Idempotency và State Machine (REM-01, AC-16).
      */
     public function submitRemittance(int $commissionId, int $hostId, array $data): CommissionRemittance
     {
@@ -143,17 +144,43 @@ class CommissionRemittanceService
                 throw new NotFoundHttpException('Không tìm thấy khoản hoa hồng cần nộp.');
             }
 
-            // 1. Kiểm tra trạng thái: Phải đang DUE
+            $submittedAmount = number_format((float) ($data['amount'] ?? 0), 2, '.', '');
+            $idempotencyKey = trim((string) ($data['idempotency_key'] ?? ''));
+
+            // 1. Xử lý Idempotency TRƯỚC gate kiểm tra trạng thái DUE (REM-01, AC-16)
+            if ($idempotencyKey !== '') {
+                $existing = CommissionRemittance::query()
+                    ->where('idempotency_key', $idempotencyKey)
+                    ->first();
+
+                if ($existing !== null) {
+                    // Kiểm tra đúng owner và đúng commission
+                    if ($existing->booking_commission_id === $commission->id && $existing->host_id === $hostId) {
+                        // Kiểm tra tính nhất quán của payload: số tiền phải khớp với lần submit trước
+                        if (bccomp($existing->amount, $submittedAmount, 2) === 0) {
+                            return $existing;
+                        }
+
+                        throw new UnprocessableEntityHttpException(
+                            'Khóa idempotency đã được sử dụng với số tiền khác.'
+                        );
+                    }
+
+                    throw new UnprocessableEntityHttpException(
+                        'Khóa idempotency đã được sử dụng cho một giao dịch khác.'
+                    );
+                }
+            }
+
+            // 2. Kiểm tra trạng thái: Phải đang DUE (State conflict dùng 409 theo plan §5.2)
             if ($commission->status !== CommissionStatus::DUE) {
-                throw new UnprocessableEntityHttpException(
+                throw new \Symfony\Component\HttpKernel\Exception\ConflictHttpException(
                     'Chỉ có thể nộp đối soát cho khoản hoa hồng đang ở trạng thái Chờ thanh toán (DUE).'
                 );
             }
 
-            // 2. Kiểm tra số tiền: phải khớp 100%
+            // 3. Kiểm tra số tiền: phải khớp 100% với số tiền hoa hồng cần nộp
             $expectedAmount = number_format((float) $commission->commission_amount, 2, '.', '');
-            $submittedAmount = number_format((float) ($data['amount'] ?? 0), 2, '.', '');
-
             if (bccomp($expectedAmount, $submittedAmount, 2) !== 0) {
                 throw new UnprocessableEntityHttpException(
                     'Số tiền nộp phải khớp 100% với số tiền hoa hồng cần nộp (' .
@@ -161,29 +188,14 @@ class CommissionRemittanceService
                 );
             }
 
-            // 3. Kiểm tra Idempotency
-            $idempotencyKey = (string) ($data['idempotency_key'] ?? '');
-            if ($idempotencyKey !== '') {
-                $existing = CommissionRemittance::query()
-                    ->where('idempotency_key', $idempotencyKey)
-                    ->first();
-
-                if ($existing !== null) {
-                    if ($existing->booking_commission_id === $commission->id && $existing->host_id === $hostId) {
-                        return $existing;
-                    }
-                    throw new UnprocessableEntityHttpException('Khóa idempotency đã được sử dụng cho một giao dịch khác.');
-                }
-            }
-
-            // 4. Kiểm tra xem đã có submission pending chưa
+            // 4. Kiểm tra xem đã có submission pending chưa (State conflict dùng 409)
             $hasPending = CommissionRemittance::query()
                 ->where('booking_commission_id', $commission->id)
                 ->where('status', RemittanceStatus::SUBMITTED)
                 ->exists();
 
             if ($hasPending) {
-                throw new UnprocessableEntityHttpException(
+                throw new \Symfony\Component\HttpKernel\Exception\ConflictHttpException(
                     'Khoản hoa hồng này đã có một yêu cầu đối soát đang chờ Admin kiểm tra.'
                 );
             }

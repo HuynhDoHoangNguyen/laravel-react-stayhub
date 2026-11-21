@@ -113,6 +113,7 @@ class AdminCommissionService
 
     /**
      * Admin xác minh giao dịch đối soát (Verify).
+     * Tuân thủ quy tắc kiểm tra trạng thái và settlement atomic (REM-01, AC-17).
      */
     public function verifyRemittance(int $remittanceId, int $adminId, array $data): array
     {
@@ -127,7 +128,7 @@ class AdminCommissionService
                 throw new NotFoundHttpException('Không tìm thấy yêu cầu nộp đối soát.');
             }
 
-            // Idempotency: nếu đã VERIFIED trước đó thì trả về thành công no-op (AC-17)
+            // 1. Idempotency: nếu đã VERIFIED trước đó thì trả về thành công no-op (AC-17)
             if ($remittance->status === RemittanceStatus::VERIFIED) {
                 return [
                     'remittance' => $remittance,
@@ -135,8 +136,11 @@ class AdminCommissionService
                 ];
             }
 
-            if ($remittance->status === RemittanceStatus::REJECTED) {
-                throw new UnprocessableEntityHttpException('Không thể xác minh yêu cầu nộp tiền đã bị từ chối.');
+            // 2. Kiểm tra trạng thái remittance: bắt buộc phải đang SUBMITTED (State conflict dùng 409)
+            if ($remittance->status !== RemittanceStatus::SUBMITTED) {
+                throw new \Symfony\Component\HttpKernel\Exception\ConflictHttpException(
+                    'Không thể xác minh yêu cầu nộp tiền không ở trạng thái chờ duyệt (SUBMITTED).'
+                );
             }
 
             $verifiedBankRef = trim((string) ($data['verified_bank_reference'] ?? ''));
@@ -144,7 +148,7 @@ class AdminCommissionService
                 throw new UnprocessableEntityHttpException('Mã giao dịch ngân hàng trích từ sao kê là bắt buộc.');
             }
 
-            // Chống tái sử dụng verified_bank_reference (AC-19)
+            // 3. Chống tái sử dụng verified_bank_reference (AC-19)
             $duplicateRef = CommissionRemittance::query()
                 ->where('verified_bank_reference', $verifiedBankRef)
                 ->where('id', '!=', $remittance->id)
@@ -164,6 +168,20 @@ class AdminCommissionService
 
             if ($commission === null) {
                 throw new NotFoundHttpException('Không tìm thấy khoản hoa hồng liên kết.');
+            }
+
+            // 4. Kiểm tra trạng thái commission: bắt buộc phải đang DUE (State conflict dùng 409)
+            if ($commission->status !== CommissionStatus::DUE) {
+                throw new \Symfony\Component\HttpKernel\Exception\ConflictHttpException(
+                    'Khoản hoa hồng liên kết không ở trạng thái Chờ thanh toán (DUE) để xác minh.'
+                );
+            }
+
+            // 5. Kiểm tra số tiền: số tiền đối soát phải khớp 100% với hoa hồng
+            if (bccomp($remittance->amount, $commission->commission_amount, 2) !== 0) {
+                throw new UnprocessableEntityHttpException(
+                    'Số tiền đối soát không khớp với số tiền hoa hồng cần nộp.'
+                );
             }
 
             $now = now();
@@ -208,7 +226,15 @@ class AdminCommissionService
             }
 
             if ($remittance->status === RemittanceStatus::VERIFIED) {
-                throw new UnprocessableEntityHttpException('Không thể từ chối giao dịch đã được xác minh thành công.');
+                throw new \Symfony\Component\HttpKernel\Exception\ConflictHttpException(
+                    'Không thể từ chối giao dịch đã được xác minh thành công.'
+                );
+            }
+
+            if ($remittance->status !== RemittanceStatus::SUBMITTED) {
+                throw new \Symfony\Component\HttpKernel\Exception\ConflictHttpException(
+                    'Yêu cầu nộp đối soát không ở trạng thái chờ duyệt (SUBMITTED) để từ chối.'
+                );
             }
 
             $reason = trim((string) ($data['reason'] ?? ''));
