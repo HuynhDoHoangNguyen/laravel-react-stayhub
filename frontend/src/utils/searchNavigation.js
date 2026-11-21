@@ -17,7 +17,9 @@ export function readSearchNavigation(search = '') {
 export function changeSearchTab(search, tab) {
     if (!['rooms', 'properties'].includes(tab)) throw new Error('Tab tìm kiếm không hợp lệ.');
     const url = new URLSearchParams(search);
+    // Each data source owns its page-size limit and default.
     url.delete('page');
+    url.delete('per_page');
     if (tab === 'rooms') url.delete('tab');
     else url.set('tab', 'properties');
     return url.toString();

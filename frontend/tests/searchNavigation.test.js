@@ -33,11 +33,59 @@ test('switching tabs resets only pagination and retains raw room criteria for re
     const next = changeSearchTab(before, 'properties');
     const parsed = readSearchNavigation(next);
     assert.equal(parsed.tab, 'properties');
-    assert.deepEqual(parsed.propertyParams, { page: 1, per_page: 6 });
+    assert.deepEqual(parsed.propertyParams, { page: 1, per_page: 12 });
     const room = readSearchNavigation(changeSearchTab(next, 'rooms'));
     assert.equal(new URLSearchParams(room.roomSearch).get('max_price'), '100.25');
     assert.equal(new URLSearchParams(room.roomSearch).get('page'), null);
+    assert.equal(new URLSearchParams(room.roomSearch).get('per_page'), null);
     assert.equal(new URLSearchParams(before).get('page'), '4');
+});
+
+test('PR15-01: changing tabs resets page sizes for both consumers and preserves all other URL values', () => {
+    const criteria = 'startDate=2026-12-01&endDate=2026-12-03&check_in_date=2026-12-01&check_out_date=2026-12-03&adults=2&children=1&roomsCount=1&city=Hue&keyword=Hue&q=Hue&guest_count=3&min_price=0.00&max_price=1000000.25&min_rating=4&sort=newest&room_type_ids[]=2&room_type_ids[]=3&amenity_ids[]=7&amenity_ids[]=8';
+    for (const size of [undefined, 6, 12, 24, 25, 50]) {
+        for (const page of [2, 8]) {
+            const original = criteria + '&page=' + page + (size === undefined ? '' : '&per_page=' + size);
+            let next = original;
+            for (const tab of ['properties', 'rooms', 'properties']) {
+                next = changeSearchTab(next, tab);
+                const url = new URLSearchParams(next);
+                assert.equal(url.has('page'), false);
+                assert.equal(url.has('per_page'), false);
+                assert.equal(readSearchNavigation(next).tab, tab);
+                assert.deepEqual(readSearchNavigation(next).propertyParams, { page: 1, per_page: 12 });
+                url.delete('tab');
+                assert.deepEqual([...url], [...new URLSearchParams(criteria)]);
+                assert.equal(searchBackLink({ searchPage: '?' + next }), '/search?' + next);
+            }
+            // Original history entries and legacy redirects retain their own pagination.
+            assert.equal(new URLSearchParams(original).get('page'), String(page));
+            const redirected = new URL(legacyPropertiesTarget(original), 'https://example.test');
+            assert.equal(redirected.searchParams.get('per_page'), size === undefined ? null : String(size));
+            assert.equal(readSearchNavigation(original).roomSearch, new URLSearchParams(original).toString());
+            if (size > 24) assert.equal(readSearchNavigation(redirected.search).propertyParams, null);
+        }
+    }
+});
+
+test('PR15-01: availability tab switch reaches the real property service with valid pagination', async () => {
+    const calls = [];
+    adapter = async config => {
+        calls.push(config);
+        return { status: 200, headers: {}, config, data: { data: [],
+            meta: { current_page: 1, last_page: 1, per_page: 12, total: 0 }, links: {} } };
+    };
+    for (const size of [25, 50]) {
+        const nav = readSearchNavigation(changeSearchTab('startDate=2026-12-01&endDate=2026-12-03&adults=2&page=2&per_page=' + size, 'properties'));
+        const result = await propertyService.getProperties(nav.propertyParams);
+        assert.equal(result.source, 'api');
+        assert.deepEqual(result.data, []);
+    }
+    assert.equal(calls.length, 2);
+    for (const call of calls) {
+        assert.equal(call.url, '/api/public/properties');
+        assert.deepEqual(call.params, { page: 1, per_page: 12 });
+    }
 });
 
 test('property pagination rejects duplicate and malformed fields without receiving room filters', () => {
