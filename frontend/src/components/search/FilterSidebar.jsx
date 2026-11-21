@@ -30,7 +30,7 @@ export function FilterSidebar({ params, options, optionsLoading, optionsError, o
     const selectionCount = draft.room_type_ids.length + draft.amenity_ids.length
         + ['min_price', 'max_price', 'guest_count', 'min_rating'].filter(key => draft[key] !== '').length;
 
-    return <aside aria-label="Bộ lọc phòng" className="flex max-h-[75dvh] flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-[0_10px_40px_-25px_rgba(17,26,19,0.2)] lg:sticky lg:top-24 lg:max-h-[calc(100dvh-7rem)]">
+    return <aside aria-label="Bộ lọc phòng" className="flex min-w-0 max-h-[75dvh] flex-col overflow-hidden rounded-3xl bg-card shadow-[0_10px_40px_-25px_rgba(17,26,19,0.2)] ring-1 ring-black/[0.04] lg:sticky lg:top-[120px] lg:max-h-[calc(100dvh-8rem)]">
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/60 px-5 py-4">
             <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest"><SlidersHorizontal className="h-4 w-4" aria-hidden />Bộ lọc phòng</h2>
             <button type="button" className="whitespace-nowrap text-xs text-primary underline-offset-4 hover:underline" onClick={onReset}>Xóa bộ lọc</button>
