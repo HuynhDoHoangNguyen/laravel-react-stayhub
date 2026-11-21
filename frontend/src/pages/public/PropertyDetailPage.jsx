@@ -2,7 +2,7 @@ import { Link, useLocation, useParams } from 'react-router-dom';
 import { useState } from 'react';
 import { useCatalogResource } from '../../hooks/useCatalogResource';
 import { propertyService } from '../../services/propertyService';
-import { catalogBackLink } from '../../services/catalog';
+import { searchBackLink } from '../../utils/searchNavigation';
 import { PropertyHeader } from '../../components/hotel/PropertyHeader';
 import { PropertyGallery } from '../../components/hotel/PropertyGallery';
 import { PropertyAmenities } from '../../components/hotel/PropertyAmenities';
@@ -20,15 +20,15 @@ export default function PropertyDetailPage() {
 }
 function PropertyView({ id }) {
     const location = useLocation();
-    const back = catalogBackLink(location.state?.catalogPage || '');
+    const back = searchBackLink(location.state);
     const { status, result, error, retry } = useCatalogResource((options) => propertyService.getPropertyById(id, options));
     const property = result?.data;
     return <div className="mx-auto max-w-[1360px] px-6 py-8 md:px-10">
-        <DetailBreadcrumbs items={[{ label: 'Cơ sở lưu trú', to: back }, { label: property?.name || 'Chi tiết cơ sở' }]} />
+        <DetailBreadcrumbs items={[{ label: 'Kết quả khám phá', to: back }, { label: property?.name || 'Chi tiết cơ sở' }]} />
         {status === 'loading' && <p role="status" className="py-20">Đang tải thông tin cơ sở...</p>}
         {status === 'error' && <div role="alert" className="my-10 rounded-3xl border border-border p-8"><p>{error.message}</p><DetailAction tone="secondary" type="button" onClick={retry} className="mt-4">Thử lại</DetailAction></div>}
         {status === 'ready' && !property && <section className="my-12 rounded-3xl bg-surface p-10">
-            <h1 className="font-display text-3xl text-primary">Không tìm thấy cơ sở lưu trú</h1><p className="mt-3 text-sm">Cơ sở không tồn tại hoặc chưa được công khai.</p><DetailAction asChild tone="secondary" className="mt-5"><Link to="/properties">Khám phá cơ sở khác</Link></DetailAction>
+            <h1 className="font-display text-3xl text-primary">Không tìm thấy cơ sở lưu trú</h1><p className="mt-3 text-sm">Cơ sở không tồn tại hoặc chưa được công khai.</p><DetailAction asChild tone="secondary" className="mt-5"><Link to="/search?tab=properties">Khám phá cơ sở khác</Link></DetailAction>
         </section>}
         {status === 'ready' && property && <div className="mt-6 space-y-8">
             {result.source === 'mock' && <p className="text-sm text-amber-800">Dữ liệu giả lập DEV — không hỗ trợ đặt phòng.</p>}

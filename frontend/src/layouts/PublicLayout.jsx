@@ -78,7 +78,6 @@ export default function PublicLayout() {
             >
               Trang chủ
             </NavLink>
-            <Link to="/properties" className={`text-sm font-medium transition-colors ${isOverlay ? 'text-white/90 hover:text-white' : 'text-ink hover:text-primary'}`}>Cơ sở lưu trú</Link>
             <NavLink
               to="/search"
               className={({ isActive }) =>
@@ -180,9 +179,6 @@ export default function PublicLayout() {
 
                   {/* Navigation Links */}
                   <div className="mt-6 flex-1 space-y-1.5 text-left">
-                    <Link to="/properties" onClick={() => setMobileOpen(false)} className="flex items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-medium text-ink hover:bg-surface">
-                      <Building2 className="h-4 w-4 text-primary" /><span>Cơ sở lưu trú</span>
-                    </Link>
                     <Link
                       to="/"
                       onClick={() => setMobileOpen(false)}
@@ -291,9 +287,8 @@ export default function PublicLayout() {
                 <li>
                   <Link to="/" className="transition-colors hover:text-primary">Trang chủ</Link>
                 </li>
-                <li><Link to="/properties" className="transition-colors hover:text-primary">Cơ sở lưu trú</Link></li>
                 <li>
-                  <Link to="/search" className="transition-colors hover:text-primary">Tìm kiếm phòng</Link>
+                  <Link to="/search" className="transition-colors hover:text-primary">Khám phá chỗ nghỉ</Link>
                 </li>
                 <li>
                   <Link to="/customer/invoices" className="transition-colors hover:text-primary">Hóa đơn của tôi</Link>

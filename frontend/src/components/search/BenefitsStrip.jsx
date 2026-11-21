@@ -1,30 +1,30 @@
-import { ShieldCheck, Headphones, Tag, Compass, Users } from "lucide-react";
+import { ShieldCheck, Building2, Tag, Compass, Users } from "lucide-react";
 
 const ITEMS = [
   {
     icon: ShieldCheck,
-    title: "Đặt phòng an toàn",
-    sub: "Bảo mật thông tin & giao dịch",
+    title: "Thông tin rõ ràng",
+    sub: "Phòng, sức chứa và tiện nghi",
   },
   {
     icon: Compass,
-    title: "Tuyển chọn đặc sắc",
-    sub: "Không gian nghỉ dưỡng thanh lịch",
+    title: "Dễ dàng khám phá",
+    sub: "Lựa chọn theo nhu cầu lưu trú",
   },
   {
     icon: Tag,
-    title: "Giá cả minh bạch",
-    sub: "Rõ ràng chi tiết, không phụ phí ẩn",
+    title: "Giá tham khảo",
+    sub: "Hiển thị theo từng đêm",
   },
   {
     icon: Users,
-    title: "Du khách tin chọn",
-    sub: "Đánh giá chân thực từ khách lưu trú",
+    title: "Đánh giá cơ sở",
+    sub: "Điểm và số đánh giá thực tế",
   },
   {
-    icon: Headphones,
-    title: "Hỗ trợ khách hàng",
-    sub: "Đồng hành và giải đáp thắc mắc",
+    icon: Building2,
+    title: "Thông tin cơ sở",
+    sub: "Xem mô tả và hình ảnh chi tiết",
   },
 ];
 
