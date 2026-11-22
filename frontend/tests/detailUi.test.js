@@ -124,3 +124,20 @@ test('merged property breadcrumb restores UC7 room/property URLs while retaining
         assert.equal(searchBackLink(state), '/search?tab=properties');
     }
 });
+
+test('RoomsList renders side-by-side detail and booking links when visiting property detail without dates', async () => {
+    const missingContext = { status: 'missing', checkIn: '', checkOut: '', adults: 2, children: 0, errors: [] };
+    const datelessBooking = {
+        propertyId: 7,
+        source: 'api',
+        context: missingContext,
+        search: '',
+        availability: { loading: false, error: null, value: null },
+    };
+    const html = await render('RoomsList', { rooms: [rooms[0]], booking: datelessBooking });
+    const footer = html.match(/<footer\b[\s\S]*?<\/footer>/)?.[0];
+    assert.ok(footer);
+    assert.ok(footer.includes('Xem chi tiết phòng'));
+    assert.ok(footer.includes('Đặt phòng'));
+    assert.ok(footer.includes('/customer/checkout?propertyId=7&amp;roomId=1&amp;adults=2&amp;children=0'));
+});

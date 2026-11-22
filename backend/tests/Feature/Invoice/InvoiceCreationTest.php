@@ -289,7 +289,7 @@ class InvoiceCreationTest extends TestCase
     public function test_database_unique_constraint_on_invoice_code_throws_runtime_exception(): void
     {
         // Mock method generateUniqueInvoiceCode để cố tình trả về mã đã tồn tại
-        $mockService = new class(app(\App\Repositories\Invoice\InvoiceRepository::class), $this->invoiceService->getValidator(), $this->invoiceService->getCalculationService(), app(\App\Mappers\Invoice\InvoiceMapper::class), app(\Psr\Log\LoggerInterface::class)) extends InvoiceService {
+        $mockService = new class(app(\App\Repositories\Invoice\InvoiceRepository::class), $this->invoiceService->getValidator(), $this->invoiceService->getCalculationService(), app(\App\Mappers\Invoice\InvoiceMapper::class), app(\Psr\Log\LoggerInterface::class), app(\App\Services\Commission\CommissionChargeService::class)) extends InvoiceService {
             public function generateUniqueInvoiceCode(): string
             {
                 return 'INV-DUPLICATE-CODE-001';
@@ -572,6 +572,7 @@ class InvoiceCreationTest extends TestCase
             app(\App\Validators\Invoice\InvoiceValidator::class),
             app(\App\Services\Invoice\InvoiceCalculationService::class),
             app(\App\Mappers\Invoice\InvoiceMapper::class), app(\Psr\Log\LoggerInterface::class),
+            app(\App\Services\Commission\CommissionChargeService::class),
         ) extends InvoiceService {
             public function generateUniqueInvoiceCode(): string { return '   '; }
         };

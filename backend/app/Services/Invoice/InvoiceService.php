@@ -9,6 +9,7 @@ use App\Mappers\Invoice\InvoiceMapper;
 use App\Repositories\Invoice\InvoiceRepository;
 use App\Models\User;
 use App\Exceptions\Invoice\DuplicateInvoiceException;
+use App\Services\Commission\CommissionChargeService;
 use App\Validators\Invoice\InvoiceValidator;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
@@ -23,6 +24,7 @@ class InvoiceService
         protected readonly InvoiceCalculationService $calculationService,
         protected readonly InvoiceMapper $mapper,
         protected readonly LoggerInterface $logger,
+        protected readonly CommissionChargeService $commissionChargeService,
     ) {}
 
     /**
@@ -115,6 +117,7 @@ class InvoiceService
                 foreach ($calcResult['service_items'] as $svcItem) {
                     $this->repository->createInvoiceItem($invoice, $this->mapper->toServiceItemAttributes($svcItem));
                 }
+                $this->commissionChargeService->createChargeForInvoice($invoice, $booking);
             } catch (QueryException $e) {
                 $this->handleQueryException($e, $booking->id);
             }

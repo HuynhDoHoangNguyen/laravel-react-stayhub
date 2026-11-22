@@ -39,12 +39,16 @@ import HostInvoiceListPage from '../pages/host/HostInvoiceListPage';
 import HostInvoiceDetailPage from '../pages/host/HostInvoiceDetailPage';
 import HostInvoiceCreationPage from '../pages/host/HostInvoiceCreationPage';
 import HostReviewsPage from '../pages/host/HostReviewsPage';
+import HostCommissionsPage from '../pages/host/HostCommissionsPage';
 
 import AdminDashboardPage from '../pages/admin/AdminDashboardPage';
 import AdminStatisticsPage from '../pages/admin/AdminStatisticsPage';
+import AdminBookingListPage from '../pages/admin/AdminBookingListPage';
 import AdminInvoiceListPage from '../pages/admin/AdminInvoiceListPage';
 import AdminCustomersPage from '../pages/admin/AdminCustomersPage';
 import AdminHostsPage from '../pages/admin/AdminHostsPage';
+import AdminCommissionsPage from '../pages/admin/AdminCommissionsPage';
+import AdminUsersPage from '../pages/admin/AdminUsersPage';
 import ProfilePage from '../components/profile/ProfilePage';
 
 function AppRouter() {
@@ -98,6 +102,7 @@ function AppRouter() {
                     <Route path="invoices/:invoiceId" element={<HostInvoiceDetailPage />} />
                     <Route path="bookings/:bookingId/create-invoice" element={<HostInvoiceCreationPage />} />
                     <Route path="invoices/create" element={<HostInvoiceCreationPage />} />
+                    <Route path="commissions" element={<HostCommissionsPage />} />
                     <Route path="reviews" element={<HostReviewsPage />} />
                 </Route>
             </Route>
@@ -107,9 +112,12 @@ function AppRouter() {
                 <Route path="/admin" element={<AdminLayout />}>
                     <Route index element={<AdminDashboardPage />} />
                     <Route path="statistics" element={<AdminStatisticsPage />} />
+                    <Route path="user-management" element={<AdminUsersPage />} />
+                    <Route path="bookings" element={<AdminBookingListPage />} />
                     <Route path="invoices" element={<AdminInvoiceListPage />} />
                     <Route path="users" element={<AdminCustomersPage />} />
                     <Route path="hosts" element={<AdminHostsPage />} />
+                    <Route path="commissions" element={<AdminCommissionsPage />} />
                     <Route path="profile" element={<ProfilePage />} />
                 </Route>
             </Route>

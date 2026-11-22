@@ -12,7 +12,14 @@ import { PropertyResultsPanel } from '../../components/search/PropertyResultsPan
 import { readSearchNavigation, changeSearchTab } from '../../utils/searchNavigation';
 import { normalizeApiError } from '../../api/apiError';
 import { roomSearchService, readRoomSearch, updateRoomSearch, createRoomSearchLoader } from '../../services/roomSearchService';
-import { isAvailabilitySearch, parseAvailabilitySearchParams, searchAvailableRooms } from '../../services/roomAvailabilitySearchService';
+import {
+    isAvailabilitySearch,
+    hasPartialDateRange,
+    isDatelessBarSearch,
+    parseAvailabilitySearchParams,
+    searchAvailableRooms,
+    searchDatelessRooms,
+} from '../../services/roomAvailabilitySearchService';
 
 function useRoomRequest(request) {
     const [loader] = useState(createRoomSearchLoader);
@@ -25,17 +32,43 @@ const getOptions = signal => roomSearchService.filterOptions({ signal });
 // Keyed by URL so history navigation starts with the correct form and no stale results.
 function RoomResults({ search, navigate, view, onViewChange }) {
     const available = isAvailabilitySearch(search);
-    const availability = available ? parseAvailabilitySearchParams(search) : null;
-    const params = available ? { ...availability.params,
+    const barSearch = isDatelessBarSearch(search);
+    const searchUrl = new URLSearchParams(search);
+    const availability = (available || barSearch) ? parseAvailabilitySearchParams(search) : null;
+    const params = (available || barSearch) ? { ...availability.params,
         room_type_ids: availability.room_type_ids.map(String),
         amenity_ids: (availability.params.amenity_ids ?? []).map(String),
         min_rating: String(availability.min_rating) } : readRoomSearch(search).params;
     const [request] = useState(() => signal => available
-        ? searchAvailableRooms(search, { signal }) : roomSearchService.list(search, { signal }));
-    const checkoutChildren = available ? Math.min(Math.max(0, Number.isFinite(availability.children) ? availability.children : 0), availability.guests - 1) : 0;
-    const forwardParams = available ? new URLSearchParams({ startDate: availability.checkIn, endDate: availability.checkOut,
-        checkIn: availability.checkIn, checkOut: availability.checkOut,
-        adults: String(availability.guests - checkoutChildren), children: String(checkoutChildren) }).toString() : '';
+        ? searchAvailableRooms(search, { signal })
+        : barSearch
+            ? searchDatelessRooms(search, { signal })
+            : roomSearchService.list(search, { signal }));
+
+    // Preserve guest count (adults & children) whether dates are preselected or not (PR18-FIX-01 Finding 2)
+    const rawAdults = searchUrl.get('adults');
+    const rawChildren = searchUrl.get('children');
+    const rawGuests = searchUrl.get('guest_count');
+    const parsedGuests = rawGuests ? parseInt(rawGuests, 10) : NaN;
+    const parsedAdults = rawAdults ? parseInt(rawAdults, 10) : (Number.isFinite(parsedGuests) ? parsedGuests : 2);
+    const parsedChildren = rawChildren ? parseInt(rawChildren, 10) : 0;
+    const finalAdults = Math.max(1, Number.isFinite(parsedAdults) ? parsedAdults : 2);
+    const finalChildren = Math.max(0, Number.isFinite(parsedChildren) ? parsedChildren : 0);
+
+    const forwardUrl = new URLSearchParams();
+    if (available && availability) {
+        const checkoutChildren = Math.min(Math.max(0, Number.isFinite(availability.children) ? availability.children : 0), availability.guests - 1);
+        forwardUrl.set('startDate', availability.checkIn);
+        forwardUrl.set('endDate', availability.checkOut);
+        forwardUrl.set('checkIn', availability.checkIn);
+        forwardUrl.set('checkOut', availability.checkOut);
+        forwardUrl.set('adults', String(availability.guests - checkoutChildren));
+        forwardUrl.set('children', String(checkoutChildren));
+    } else {
+        forwardUrl.set('adults', String(finalAdults));
+        forwardUrl.set('children', String(finalChildren));
+    }
+    const forwardParams = forwardUrl.toString();
     const results = useRoomRequest(request);
     const options = useRoomRequest(getOptions);
     const errors = results.error?.response?.data?.errors ?? {};
@@ -51,8 +84,9 @@ function RoomResults({ search, navigate, view, onViewChange }) {
             behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start',
         });
     };
-    const reset = () => change({ min_price: null, max_price: null, guest_count: null, min_rating: null,
-        room_type_ids: [], amenity_ids: [], sort: null, per_page: null });
+    const reset = () => {
+        navigate({});
+    };
     return <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-[280px_minmax(0,1fr)_340px]">
         <FilterSidebar params={params} options={options.value} optionsLoading={options.loading} optionsError={options.error}
             onRetryOptions={options.retry} errors={errors} onApply={change} onReset={reset} />
@@ -60,7 +94,9 @@ function RoomResults({ search, navigate, view, onViewChange }) {
             <ResultsHeader meta={meta} sortBy={params.sort ?? 'price_asc'} availability={available} onSortChange={sort => change({ sort })} view={view} onViewChange={onViewChange} />
             <p className="text-[12.5px] leading-relaxed text-muted-foreground">{available
                 ? `Tìm phòng trống từ ${availability.checkIn} đến ${availability.checkOut}, cho ${availability.guests} khách mỗi phòng.`
-                : 'Lọc theo giá mỗi đêm, sức chứa, loại phòng, tiện nghi và đánh giá của cơ sở. Giá tham khảo, chưa kiểm tra phòng trống theo ngày.'}</p>
+                : barSearch && availability?.keyword
+                    ? `Tìm phòng tại "${availability.keyword}" cho ${availability.guests} khách mỗi phòng. Giá tham khảo, bạn sẽ chọn ngày nhận và trả phòng ở bước Đặt phòng.`
+                    : 'Lọc theo giá mỗi đêm, sức chứa, loại phòng, tiện nghi và đánh giá của cơ sở. Giá tham khảo, chưa kiểm tra phòng trống theo ngày.'}</p>
             {results.loading && <p role="status" className="text-sm text-muted-foreground">Đang tải phòng…</p>}
             {results.error && <div role="alert" className="rounded-3xl bg-card ring-1 ring-black/[0.04]">
                 <EmptyState title={failure.status === 422 ? 'Bộ lọc không hợp lệ' : 'Không tải được danh sách phòng'}
@@ -93,8 +129,16 @@ export default function SearchResultsPage() {
     }, [view]);
     const search = searchParams.toString();
     const navigation = readSearchNavigation(search);
-    const unsupported = navigation.tab === 'rooms' && !isAvailabilitySearch(navigation.roomSearch)
+    const hasDates = isAvailabilitySearch(navigation.roomSearch);
+    const partialDate = hasPartialDateRange(navigation.roomSearch);
+    const barSearch = isDatelessBarSearch(navigation.roomSearch);
+    const unsupported = navigation.tab === 'rooms' && !hasDates && !barSearch
         ? readRoomSearch(navigation.roomSearch).unsupported : [];
+    const propertyKeyword = (searchParams.get('city') ?? searchParams.get('keyword') ?? searchParams.get('q') ?? '').trim();
+    const hasPropertyGuestFilter = searchParams.has('guest_count') || searchParams.has('adults') || searchParams.has('children');
+    const propertyGuestCount = hasPropertyGuestFilter
+        ? parseAvailabilitySearchParams(navigation.roomSearch).guests
+        : null;
     const switchTab = tab => setSearchParams(changeSearchTab(search, tab));
     return <div className="min-h-screen bg-background">
         <SearchSummaryBar city={searchParams.get('city') ?? searchParams.get('keyword') ?? searchParams.get('q') ?? ''} startDate={searchParams.get('startDate') ?? searchParams.get('check_in_date') ?? ''}
@@ -107,13 +151,25 @@ export default function SearchResultsPage() {
                     onClick={() => switchTab(tab)} className={['rounded-full border px-5 py-2.5 text-sm font-medium', navigation.tab === tab ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-ink'].join(' ')}>{label}</button>)}
             </nav>
             {navigation.error ? <section role="alert"><EmptyState title="Tab tìm kiếm không hợp lệ" message={navigation.error} onRetry={() => switchTab('rooms')} actionLabel="Về tab Phòng" /></section>
+                : partialDate ? <section role="alert" className="rounded-3xl bg-card p-8 ring-1 ring-black/[0.04]">
+                <h2 className="font-display text-xl text-destructive">Khoảng ngày tìm kiếm chưa hợp lệ</h2>
+                <p className="mt-3 text-sm text-muted-foreground">Vui lòng chọn cả ngày nhận phòng và ngày trả phòng để tìm kiếm phòng trống theo khoảng thời gian.</p>
+                <button type="button" className="mt-5 rounded-full bg-primary px-5 py-3 font-semibold text-primary-foreground"
+                    onClick={() => {
+                        const next = new URLSearchParams(navigation.roomSearch);
+                        next.delete('startDate'); next.delete('endDate');
+                        next.delete('checkIn'); next.delete('checkOut');
+                        next.delete('check_in_date'); next.delete('check_out_date');
+                        setSearchParams(next);
+                    }}>Bỏ chọn ngày để xem danh mục phòng</button>
+            </section>
                 : unsupported.length ? <section role="alert" className="rounded-3xl bg-card p-8 ring-1 ring-black/[0.04]">
                 <h2 className="font-display text-xl">Tìm kiếm theo ngày hoặc địa điểm chưa được hỗ trợ</h2>
                 <p className="mt-3 text-sm text-muted-foreground">Địa chỉ hiện tại có bộ lọc chưa được hỗ trợ ({unsupported.join(', ')}). Chưa có kết quả xác nhận khả dụng cho yêu cầu này.</p>
                 <button type="button" className="mt-5 rounded-full bg-primary px-5 py-3 font-semibold text-primary-foreground"
                     onClick={() => setSearchParams(updateRoomSearch(navigation.roomSearch, {}, { clearUnsupported: true }))}>Chuyển sang lọc phòng cơ bản</button>
             </section> : navigation.tab === 'properties' ? navigation.propertyParams
-                ? <PropertyResultsPanel key={search} params={navigation.propertyParams} onPageChange={page => { const next = new URLSearchParams(search); next.set('page', String(page)); setSearchParams(next); }}
+                ? <PropertyResultsPanel key={search} params={navigation.propertyParams} keyword={propertyKeyword} guestCount={propertyGuestCount} onPageChange={page => { const next = new URLSearchParams(search); next.set('page', String(page)); setSearchParams(next); }}
                     onShowRooms={() => switchTab('rooms')} view={view} onViewChange={setView} />
                 : <section role="alert"><EmptyState title="Tham số danh sách cơ sở không hợp lệ" message="Trang phải là số nguyên dương; số cơ sở mỗi trang từ 1 đến 24." /></section>
                 : <RoomResults key={navigation.roomSearch} search={navigation.roomSearch} navigate={setSearchParams} view={view} onViewChange={setView} />}

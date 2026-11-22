@@ -35,6 +35,8 @@ final class GlobalExceptionHandler
         'admin.dashboard.show',
         'admin.invoices.index',
         'admin.invoices.filter-options',
+        'admin.bookings.index',
+        'admin.bookings.filter-options',
         'host.invoices.index', 'host.invoices.show', 'host.bookings.invoice.store',
         'host.invoices.payment-status.update',
         'customer.invoices.index', 'customer.invoices.show',
@@ -61,6 +63,14 @@ final class GlobalExceptionHandler
         if ($exception instanceof AppException
             && (self::CATALOG_ERROR_STATUSES[$exception->errorCode] ?? null) === $exception->status) {
             return response()->json(['message' => $exception->getMessage()], $exception->status);
+        }
+
+        if ($exception instanceof AppException && $exception->errorCode === ErrorCode::AGREEMENT_REQUIRED) {
+            return response()->json([
+                'success' => false,
+                'code' => $exception->errorCode,
+                'message' => $exception->getMessage(),
+            ], $exception->status);
         }
 
         if (!$request->routeIs(...self::ROUTES)) {

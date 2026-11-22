@@ -35,9 +35,11 @@ const ADMIN_NAV = [
   { to: "/admin/statistics", label: "Thống kê hệ thống", icon: ConsoleIcon },
   { to: "/admin/users", label: "Khách hàng", icon: UsersIcon },
   { to: "/admin/hosts", label: "Host", icon: UsersIcon },
+  { to: "/admin/user-management", label: "Người dùng & duyệt Host", icon: UsersIcon },
   { to: "/admin/properties", label: "Cơ sở lưu trú", icon: HotelIcon },
   { to: "/admin/bookings", label: "Đơn đặt phòng", icon: BookingsIcon },
   { to: "/admin/invoices", label: "Hóa đơn hệ thống", icon: InvoiceIcon },
+  { to: "/admin/commissions", label: "Đối soát hoa hồng", icon: ShieldCheck },
 ];
 
 export default function AdminLayout() {

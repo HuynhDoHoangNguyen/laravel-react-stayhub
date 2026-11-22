@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Symfony\Component\Validator\Constraints as Assert;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Invoice extends Model
 {
@@ -67,6 +68,14 @@ class Invoice extends Model
     public function items(): HasMany
     {
         return $this->hasMany(InvoiceItem::class, 'invoice_id');
+    }
+
+    /**
+     * Get the platform commission associated with the invoice.
+     */
+    public function commission(): HasOne
+    {
+        return $this->hasOne(BookingCommission::class, 'invoice_id');
     }
 
     /** Explicit pilot/create groups; ordinary Eloquent saves do not trigger validation. */

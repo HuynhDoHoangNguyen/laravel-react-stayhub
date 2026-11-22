@@ -185,3 +185,59 @@ test('property API retains its actual endpoint and does not call legacy Search',
     adapter = async config => { assert.equal(config.url, '/api/public/properties'); return { status: 200, headers: {}, config, data: { data: [] } }; };
     assert.deepEqual(await createPublicPropertyApi(client).getProperties({ page: 1, per_page: 12 }), { data: [] });
 });
+
+test('searchPaginatedProperties delegates to /api/public/properties-search with keyword, guest_count and pagination without forcing last_page = 1', async () => {
+    const calls = [];
+    const page2Item = {
+        id: 15,
+        name: 'Villa Đà Lạt Gia Đình',
+        type: 'HOMESTAY',
+        address: '20 Trần Phú, Đà Lạt',
+        starting_price: '1200000.00',
+        rating: 4.8,
+        review_count: 5,
+    };
+    const serverMeta = { current_page: 2, last_page: 2, per_page: 1, total: 2, from: 2, to: 2 };
+    adapter = async config => {
+        calls.push(config);
+        return {
+            status: 200,
+            headers: {},
+            config,
+            data: { data: [page2Item], meta: serverMeta, links: { prev: '?page=1' } },
+        };
+    };
+
+    const result = await propertyService.searchPaginatedProperties({
+        page: 2,
+        per_page: 1,
+        keyword: ' Đà Lạt ',
+        guest_count: 4,
+    });
+
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, '/api/public/properties-search');
+    assert.deepEqual(calls[0].params, {
+        page: 2,
+        per_page: 1,
+        keyword: 'Đà Lạt',
+        guest_count: 4,
+    });
+    assert.equal(result.data.length, 1);
+    assert.equal(result.data[0].id, 15);
+    assert.deepEqual(result.meta, serverMeta);
+});
+
+test('searchPaginatedProperties falls back to /api/public/properties when neither keyword nor guest_count is provided', async () => {
+    const calls = [];
+    const meta = { current_page: 1, last_page: 1, per_page: 12, total: 0 };
+    adapter = async config => {
+        calls.push(config);
+        return { status: 200, headers: {}, config, data: { data: [], meta, links: {} } };
+    };
+
+    await propertyService.searchPaginatedProperties({ page: 1, per_page: 12, keyword: '   ', guest_count: null });
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, '/api/public/properties');
+    assert.deepEqual(calls[0].params, { page: 1, per_page: 12 });
+});

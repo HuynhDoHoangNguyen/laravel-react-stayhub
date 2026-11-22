@@ -10,6 +10,7 @@ use App\Models\Booking;
 use App\Models\User;
 use App\Repositories\Booking\BookingRepository;
 use App\Repositories\Booking\BookingServiceRepository;
+use App\Services\Agreement\PartnerAgreementService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -22,8 +23,11 @@ class BookingService
         protected PricingService $pricingService,
         protected BookingRepository $bookingRepository,
         protected BookingServiceRepository $bookingServiceRepository,
-        protected BookingWorkflowService $bookingWorkflowService
-    ) {}
+        protected BookingWorkflowService $bookingWorkflowService,
+        protected ?PartnerAgreementService $agreementService = null
+    ) {
+        $this->agreementService = $agreementService ?? app(PartnerAgreementService::class);
+    }
 
     /**
      * Build a public preview using the same availability and pricing rules as create.
@@ -38,6 +42,17 @@ class BookingService
                 'room_id' => [__('validation.exists', ['attribute' => 'room id'])],
             ]);
         }
+
+        // BIZ-01: Bắt buộc Host phải hoàn tất thỏa thuận đối tác PUBLISHED đang có hiệu lực
+        $room->loadMissing('property');
+        $hostId = (int) ($room->property?->host_id ?? 0);
+        $currentAgreement = $this->agreementService->getCurrentAgreement($hostId);
+        if ($currentAgreement !== null && empty($currentAgreement['is_accepted'])) {
+            throw ValidationException::withMessages([
+                'room_id' => ['Host sở hữu cơ sở lưu trú chưa hoàn tất thỏa thuận hợp đồng đối tác. Không thể tạo đơn đặt phòng lúc này.'],
+            ]);
+        }
+
         try {
             $quote = $this->pricingService->quote(
                 $room,
@@ -112,6 +127,22 @@ class BookingService
                 ]);
             }
 
+            // Snapshot commission rate from Host active partner agreement
+            $room->loadMissing('property');
+            $hostId = (int) ($room->property?->host_id ?? 0);
+
+            // BIZ-01: Bắt buộc Host phải hoàn tất thỏa thuận đối tác PUBLISHED đang có hiệu lực
+            $currentAgreement = $this->agreementService->getCurrentAgreement($hostId);
+            if ($currentAgreement !== null && empty($currentAgreement['is_accepted'])) {
+                throw ValidationException::withMessages([
+                    'room_id' => ['Host sở hữu cơ sở lưu trú chưa hoàn tất thỏa thuận hợp đồng đối tác. Không thể tạo đơn đặt phòng lúc này.'],
+                ]);
+            }
+
+            $activeAcceptance = $hostId > 0 ? $this->agreementService->getHostActiveAcceptance($hostId) : null;
+            $commissionRateBps = $activeAcceptance?->agreement?->commission_rate_bps;
+            $acceptanceId = $activeAcceptance?->id;
+
             // Generate unique booking code
             $prefix = config('booking.code_prefix', 'BK');
             $bookingCode = null;
@@ -137,6 +168,8 @@ class BookingService
                 'number_of_nights' => $quote['number_of_nights'],
                 'price_per_night' => $quote['price_per_night'],
                 'room_total' => $quote['room_total'],
+                'commission_rate_bps' => $commissionRateBps,
+                'host_agreement_acceptance_id' => $acceptanceId,
                 'status' => BookingStatus::PENDING,
                 'note' => $input->note,
             ]);

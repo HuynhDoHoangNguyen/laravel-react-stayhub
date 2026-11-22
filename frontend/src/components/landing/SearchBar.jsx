@@ -67,8 +67,13 @@ export function SearchBar() {
       return;
     }
 
-    if (!checkIn || !checkOut) {
-      toast.error("Vui lòng chọn ngày nhận phòng và trả phòng.");
+    if (checkIn && !checkOut) {
+      toast.error("Vui lòng chọn ngày trả phòng.");
+      return;
+    }
+
+    if (!checkIn && checkOut) {
+      toast.error("Vui lòng chọn ngày nhận phòng.");
       return;
     }
 

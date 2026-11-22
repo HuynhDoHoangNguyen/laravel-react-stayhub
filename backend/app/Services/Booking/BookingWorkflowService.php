@@ -29,7 +29,15 @@ class BookingWorkflowService
     public function confirm(Booking $booking, User $actor): Booking
     {
         return DB::transaction(function () use ($booking, $actor) {
+            // Lock Room first to establish hierarchical lock order (Room -> Booking) and prevent deadlocks with maintenance workflows
+            $roomId = (int) ($booking->room_id ?: Booking::query()->whereKey($booking->id)->value('room_id'));
+            $room = $this->bookingRepository->lockRoomForUpdate($roomId);
             $currentBooking = $this->bookingRepository->lockForUpdate($booking->id);
+
+            if ($currentBooking->room_id !== $room->id) {
+                $room = $this->bookingRepository->lockRoomForUpdate($currentBooking->room_id);
+            }
+
             Gate::forUser($actor)->authorize('manageHost', $currentBooking);
 
             $currentStatus = $currentBooking->status instanceof BookingStatus
@@ -41,7 +49,6 @@ class BookingWorkflowService
             }
 
             // Re-check room availability (excluding current booking)
-            $room = $this->bookingRepository->lockRoomForUpdate($currentBooking->room_id);
             $checkResult = $this->availabilityService->check(
                 $room,
                 $currentBooking->check_in_date,

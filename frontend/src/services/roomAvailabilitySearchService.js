@@ -7,15 +7,36 @@ import {
 export function isAvailabilitySearch(search) {
   if (!search) return false;
   const url = typeof search === 'string' ? new URLSearchParams(search) : search;
-  const hasCheckIn = Boolean(url.get('startDate') || url.get('check_in_date'));
-  const hasCheckOut = Boolean(url.get('endDate') || url.get('check_out_date'));
+  const hasCheckIn = Boolean(url.get('startDate') || url.get('check_in_date') || url.get('checkIn'));
+  const hasCheckOut = Boolean(url.get('endDate') || url.get('check_out_date') || url.get('checkOut'));
   return hasCheckIn && hasCheckOut;
+}
+
+export function hasPartialDateRange(search) {
+  if (!search) return false;
+  const url = typeof search === 'string' ? new URLSearchParams(search) : search;
+  const hasCheckIn = Boolean(url.get('startDate') || url.get('check_in_date') || url.get('checkIn'));
+  const hasCheckOut = Boolean(url.get('endDate') || url.get('check_out_date') || url.get('checkOut'));
+  return (hasCheckIn && !hasCheckOut) || (!hasCheckIn && hasCheckOut);
+}
+
+export function isDatelessBarSearch(search) {
+  if (!search) return false;
+  if (isAvailabilitySearch(search) || hasPartialDateRange(search)) return false;
+  const url = typeof search === 'string' ? new URLSearchParams(search) : search;
+  const hasLocation = Boolean(
+    (url.get('city') && url.get('city').trim()) ||
+    (url.get('keyword') && url.get('keyword').trim()) ||
+    (url.get('q') && url.get('q').trim())
+  );
+  const hasBarGuests = url.has('adults') || url.has('children') || url.has('roomsCount');
+  return hasLocation || hasBarGuests;
 }
 
 export function parseAvailabilitySearchParams(search) {
   const url = typeof search === 'string' ? new URLSearchParams(search) : search;
-  const checkIn = url.get('startDate') || url.get('check_in_date') || '';
-  const checkOut = url.get('endDate') || url.get('check_out_date') || '';
+  const checkIn = url.get('startDate') || url.get('check_in_date') || url.get('checkIn') || '';
+  const checkOut = url.get('endDate') || url.get('check_out_date') || url.get('checkOut') || '';
   const adults = parseInt(url.get('adults') || '2', 10);
   const children = parseInt(url.get('children') || '0', 10);
   const rawGuests = url.get('guest_count');
@@ -71,7 +92,30 @@ export function mapAvailabilityRooms(items) {
 }
 
 export async function searchAvailableRooms(search, options = {}) {
-  const { params } = parseAvailabilitySearchParams(search);
+  const { params, checkIn, checkOut } = parseAvailabilitySearchParams(search);
+  if (!checkIn || !checkOut) {
+    const error = new Error('Vui lòng chọn cả ngày nhận phòng và ngày trả phòng để tìm phòng trống.');
+    error.response = {
+      status: 422,
+      data: {
+        message: 'Vui lòng chọn cả ngày nhận phòng và ngày trả phòng.',
+        errors: {
+          ...(!checkIn ? { check_in_date: ['Ngày nhận phòng là bắt buộc khi tìm phòng trống theo ngày.'] } : {}),
+          ...(!checkOut ? { check_out_date: ['Ngày trả phòng là bắt buộc khi tìm phòng trống theo ngày.'] } : {}),
+        },
+      },
+    };
+    throw error;
+  }
   const response = await roomSearchApi.search(params, options);
+  return mapRoomAvailabilitySearchResponse(response.data);
+}
+
+export async function searchDatelessRooms(search, options = {}) {
+  const { params } = parseAvailabilitySearchParams(search);
+  const queryParams = { ...params };
+  delete queryParams.check_in_date;
+  delete queryParams.check_out_date;
+  const response = await roomSearchApi.search(queryParams, options);
   return mapRoomAvailabilitySearchResponse(response.data);
 }

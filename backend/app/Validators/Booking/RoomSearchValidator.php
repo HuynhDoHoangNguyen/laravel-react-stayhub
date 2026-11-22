@@ -20,9 +20,21 @@ class RoomSearchValidator
      */
     public function validateSearchRooms(array $input): SearchRoomsQuery
     {
+        $isDatelessSearch = empty($input['check_in_date'])
+            && empty($input['check_out_date'])
+            && (! empty($input['keyword']) || isset($input['guest_count']));
+
+        $checkInRules = $isDatelessSearch
+            ? ['nullable', 'date', 'date_format:Y-m-d', 'after_or_equal:today']
+            : ['required', 'date', 'date_format:Y-m-d', 'after_or_equal:today'];
+
+        $checkOutRules = $isDatelessSearch
+            ? ['nullable', 'date', 'date_format:Y-m-d', 'after:check_in_date']
+            : ['required', 'date', 'date_format:Y-m-d', 'after:check_in_date'];
+
         $validated = $this->validation->make($input, [
-            'check_in_date' => ['required', 'date', 'date_format:Y-m-d', 'after_or_equal:today'],
-            'check_out_date' => ['required', 'date', 'date_format:Y-m-d', 'after:check_in_date'],
+            'check_in_date' => $checkInRules,
+            'check_out_date' => $checkOutRules,
             'guest_count' => ['required', 'integer', 'min:1'],
             'property_id' => ['nullable', 'integer', 'min:1'],
             'keyword' => ['nullable', 'string'],
@@ -119,8 +131,12 @@ class RoomSearchValidator
             : null;
 
         return new SearchRoomsQuery(
-            checkInDate: (string) $validated['check_in_date'],
-            checkOutDate: (string) $validated['check_out_date'],
+            checkInDate: isset($validated['check_in_date']) && $validated['check_in_date'] !== ''
+                ? (string) $validated['check_in_date']
+                : null,
+            checkOutDate: isset($validated['check_out_date']) && $validated['check_out_date'] !== ''
+                ? (string) $validated['check_out_date']
+                : null,
             guestCount: (int) $validated['guest_count'],
             propertyId: isset($validated['property_id']) && $validated['property_id'] !== '' ? (int) $validated['property_id'] : null,
             keyword: isset($validated['keyword']) && $validated['keyword'] !== '' ? (string) $validated['keyword'] : null,
@@ -133,6 +149,37 @@ class RoomSearchValidator
             roomTypeIds: $roomTypeIds,
             minRating: $minRating,
         );
+    }
+
+    /**
+     * Validate raw input for public property search (before pagination).
+     *
+     * @param array<string, mixed> $input
+     * @return array{keyword: ?string, guest_count: ?int, page: int, per_page: int}
+     */
+    public function validateSearchProperties(array $input): array
+    {
+        $validated = $this->validation->make($input, [
+            'keyword' => ['nullable', 'string', 'max:255'],
+            'guest_count' => ['nullable', 'integer', 'min:1'],
+            'page' => ['nullable', 'integer', 'min:1', 'max:2147483647'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:24'],
+        ])->validate();
+
+        $keyword = isset($validated['keyword']) ? trim((string) $validated['keyword']) : '';
+
+        return [
+            'keyword' => $keyword !== '' ? $keyword : null,
+            'guest_count' => isset($validated['guest_count']) && $validated['guest_count'] !== ''
+                ? (int) $validated['guest_count']
+                : null,
+            'page' => isset($validated['page']) && $validated['page'] !== ''
+                ? (int) $validated['page']
+                : 1,
+            'per_page' => isset($validated['per_page']) && $validated['per_page'] !== ''
+                ? (int) $validated['per_page']
+                : 12,
+        ];
     }
 
     /**

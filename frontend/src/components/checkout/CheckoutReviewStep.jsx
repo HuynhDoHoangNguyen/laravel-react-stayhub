@@ -10,6 +10,7 @@ import {
   Edit2,
   Info,
   ExternalLink,
+  CreditCard,
   X,
   Loader2,
 } from 'lucide-react';
@@ -221,7 +222,31 @@ export function CheckoutReviewStep({
         </div>
       </div>
 
-      {/* 4. Truthful Preview Workflow Banner & Action */}
+      {/* 4. Payment Disclosure Notice (BKG-02) */}
+      <div
+        data-testid="payment-disclosure-notice"
+        className="rounded-3xl border border-amber-500/30 bg-amber-500/[0.06] p-6 sm:p-7 shadow-xs"
+      >
+        <div className="flex items-start gap-3.5">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-amber-500/15 text-amber-900">
+            <CreditCard className="h-5 w-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="font-display text-base font-bold text-amber-950">
+              Phương thức thanh toán trực tiếp cho cơ sở lưu trú
+            </h3>
+            <p className="mt-1 text-xs text-amber-900/90 leading-relaxed">
+              StayHub không trực tiếp thu tiền phòng của quý khách. Quý khách sẽ thanh toán 100% tiền phòng trực tiếp cho chủ cơ sở lưu trú (Host) bằng tiền mặt hoặc chuyển khoản ngân hàng ngoài hệ thống StayHub khi nhận phòng (Check-in).
+            </p>
+            <div className="mt-2.5 flex items-center gap-2 text-[11px] font-semibold text-amber-900/80">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-600" />
+              <span>Chính sách thanh toán minh bạch — không thu phí trung gian từ khách hàng</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 5. Truthful Preview Workflow Banner & Action */}
       <div className="rounded-3xl border border-primary/20 bg-gradient-to-br from-surface/80 via-white to-surface/40 p-6 sm:p-8 shadow-xs text-left">
         <div className="flex items-start gap-3">
           <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary text-primary-foreground">

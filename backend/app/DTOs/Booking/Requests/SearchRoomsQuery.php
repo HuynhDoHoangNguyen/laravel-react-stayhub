@@ -9,8 +9,8 @@ final readonly class SearchRoomsQuery
      * @param list<int>|null $roomTypeIds
      */
     public function __construct(
-        public string $checkInDate,
-        public string $checkOutDate,
+        public ?string $checkInDate,
+        public ?string $checkOutDate,
         public int $guestCount,
         public ?int $propertyId = null,
         public ?string $keyword = null,

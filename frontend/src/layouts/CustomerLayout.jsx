@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/sheet';
 import { useAuth } from '@/hooks/useAuth';
 import AccountDropdown from '@/components/common/AccountDropdown';
+import CustomerChatWidget from '@/components/chat/CustomerChatWidget';
 
 function initialsOf(name) {
     const parts = (name || '').trim().split(/\s+/).filter(Boolean);
@@ -227,6 +228,8 @@ export default function CustomerLayout() {
                     <div>Hệ thống quản lý đặt phòng & dịch vụ lưu trú Quiet Luxury</div>
                 </div>
             </footer>
+
+            {!loading && !isLoggingOut && user?.role === 'CUSTOMER' && <CustomerChatWidget key={user.id} />}
 
             {/* Global Toaster */}
             <Toaster position="top-center" />

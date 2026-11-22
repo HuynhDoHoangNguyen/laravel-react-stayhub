@@ -16,7 +16,7 @@ class DatabaseSeederTest extends TestCase
         $this->seed();
 
         $tables = ['users','properties','property_images','room_types','rooms','room_images','amenities','room_amenities',
-            'maintenances','services','bookings','booking_services','invoices','invoice_items','reviews','faqs','chat_sessions','chat_messages'];
+            'maintenances','services','bookings','booking_services','invoices','invoice_items','reviews','faqs','chat_sessions','chat_messages','partner_agreements'];
         foreach ($tables as $table) {
             $this->assertGreaterThan(0, DB::table($table)->count(), "{$table} must contain demo data.");
         }

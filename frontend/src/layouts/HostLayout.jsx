@@ -1,8 +1,9 @@
-import { Link, useLocation, Outlet } from "react-router-dom";
-import { Sparkles, Star } from "lucide-react";
+import { Link, Navigate, useLocation, Outlet } from "react-router-dom";
+import { Sparkles, Star, CreditCard, Lock, User } from "lucide-react";
 import logoMark from "@/assets/logo-mark.png";
 import { Toaster } from "@/components/ui/sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { useHostApproval } from "@/hooks/useHostApproval";
 import AccountDropdown from "@/components/common/AccountDropdown";
 import {
   BackIcon,
@@ -32,6 +33,7 @@ import {
 const NAV = [
   { to: "/host", label: "Tổng quan", icon: ConsoleIcon, exact: true },
   { to: "/host/invoices", label: "Quản lý Hóa đơn", icon: InvoiceIcon },
+  { to: "/host/commissions", label: "Hoa hồng & Đối soát", icon: CreditCard },
   { to: "/host/reviews", label: "Đánh giá của khách", icon: Star },
   { to: "/host/bookings", label: "Đơn đặt phòng", icon: BookingsIcon },
   { to: "/host/services", label: "Dịch vụ", icon: Sparkles },
@@ -41,6 +43,11 @@ const NAV = [
 export default function HostLayout() {
   const { pathname } = useLocation();
   const { logout, isLoggingOut } = useAuth();
+  const { isPendingHost } = useHostApproval();
+
+  if (isPendingHost && pathname !== "/host/profile") {
+    return <Navigate to="/host/profile" replace />;
+  }
 
   return (
     <SidebarProvider>
@@ -48,7 +55,7 @@ export default function HostLayout() {
         {/* Sidebar */}
         <Sidebar collapsible="icon" className="border-r border-border/60">
           <SidebarHeader className="border-b border-border/60 px-3 py-3 group-data-[collapsible=icon]:px-0">
-            <BrandLink />
+            <BrandLink isPendingHost={isPendingHost} />
           </SidebarHeader>
 
           <SidebarContent>
@@ -56,7 +63,32 @@ export default function HostLayout() {
               <SidebarGroupLabel>Menu Quản lý</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
+                  {isPendingHost && (
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild isActive={pathname === "/host/profile"} tooltip="Hồ sơ cá nhân">
+                        <Link to="/host/profile" className="flex items-center gap-2.5">
+                          <User className="h-4 w-4" />
+                          <span>Hồ sơ cá nhân</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  )}
                   {NAV.map((item) => {
+                    if (isPendingHost) {
+                      return (
+                        <SidebarMenuItem key={item.to}>
+                          <SidebarMenuButton
+                            disabled
+                            tooltip={`${item.label} (Chờ Quản trị viên phê duyệt mở khóa)`}
+                            className="cursor-not-allowed opacity-45"
+                          >
+                            <item.icon className="h-4 w-4" />
+                            <span className="flex-1 truncate">{item.label}</span>
+                            <Lock className="h-3.5 w-3.5 text-amber-700" />
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    }
                     const active = item.to === "/host/services"
                       ? pathname === item.to || /^\/host\/properties\/\d+\/services(?:\/|$)/.test(pathname)
                       : item.exact
@@ -150,12 +182,12 @@ export default function HostLayout() {
   );
 }
 
-function BrandLink() {
+function BrandLink({ isPendingHost = false }) {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   return (
     <Link
-      to="/host"
+      to={isPendingHost ? "/host/profile" : "/host"}
       className={
         collapsed
           ? "mx-auto flex h-9 w-9 items-center justify-center text-primary transition-opacity hover:opacity-80"

@@ -4,6 +4,8 @@ import { toast } from 'sonner';
 import { ArrowLeft, Building2, Clock3, Plus } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { hostPropertyService } from '../../services/hostPropertyService';
+import { hostAgreementService } from '../../services/hostAgreementService';
+import { HostPartnerAgreementModal } from '../../components/host/HostPartnerAgreementModal';
 
 export default function HostPropertyCreatePage() {
     const { user } = useAuth();
@@ -19,10 +21,43 @@ function CreateForm() {
     const [uncertain, setUncertain] = useState(false);
     const [error, setError] = useState('');
     const [fields, setFields] = useState({});
+    const [agreement, setAgreement] = useState(null);
+    const [showAgreementModal, setShowAgreementModal] = useState(false);
+    const [acceptingAgreement, setAcceptingAgreement] = useState(false);
+
     useEffect(() => {
         active.current = true;
+        hostAgreementService.getCurrentAgreement()
+            .then(res => {
+                if (!active.current) return;
+                if (res?.data) {
+                    setAgreement(res.data);
+                    if (!res.data.is_accepted) {
+                        setShowAgreementModal(true);
+                    }
+                }
+            })
+            .catch(() => {
+                // Bỏ qua nếu lỗi mạng hoặc chưa cấu hình hợp đồng
+            });
         return () => { active.current = false; request.current?.abort(); };
     }, []);
+
+    async function handleAcceptAgreement(ag) {
+        setAcceptingAgreement(true);
+        try {
+            await hostAgreementService.acceptAgreement(ag.id, {
+                accepted: true,
+                content_sha256: ag.content_sha256,
+            });
+            if (!active.current) return;
+            toast.success('Chấp thuận hợp đồng đối tác thành công.');
+            setShowAgreementModal(false);
+            setAgreement(prev => prev ? { ...prev, is_accepted: true } : null);
+        } finally {
+            if (active.current) setAcceptingAgreement(false);
+        }
+    }
 
     async function submit(event) {
         event.preventDefault();
@@ -43,6 +78,11 @@ function CreateForm() {
         } catch (failure) {
             if (!active.current) return;
             const status = failure.response?.status;
+            if (status === 403 && failure.response?.data?.code === 'AGREEMENT_REQUIRED') {
+                setShowAgreementModal(true);
+                setError('Bạn cần chấp thuận hợp đồng đối tác trước khi tạo cơ sở lưu trú.');
+                return;
+            }
             setUncertain(Boolean(failure.outcomeUnknown));
             setFields(status === 422 ? failure.response.data?.errors || {} : {});
             const messages = {
@@ -110,5 +150,12 @@ function CreateForm() {
             </fieldset>
         </form>
         {uncertain && <Link to="/host/properties" className="inline-flex min-h-11 items-center rounded-xl border border-border bg-card px-4 py-2 text-sm font-semibold text-primary shadow-sm focus-visible:ring-2 focus-visible:ring-primary">Kiểm tra danh sách cơ sở</Link>}
+        <HostPartnerAgreementModal
+            agreement={agreement}
+            isOpen={showAgreementModal}
+            isSubmitting={acceptingAgreement}
+            onAccept={handleAcceptAgreement}
+            onCancel={() => navigate('/host/properties')}
+        />
     </main>;
 }
