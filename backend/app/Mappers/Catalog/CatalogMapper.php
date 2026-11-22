@@ -6,6 +6,7 @@ use App\DTOs\Catalog\Responses\HostPropertyResponse;
 use App\DTOs\Catalog\Responses\HostRoomTypeResponse;
 use App\DTOs\Catalog\Responses\HostRoomResponse;
 use App\DTOs\Catalog\Responses\HostRoomDetailResponse;
+use App\DTOs\Catalog\Responses\HostRoomAmenitiesResponse;
 use App\DTOs\Catalog\Responses\HostPropertyDetailResponse;
 use App\DTOs\Catalog\Responses\PublicPropertyDetailResponse;
 use App\DTOs\Catalog\Responses\PublicPropertyListItemResponse;
@@ -17,6 +18,8 @@ use App\Mappers\EloquentObjectMapper;
 use App\Models\Amenity;
 use App\Models\Property;
 use App\Models\PropertyImage;
+use App\Models\RoomImage;
+use App\DTOs\Catalog\Responses\HostRoomImageResponse;
 use App\DTOs\Catalog\Responses\HostPropertyImageResponse;
 use App\Models\Room;
 use App\Models\RoomType;
@@ -27,6 +30,14 @@ use LogicException;
 
 final class CatalogMapper
 {
+    public function toHostRoomImage(RoomImage $image): ?HostRoomImageResponse
+    {
+        $url = PublicImageUrl::from($image->image_path);
+
+        return $url === null ? null : $this->objectMapper->map($image, HostRoomImageResponse::class,
+            ['id', 'is_primary'], ['url' => $url]);
+    }
+
     public function __construct(private readonly EloquentObjectMapper $objectMapper) {}
 
     public function toPublicRoomDetail(Room $room): PublicRoomDetailResponse
@@ -69,6 +80,14 @@ final class CatalogMapper
         );
     }
 
+    /** @param Collection<int, Amenity> $amenities */
+    public function toHostRoomAmenities(Collection $amenities): HostRoomAmenitiesResponse
+    {
+        [$assigned, $available] = $amenities->partition(fn (Amenity $amenity) => $amenity->assigned_to_room);
+
+        return new HostRoomAmenitiesResponse($this->roomAmenityItems($assigned), $this->roomAmenityItems($available));
+    }
+
     public function toHostRoomDetail(Room $room): HostRoomDetailResponse
     {
         foreach (['property', 'images', 'amenities'] as $relation) {
@@ -82,10 +101,16 @@ final class CatalogMapper
             'property' => ['id' => $room->property->id, 'name' => $room->property->name,
                 'status' => $room->property->status->value],
             'images' => $this->imageUrls($room->images),
-            'amenities' => $room->amenities->map(fn (Amenity $amenity) => [
-                'id' => $amenity->id, 'name' => $amenity->name, 'status' => $amenity->status,
-            ])->values()->all(),
+            'amenities' => $this->roomAmenityItems($room->amenities),
         ]);
+    }
+
+    /** @return list<array{id: int, name: string, status: bool}> */
+    private function roomAmenityItems(Collection $amenities): array
+    {
+        return $amenities->map(fn (Amenity $amenity) => [
+            'id' => $amenity->id, 'name' => $amenity->name, 'status' => $amenity->status,
+        ])->values()->all();
     }
 
     public function toHostRoom(Room $room): HostRoomResponse

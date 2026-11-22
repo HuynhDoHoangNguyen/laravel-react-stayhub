@@ -6,7 +6,19 @@ use App\Http\Controllers\Catalog\HostPropertyController;
 use App\Http\Controllers\Catalog\HostPropertyImageController;
 use App\Http\Controllers\Catalog\HostRoomTypeController;
 use App\Http\Controllers\Catalog\HostRoomController;
+use App\Http\Controllers\Catalog\HostRoomAmenityController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Catalog\HostRoomImageController;
+
+Route::patch('/host/rooms/{room}/images/{image}/primary', [HostRoomImageController::class, 'primary'])
+    ->middleware(['auth:sanctum', 'account.active']);
+Route::delete('/host/rooms/{room}/images/{image}', [HostRoomImageController::class, 'destroy'])
+    ->middleware(['auth:sanctum', 'account.active']);
+
+Route::get('/host/rooms/{room}/images', [HostRoomImageController::class, 'index'])
+    ->middleware(['auth:sanctum', 'account.active']);
+Route::post('/host/rooms/{room}/images', [HostRoomImageController::class, 'store'])
+    ->middleware(['auth:sanctum', 'account.active']);
 
 Route::get('/public/rooms', [PublicRoomController::class, 'index']);
 Route::get('/public/rooms/filter-options', [PublicRoomController::class, 'filterOptions']);
@@ -53,6 +65,13 @@ Route::patch('/host/rooms/{room}/status', [HostRoomController::class, 'changeSta
     ->middleware(['auth:sanctum', 'account.active']);
 
 Route::put('/host/rooms/{room}', [HostRoomController::class, 'update'])
+    ->middleware(['auth:sanctum', 'account.active']);
+
+Route::get('/host/rooms/{room}/amenities', [HostRoomAmenityController::class, 'index'])
+    ->middleware(['auth:sanctum', 'account.active']);
+Route::put('/host/rooms/{room}/amenities/{amenity}', [HostRoomAmenityController::class, 'assign'])
+    ->middleware(['auth:sanctum', 'account.active']);
+Route::delete('/host/rooms/{room}/amenities/{amenity}', [HostRoomAmenityController::class, 'destroy'])
     ->middleware(['auth:sanctum', 'account.active']);
 
 Route::get('/host/rooms/{room}', [HostRoomController::class, 'show'])
