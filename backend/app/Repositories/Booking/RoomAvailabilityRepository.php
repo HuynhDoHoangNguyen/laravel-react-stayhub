@@ -2,7 +2,7 @@
 
 namespace App\Repositories\Booking;
 
-use App\Enums\BookingStatus;
+use App\DTOs\Booking\Requests\CheckAvailabilityQuery;
 use App\Enums\MaintenanceStatus;
 use App\Enums\PropertyStatus;
 use App\Enums\RoomStatus;
@@ -13,6 +13,7 @@ use App\Models\Property;
 use App\Models\Review;
 use App\Models\Room;
 use App\Models\RoomType;
+use App\Repositories\Catalog\CatalogRepository;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -21,6 +22,8 @@ use Illuminate\Support\Facades\DB;
 
 class RoomAvailabilityRepository
 {
+    public function __construct(private readonly CatalogRepository $catalog) {}
+
     public function propertyForRoom(Room $room): ?Property
     {
         return $room->relationLoaded('property')
@@ -129,24 +132,14 @@ class RoomAvailabilityRepository
         $guestCount = (int) $filters['guest_count'];
         $ignoreBookingId = $filters['ignore_booking_id'] ?? null;
 
-        $query = Room::query()
-            ->where('status', RoomStatus::ACTIVE->value)
-            ->where('capacity', '>=', $guestCount)
-            ->whereHas('property', function (Builder $query): void {
-                $query->where('status', PropertyStatus::ACTIVE->value);
-            });
-
         if ($hasDates && $checkIn !== null && $checkOut !== null) {
-            $query->whereDoesntHave('maintenances', function (Builder $query) use ($checkIn, $checkOut): void {
-                $query->whereNotIn('status', [MaintenanceStatus::CANCELLED->value, MaintenanceStatus::COMPLETED->value])
-                    ->where('start_date', '<', $checkOut)
-                    ->where('end_date', '>', $checkIn);
-            })
-                ->whereDoesntHave('bookings', function (Builder $query) use ($checkIn, $checkOut, $ignoreBookingId): void {
-                    $query->holdingRoom()->overlapping($checkIn, $checkOut);
-                    if ($ignoreBookingId !== null) {
-                        $query->where('id', '!=', $ignoreBookingId);
-                    }
+            $query = $this->availableRooms($checkIn, $checkOut, $guestCount, $ignoreBookingId);
+        } else {
+            $query = Room::query()
+                ->where('status', RoomStatus::ACTIVE->value)
+                ->where('capacity', '>=', $guestCount)
+                ->whereHas('property', function (Builder $query): void {
+                    $query->where('status', PropertyStatus::ACTIVE->value);
                 });
         }
 
@@ -246,6 +239,42 @@ class RoomAvailabilityRepository
 
         return $query->orderBy('properties.id')
             ->paginate($perPage, ['properties.*'], 'page', $page);
+    }
+    /** @return Collection<int, Room> */
+    public function publicAvailableRooms(int $propertyId, CheckAvailabilityQuery $input): Collection
+    {
+        $query = $this->availableRooms($input->checkInDate, $input->checkOutDate, $input->guestCount)
+            ->where('rooms.property_id', $propertyId);
+        $this->catalog->scopePublicRoomCandidates($query);
+
+        return $query->orderBy('rooms.id')->limit(3)->get(['rooms.id', 'rooms.name']);
+    }
+
+    /** @return Builder<Room> */
+    private function availableRooms(string $checkIn, string $checkOut, int $guestCount, ?int $ignoreBookingId = null): Builder
+    {
+        return Room::query()
+            ->where('status', RoomStatus::ACTIVE->value)
+            ->where('capacity', '>=', $guestCount)
+            ->whereHas('property', function (Builder $query): void {
+                $query->where('status', PropertyStatus::ACTIVE->value);
+            })
+            ->whereDoesntHave('maintenances', function (Builder $query) use ($checkIn, $checkOut): void {
+                $query->whereNotIn('status', [MaintenanceStatus::CANCELLED->value, MaintenanceStatus::COMPLETED->value])
+                    ->where(function (Builder $q) use ($checkIn, $checkOut) {
+                        $q->where('status', MaintenanceStatus::IN_PROGRESS->value)
+                            ->orWhere(function (Builder $sub) use ($checkIn, $checkOut) {
+                                $sub->where('start_date', '<', $checkOut)
+                                    ->where('end_date', '>', $checkIn);
+                            });
+                    });
+            })
+            ->whereDoesntHave('bookings', function (Builder $query) use ($checkIn, $checkOut, $ignoreBookingId): void {
+                $query->holdingRoom()->overlapping($checkIn, $checkOut);
+                if ($ignoreBookingId !== null) {
+                    $query->where('id', '!=', $ignoreBookingId);
+                }
+            });
     }
 
     private function holdingBookings(int $roomId, string $checkIn, string $checkOut, ?int $ignoreBookingId = null): Builder

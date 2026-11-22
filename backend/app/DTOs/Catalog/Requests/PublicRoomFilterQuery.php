@@ -15,5 +15,7 @@ final readonly class PublicRoomFilterQuery
         public int $page = 1,
         public int $perPage = 12,
         public ?string $minRating = null,
+        public ?int $propertyId = null,
+        public ?string $maxPriceExclusive = null,
     ) {}
 }
