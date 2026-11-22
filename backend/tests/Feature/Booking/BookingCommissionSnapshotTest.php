@@ -204,4 +204,25 @@ class BookingCommissionSnapshotTest extends TestCase
         // Xác nhận không có bản ghi booking nào được chèn vào DB
         $this->assertDatabaseCount('bookings', 0);
     }
+
+    /**
+     * BIZ-01: Preview cũng phải đồng bộ chặn 422 nếu Host chưa chấp thuận thỏa thuận PUBLISHED.
+     */
+    public function test_booking_preview_fails_when_published_agreement_exists_but_host_has_not_accepted(): void
+    {
+        $this->seed(PartnerAgreementSeeder::class);
+
+        $checkIn = Carbon::now()->addDays(10)->format('Y-m-d');
+        $checkOut = Carbon::now()->addDays(12)->format('Y-m-d');
+
+        $previewResponse = $this->postJson('/api/public/bookings/preview', [
+            'room_id' => $this->room->id,
+            'check_in_date' => $checkIn,
+            'check_out_date' => $checkOut,
+            'guest_count' => 2,
+        ]);
+
+        $previewResponse->assertStatus(422);
+        $previewResponse->assertJsonValidationErrors(['room_id']);
+    }
 }

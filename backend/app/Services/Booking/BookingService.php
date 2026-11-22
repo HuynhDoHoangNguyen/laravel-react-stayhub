@@ -42,6 +42,17 @@ class BookingService
                 'room_id' => [__('validation.exists', ['attribute' => 'room id'])],
             ]);
         }
+
+        // BIZ-01: Bắt buộc Host phải hoàn tất thỏa thuận đối tác PUBLISHED đang có hiệu lực
+        $room->loadMissing('property');
+        $hostId = (int) ($room->property?->host_id ?? 0);
+        $currentAgreement = $this->agreementService->getCurrentAgreement($hostId);
+        if ($currentAgreement !== null && empty($currentAgreement['is_accepted'])) {
+            throw ValidationException::withMessages([
+                'room_id' => ['Host sở hữu cơ sở lưu trú chưa hoàn tất thỏa thuận hợp đồng đối tác. Không thể tạo đơn đặt phòng lúc này.'],
+            ]);
+        }
+
         try {
             $quote = $this->pricingService->quote(
                 $room,

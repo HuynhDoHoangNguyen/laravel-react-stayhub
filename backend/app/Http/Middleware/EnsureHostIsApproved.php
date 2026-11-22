@@ -17,10 +17,10 @@ class EnsureHostIsApproved
         if ($user !== null) {
             $role = $user->role instanceof UserRole ? $user->role->value : (string) $user->role;
 
-            if ($role === UserRole::HOST->value && $user->email_verified_at === null) {
+            if ($role === UserRole::HOST->value) {
                 $isPendingRegistrationApproval = HostAgreementAcceptance::query()
                     ->where('host_id', $user->id)
-                    ->where('method', 'REGISTRATION_CLICKWRAP')
+                    ->where('method', 'REGISTRATION_PENDING')
                     ->exists();
 
                 if ($isPendingRegistrationApproval) {

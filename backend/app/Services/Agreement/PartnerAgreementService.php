@@ -42,6 +42,8 @@ class PartnerAgreementService
             $acceptance = $this->repository->findHostAcceptance($hostId, (int) $agreement->id);
         }
 
+        $isPendingApproval = $acceptance !== null && $acceptance->method === 'REGISTRATION_PENDING';
+
         return [
             'id' => $agreement->id,
             'version' => $agreement->version,
@@ -51,6 +53,8 @@ class PartnerAgreementService
             'commission_rate_bps' => $agreement->commission_rate_bps,
             'is_accepted' => $acceptance !== null,
             'accepted_at' => $acceptance?->accepted_at?->toIso8601String(),
+            'is_approved' => ! $isPendingApproval,
+            'is_pending_approval' => $isPendingApproval,
         ];
     }
 
@@ -157,7 +161,7 @@ class PartnerAgreementService
                     (int) $user->id,
                     (int) $agreement->id,
                     (string) $agreement->content_sha256,
-                    'REGISTRATION_CLICKWRAP'
+                    'REGISTRATION_PENDING'
                 );
 
                 DB::afterCommit(fn () => Log::info('Đăng ký tài khoản đối tác (Host) và chấp thuận hợp đồng thành công.', [

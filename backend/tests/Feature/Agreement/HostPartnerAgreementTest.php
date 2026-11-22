@@ -211,7 +211,7 @@ class HostPartnerAgreementTest extends TestCase
             'host_id' => $newHost->id,
             'partner_agreement_id' => $agreementId,
             'accepted_content_sha256' => $sha256,
-            'method' => 'REGISTRATION_CLICKWRAP',
+            'method' => 'REGISTRATION_PENDING',
         ]);
 
         // 4. Đăng ký trùng email (khi vẫn đang là guest) bị từ chối 422

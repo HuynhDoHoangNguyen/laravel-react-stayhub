@@ -7,6 +7,7 @@ use App\Enums\UserStatus;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 
 class AdminUserRepository
 {
@@ -40,14 +41,34 @@ class AdminUserRepository
         if (! empty($filters['host_approval'])) {
             $query->where('role', UserRole::HOST->value);
             if ($filters['host_approval'] === 'PENDING') {
-                $query->whereNull('email_verified_at');
+                $query->whereExists(function ($sub) {
+                    $sub->select(DB::raw(1))
+                        ->from('host_agreement_acceptances')
+                        ->whereColumn('host_agreement_acceptances.host_id', 'users.id')
+                        ->where('host_agreement_acceptances.method', 'REGISTRATION_PENDING');
+                });
             } elseif ($filters['host_approval'] === 'APPROVED') {
-                $query->whereNotNull('email_verified_at');
+                $query->whereNotExists(function ($sub) {
+                    $sub->select(DB::raw(1))
+                        ->from('host_agreement_acceptances')
+                        ->whereColumn('host_agreement_acceptances.host_id', 'users.id')
+                        ->where('host_agreement_acceptances.method', 'REGISTRATION_PENDING');
+                });
             }
         }
 
         return $query
-            ->orderByRaw("CASE WHEN role = 'HOST' AND email_verified_at IS NULL THEN 0 ELSE 1 END ASC")
+            ->select('users.*')
+            ->selectRaw("EXISTS (
+                SELECT 1 FROM host_agreement_acceptances
+                WHERE host_agreement_acceptances.host_id = users.id
+                  AND host_agreement_acceptances.method = 'REGISTRATION_PENDING'
+            ) AS is_pending_approval")
+            ->orderByRaw("CASE WHEN role = 'HOST' AND EXISTS (
+                SELECT 1 FROM host_agreement_acceptances
+                WHERE host_agreement_acceptances.host_id = users.id
+                  AND host_agreement_acceptances.method = 'REGISTRATION_PENDING'
+            ) THEN 0 ELSE 1 END ASC")
             ->orderByDesc('id')
             ->paginate($filters['per_page'], ['*'], 'page', $filters['page']);
     }
@@ -63,11 +84,21 @@ class AdminUserRepository
             'total_users' => User::query()->count(),
             'pending_hosts' => User::query()
                 ->where('role', UserRole::HOST->value)
-                ->whereNull('email_verified_at')
+                ->whereExists(function ($sub) {
+                    $sub->select(DB::raw(1))
+                        ->from('host_agreement_acceptances')
+                        ->whereColumn('host_agreement_acceptances.host_id', 'users.id')
+                        ->where('host_agreement_acceptances.method', 'REGISTRATION_PENDING');
+                })
                 ->count(),
             'approved_hosts' => User::query()
                 ->where('role', UserRole::HOST->value)
-                ->whereNotNull('email_verified_at')
+                ->whereNotExists(function ($sub) {
+                    $sub->select(DB::raw(1))
+                        ->from('host_agreement_acceptances')
+                        ->whereColumn('host_agreement_acceptances.host_id', 'users.id')
+                        ->where('host_agreement_acceptances.method', 'REGISTRATION_PENDING');
+                })
                 ->count(),
             'total_customers' => User::query()
                 ->where('role', UserRole::CUSTOMER->value)

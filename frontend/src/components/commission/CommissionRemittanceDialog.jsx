@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CreditCard, Copy, Check, AlertCircle, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { hostCommissionService } from '@/services/hostCommissionService';
 
 export function CommissionRemittanceDialog({
     commission,
@@ -14,6 +15,32 @@ export function CommissionRemittanceDialog({
     const [copiedAccount, setCopiedAccount] = useState(false);
     const [bankRef, setBankRef] = useState('');
     const [error, setError] = useState('');
+    const [fetchedInstructions, setFetchedInstructions] = useState(
+        () => commission?.payment_instructions ?? null
+    );
+
+    useEffect(() => {
+        let isMounted = true;
+        if (!isOpen || !commission || commission.payment_instructions !== undefined) {
+            return;
+        }
+
+        hostCommissionService.getCommissionDetail(commission.id)
+            .then((res) => {
+                if (isMounted) {
+                    setFetchedInstructions(res.data?.payment_instructions ?? null);
+                }
+            })
+            .catch(() => {
+                if (isMounted) {
+                    setFetchedInstructions(null);
+                }
+            });
+
+        return () => {
+            isMounted = false;
+        };
+    }, [isOpen, commission]);
 
     if (!isOpen || !commission) return null;
 
@@ -22,13 +49,18 @@ export function CommissionRemittanceDialog({
         currency: 'VND',
     }).format(Number(commission.commission_amount) || 0);
 
-    const bankInfo = {
-        bankName: 'Ngân hàng TMCP Ngoại thương Việt Nam (Vietcombank)',
-        accountNumber: '1029384756',
-        accountHolder: 'CONG TY CP CONG NGHE STAYHUB',
+    const instructions = fetchedInstructions ?? commission.payment_instructions ?? null;
+    const isLoadingInstructions = commission.payment_instructions === undefined && fetchedInstructions === null;
+    const hasInstructions = Boolean(instructions?.bank_name && instructions?.account_number);
+
+    const handleClose = () => {
+        setError('');
+        setBankRef('');
+        onClose();
     };
 
     const handleCopy = (text, type) => {
+        if (!text) return;
         navigator.clipboard?.writeText(text);
         if (type === 'ref') {
             setCopiedRef(true);
@@ -72,7 +104,7 @@ export function CommissionRemittanceDialog({
                     variant="ghost"
                     size="icon"
                     aria-label="Đóng hộp thoại"
-                    onClick={onClose}
+                    onClick={handleClose}
                     className="absolute right-4 top-4 h-8 w-8 rounded-full"
                 >
                     <X className="h-4 w-4" />
@@ -101,57 +133,80 @@ export function CommissionRemittanceDialog({
                     </div>
                 )}
 
+                {/* Loading State */}
+                {isLoadingInstructions && (
+                    <div className="mt-4 flex items-center justify-center p-6 text-xs text-muted-foreground">
+                        <Loader2 className="h-5 w-5 animate-spin mr-2 text-primary" />
+                        <span>Đang tải thông tin chuyển khoản…</span>
+                    </div>
+                )}
+
+                {/* Missing Configuration Notice */}
+                {!isLoadingInstructions && !hasInstructions && (
+                    <div role="status" className="mt-4 flex items-start gap-2.5 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-xs text-amber-900">
+                        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+                        <div className="space-y-1">
+                            <p className="font-semibold text-amber-800">Chưa có hướng dẫn chuyển khoản</p>
+                            <p className="text-amber-700 leading-relaxed">
+                                Hệ thống hiện chưa cấu hình thông tin tài khoản ngân hàng chính thức nhận hoa hồng. Vui lòng liên hệ Quản trị viên để được hướng dẫn nộp đối soát.
+                            </p>
+                        </div>
+                    </div>
+                )}
+
                 {/* Bank Instructions Card */}
-                <div className="mt-4 rounded-2xl border border-border/70 bg-surface/50 p-4 text-xs space-y-2.5">
-                    <div className="flex justify-between items-center py-1 border-b border-border/40">
-                        <span className="text-muted-foreground">Ngân hàng thụ hưởng:</span>
-                        <span className="font-semibold text-ink text-right">{bankInfo.bankName}</span>
-                    </div>
+                {!isLoadingInstructions && hasInstructions && (
+                    <div className="mt-4 rounded-2xl border border-border/70 bg-surface/50 p-4 text-xs space-y-2.5">
+                        <div className="flex justify-between items-center py-1 border-b border-border/40">
+                            <span className="text-muted-foreground">Ngân hàng thụ hưởng:</span>
+                            <span className="font-semibold text-ink text-right">{instructions.bank_name}</span>
+                        </div>
 
-                    <div className="flex justify-between items-center py-1 border-b border-border/40">
-                        <span className="text-muted-foreground">Số tài khoản:</span>
-                        <div className="flex items-center gap-1.5 font-mono font-bold text-primary text-sm">
-                            <span>{bankInfo.accountNumber}</span>
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6"
-                                onClick={() => handleCopy(bankInfo.accountNumber, 'acc')}
-                                title="Sao chép số tài khoản"
-                            >
-                                {copiedAccount ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
-                            </Button>
+                        <div className="flex justify-between items-center py-1 border-b border-border/40">
+                            <span className="text-muted-foreground">Số tài khoản:</span>
+                            <div className="flex items-center gap-1.5 font-mono font-bold text-primary text-sm">
+                                <span>{instructions.account_number}</span>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    onClick={() => handleCopy(instructions.account_number, 'acc')}
+                                    title="Sao chép số tài khoản"
+                                >
+                                    {copiedAccount ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-between items-center py-1 border-b border-border/40">
+                            <span className="text-muted-foreground">Chủ tài khoản:</span>
+                            <span className="font-semibold text-ink uppercase">{instructions.account_holder}</span>
+                        </div>
+
+                        <div className="flex justify-between items-center py-1 border-b border-border/40">
+                            <span className="text-muted-foreground">Số tiền hoa hồng (10%):</span>
+                            <span className="font-bold text-base text-primary">{formattedAmount}</span>
+                        </div>
+
+                        <div className="flex justify-between items-center py-1">
+                            <span className="text-muted-foreground">Nội dung chuyển khoản (bắt buộc):</span>
+                            <div className="flex items-center gap-1.5 font-mono font-bold text-amber-700 bg-amber-500/10 px-2 py-0.5 rounded-md">
+                                <span>{commission.reference_code}</span>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    onClick={() => handleCopy(commission.reference_code, 'ref')}
+                                    title="Sao chép mã chuyển khoản"
+                                >
+                                    {copiedRef ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                                </Button>
+                            </div>
                         </div>
                     </div>
-
-                    <div className="flex justify-between items-center py-1 border-b border-border/40">
-                        <span className="text-muted-foreground">Chủ tài khoản:</span>
-                        <span className="font-semibold text-ink uppercase">{bankInfo.accountHolder}</span>
-                    </div>
-
-                    <div className="flex justify-between items-center py-1 border-b border-border/40">
-                        <span className="text-muted-foreground">Số tiền hoa hồng (10%):</span>
-                        <span className="font-bold text-base text-primary">{formattedAmount}</span>
-                    </div>
-
-                    <div className="flex justify-between items-center py-1">
-                        <span className="text-muted-foreground">Nội dung chuyển khoản (bắt buộc):</span>
-                        <div className="flex items-center gap-1.5 font-mono font-bold text-amber-700 bg-amber-500/10 px-2 py-0.5 rounded-md">
-                            <span>{commission.reference_code}</span>
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6"
-                                onClick={() => handleCopy(commission.reference_code, 'ref')}
-                                title="Sao chép mã chuyển khoản"
-                            >
-                                {copiedRef ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
-                            </Button>
-                        </div>
-                    </div>
-                </div>
+                )}
 
                 {/* Remittance Form */}
                 <form onSubmit={handleSubmit} className="mt-5 space-y-4">
@@ -177,7 +232,7 @@ export function CommissionRemittanceDialog({
                         <Button
                             type="button"
                             variant="outline"
-                            onClick={onClose}
+                            onClick={handleClose}
                             disabled={isSubmitting}
                             className="h-10 text-xs font-semibold rounded-xl"
                         >

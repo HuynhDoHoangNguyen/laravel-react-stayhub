@@ -19,6 +19,7 @@ import {
     PopoverTrigger,
 } from '@/components/ui/popover';
 import { useAuth } from '@/hooks/useAuth';
+import { useHostApproval } from '@/hooks/useHostApproval';
 
 function initialsOf(name) {
     const parts = (name || '').trim().split(/\s+/).filter(Boolean);
@@ -32,6 +33,7 @@ function initialsOf(name) {
  */
 export default function AccountDropdown({ triggerClassName, align = 'end' }) {
     const { user, logout, isLoggingOut } = useAuth();
+    const { isPendingHost } = useHostApproval();
     const [open, setOpen] = useState(false);
     const navigate = useNavigate();
 
@@ -158,7 +160,7 @@ export default function AccountDropdown({ triggerClassName, align = 'end' }) {
                     )}
 
                     {/* HOST Menu */}
-                    {user.role === 'HOST' && user.email_verified_at && (
+                    {user.role === 'HOST' && !isPendingHost && (
                         <>
                             <Link
                                 to="/host"

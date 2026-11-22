@@ -46,6 +46,8 @@ export function mapAgreementCurrentResponse(payload) {
             commission_rate_bps: Number(d.commission_rate_bps ?? 1000),
             is_accepted: Boolean(d.is_accepted),
             accepted_at: d.accepted_at ?? null,
+            is_approved: Boolean(d.is_approved ?? true),
+            is_pending_approval: Boolean(d.is_pending_approval ?? false),
         },
     };
 }
@@ -107,6 +109,15 @@ function mapCommissionItem(item) {
         due_at: item.due_at ?? null,
         settled_at: item.settled_at ?? null,
         created_at: item.created_at ?? null,
+        payment_instructions: item.payment_instructions
+            ? {
+                bank_name: String(item.payment_instructions.bank_name ?? ''),
+                account_number: String(item.payment_instructions.account_number ?? ''),
+                account_holder: String(item.payment_instructions.account_holder ?? ''),
+                amount: String(item.payment_instructions.amount ?? '0.00'),
+                reference_code: String(item.payment_instructions.reference_code ?? ''),
+            }
+            : null,
     };
 }
 

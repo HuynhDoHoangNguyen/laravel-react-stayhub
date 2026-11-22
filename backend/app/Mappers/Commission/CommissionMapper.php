@@ -38,6 +38,11 @@ class CommissionMapper
     {
         $displayStatus = $this->computeDisplayStatus($item);
 
+        $bankName = config('commission.bank_info.bank_name');
+        $accountNumber = config('commission.bank_info.account_number');
+        $accountHolder = config('commission.bank_info.account_holder');
+        $hasValidConfig = ! empty($bankName) && ! empty($accountNumber);
+
         return [
             'id' => $item->id,
             'reference_code' => $item->reference_code,
@@ -56,6 +61,13 @@ class CommissionMapper
             'due_at' => $item->due_at?->toIso8601String(),
             'settled_at' => $item->settled_at?->toIso8601String(),
             'created_at' => $item->created_at?->toIso8601String(),
+            'payment_instructions' => $hasValidConfig ? [
+                'bank_name' => (string) $bankName,
+                'account_number' => (string) $accountNumber,
+                'account_holder' => (string) ($accountHolder ?? 'CONG TY CP CONG NGHE STAYHUB'),
+                'amount' => $item->commission_amount,
+                'reference_code' => $item->reference_code,
+            ] : null,
         ];
     }
 
@@ -87,6 +99,11 @@ class CommissionMapper
     {
         $displayStatus = $this->computeDisplayStatus($commission);
 
+        $bankName = config('commission.bank_info.bank_name');
+        $accountNumber = config('commission.bank_info.account_number');
+        $accountHolder = config('commission.bank_info.account_holder');
+        $hasValidConfig = ! empty($bankName) && ! empty($accountNumber);
+
         return [
             'success' => true,
             'data' => [
@@ -110,13 +127,13 @@ class CommissionMapper
                     'settled_at' => $commission->settled_at?->toIso8601String(),
                     'created_at' => $commission->created_at?->toIso8601String(),
                 ],
-                'payment_instructions' => [
-                    'bank_name' => config('commission.bank_info.bank_name', 'Vietcombank'),
-                    'account_number' => config('commission.bank_info.account_number', '1029384756'),
-                    'account_holder' => config('commission.bank_info.account_holder', 'STAYHUB'),
+                'payment_instructions' => $hasValidConfig ? [
+                    'bank_name' => (string) $bankName,
+                    'account_number' => (string) $accountNumber,
+                    'account_holder' => (string) ($accountHolder ?? 'CONG TY CP CONG NGHE STAYHUB'),
                     'amount' => $commission->commission_amount,
                     'reference_code' => $commission->reference_code,
-                ],
+                ] : null,
                 'remittances' => $commission->remittances->map(fn ($r) => [
                     'id' => $r->id,
                     'amount' => $r->amount,

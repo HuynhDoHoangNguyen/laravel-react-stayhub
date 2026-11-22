@@ -21,6 +21,8 @@ class PartnerAgreementMapper
             'commission_rate_bps' => (int) $agreement['commission_rate_bps'],
             'is_accepted' => (bool) $agreement['is_accepted'],
             'accepted_at' => $agreement['accepted_at'] ?? null,
+            'is_approved' => (bool) ($agreement['is_approved'] ?? true),
+            'is_pending_approval' => (bool) ($agreement['is_pending_approval'] ?? false),
         ];
     }
 

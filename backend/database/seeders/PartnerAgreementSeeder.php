@@ -35,7 +35,7 @@ TEXT;
     {
         $hash = hash('sha256', self::DEFAULT_TERMS);
 
-        PartnerAgreement::firstOrCreate(
+        $agreement = PartnerAgreement::firstOrCreate(
             ['version' => 'v1.0'],
             [
                 'title' => 'Hợp đồng Đối tác Kinh doanh Lưu trú StayHub (Phiên bản v1.0)',
@@ -47,5 +47,25 @@ TEXT;
                 'status' => 'PUBLISHED',
             ]
         );
+
+        // Đảm bảo toàn bộ các Host mẫu (demo hosts) trong hệ thống đều đã hoàn tất chấp thuận hợp đồng
+        $demoHostEmails = ['host1@stayhub.com', 'host2@stayhub.com'];
+        $demoHostIds = \Illuminate\Support\Facades\DB::table('users')
+            ->whereIn('email', $demoHostEmails)
+            ->pluck('id');
+
+        foreach ($demoHostIds as $hostId) {
+            \App\Models\HostAgreementAcceptance::firstOrCreate(
+                [
+                    'host_id' => (int) $hostId,
+                    'partner_agreement_id' => (int) $agreement->id,
+                ],
+                [
+                    'accepted_content_sha256' => $hash,
+                    'accepted_at' => '2026-01-01 00:00:00',
+                    'method' => 'CHECKBOX_CLICKWRAP',
+                ]
+            );
+        }
     }
 }

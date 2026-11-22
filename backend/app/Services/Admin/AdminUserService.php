@@ -50,9 +50,11 @@ class AdminUserService
                 ]);
             }
 
-            if ($user->email_verified_at === null) {
-                $user->forceFill(['email_verified_at' => now()]);
-            }
+            \App\Models\HostAgreementAcceptance::query()
+                ->where('host_id', $user->id)
+                ->where('method', 'REGISTRATION_PENDING')
+                ->update(['method' => 'REGISTRATION_APPROVED']);
+
             if ($user->status !== UserStatus::ACTIVE) {
                 $user->status = UserStatus::ACTIVE;
             }

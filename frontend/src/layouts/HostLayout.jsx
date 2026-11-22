@@ -3,6 +3,7 @@ import { Sparkles, Star, CreditCard, Lock, User } from "lucide-react";
 import logoMark from "@/assets/logo-mark.png";
 import { Toaster } from "@/components/ui/sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { useHostApproval } from "@/hooks/useHostApproval";
 import AccountDropdown from "@/components/common/AccountDropdown";
 import {
   BackIcon,
@@ -41,8 +42,8 @@ const NAV = [
 
 export default function HostLayout() {
   const { pathname } = useLocation();
-  const { user, logout, isLoggingOut } = useAuth();
-  const isPendingHost = user?.role === "HOST" && !user?.email_verified_at;
+  const { logout, isLoggingOut } = useAuth();
+  const { isPendingHost } = useHostApproval();
 
   if (isPendingHost && pathname !== "/host/profile") {
     return <Navigate to="/host/profile" replace />;

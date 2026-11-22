@@ -190,6 +190,16 @@ class HostCommissionApiTest extends TestCase
             ]);
     }
 
+    public function test_commission_detail_hides_payment_instructions_when_config_is_missing(): void
+    {
+        config(['commission.bank_info.account_number' => '']);
+
+        $response = $this->actingAs($this->hostA)->getJson("/api/host/commissions/{$this->commissionA->id}");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.payment_instructions', null);
+    }
+
     public function test_host_cannot_view_another_host_commission_detail(): void
     {
         $response = $this->actingAs($this->hostB)->getJson("/api/host/commissions/{$this->commissionA->id}");

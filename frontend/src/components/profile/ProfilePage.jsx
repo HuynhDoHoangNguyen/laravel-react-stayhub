@@ -1,6 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { useHostApproval } from '../../hooks/useHostApproval';
 import { profileService } from '../../services/profileService';
 import { createProfileEditor } from '../../services/profile';
 import { ProfileHeader } from './ProfileHeader';
@@ -17,8 +18,8 @@ export default function ProfilePage() {
 }
 
 function ProfileEditorPage({ role }) {
-    const { user, captureProfileAuth, isProfileAuthCurrent, updateProfileUser } = useAuth();
-    const isPendingHost = role === 'HOST' && !user?.email_verified_at;
+    const { captureProfileAuth, isProfileAuthCurrent, updateProfileUser } = useAuth();
+    const { isPendingHost } = useHostApproval();
     const [editor] = useState(() => createProfileEditor(profileService, {
         capture: captureProfileAuth, isCurrent: isProfileAuthCurrent, commit: updateProfileUser,
     }));

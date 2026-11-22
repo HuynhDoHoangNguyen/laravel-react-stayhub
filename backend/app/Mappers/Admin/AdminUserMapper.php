@@ -19,7 +19,15 @@ class AdminUserMapper
         $role = $user->role instanceof UserRole ? $user->role->value : (string) $user->role;
         $status = $user->status instanceof UserStatus ? $user->status->value : (string) $user->status;
         $isHost = $role === UserRole::HOST->value;
-        $isHostApproved = $isHost ? ($user->email_verified_at !== null) : null;
+        $isPending = $isHost && (
+            isset($user->is_pending_approval)
+                ? (bool) $user->is_pending_approval
+                : \App\Models\HostAgreementAcceptance::query()
+                    ->where('host_id', $user->id)
+                    ->where('method', 'REGISTRATION_PENDING')
+                    ->exists()
+        );
+        $isHostApproved = $isHost ? ! $isPending : null;
 
         return [
             'id' => (int) $user->id,
