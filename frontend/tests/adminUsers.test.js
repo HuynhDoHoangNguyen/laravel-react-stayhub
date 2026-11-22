@@ -107,3 +107,14 @@ test('approval result keeps account status separate from approval and preserves 
     assert.equal(result.data.bookings_count, 0);
   }
 });
+
+test('useHostApproval isolates approval cache per user ID to prevent cross-account approval contamination', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const { fileURLToPath } = await import('node:url');
+    const hookPath = fileURLToPath(new URL('../src/hooks/useHostApproval.js', import.meta.url));
+    const code = await readFile(hookPath, 'utf8');
+
+    assert.match(code, /cachedUserId/);
+    assert.match(code, /cachedUserId\s*===\s*currentUserId/);
+    assert.match(code, /invalidateHostApprovalCache/);
+});

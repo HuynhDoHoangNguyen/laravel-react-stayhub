@@ -15,32 +15,46 @@ export function CommissionRemittanceDialog({
     const [copiedAccount, setCopiedAccount] = useState(false);
     const [bankRef, setBankRef] = useState('');
     const [error, setError] = useState('');
-    const [fetchedInstructions, setFetchedInstructions] = useState(
-        () => commission?.payment_instructions ?? null
-    );
+    const [fetchedData, setFetchedData] = useState(() => ({
+        commissionId: commission?.id ?? null,
+        instructions: commission?.payment_instructions ?? null,
+    }));
+
+    if (commission?.id && fetchedData.commissionId !== commission.id) {
+        setFetchedData({
+            commissionId: commission.id,
+            instructions: commission.payment_instructions ?? null,
+        });
+    }
 
     useEffect(() => {
-        let isMounted = true;
-        if (!isOpen || !commission || commission.payment_instructions !== undefined) {
+        if (!isOpen || !commission?.id || commission.payment_instructions !== undefined) {
             return;
         }
 
+        let isMounted = true;
         hostCommissionService.getCommissionDetail(commission.id)
             .then((res) => {
                 if (isMounted) {
-                    setFetchedInstructions(res.data?.payment_instructions ?? null);
+                    setFetchedData({
+                        commissionId: commission.id,
+                        instructions: res.data?.payment_instructions ?? null,
+                    });
                 }
             })
             .catch(() => {
                 if (isMounted) {
-                    setFetchedInstructions(null);
+                    setFetchedData({
+                        commissionId: commission.id,
+                        instructions: null,
+                    });
                 }
             });
 
         return () => {
             isMounted = false;
         };
-    }, [isOpen, commission]);
+    }, [isOpen, commission?.id, commission?.payment_instructions]);
 
     if (!isOpen || !commission) return null;
 
@@ -49,8 +63,11 @@ export function CommissionRemittanceDialog({
         currency: 'VND',
     }).format(Number(commission.commission_amount) || 0);
 
-    const instructions = fetchedInstructions ?? commission.payment_instructions ?? null;
-    const isLoadingInstructions = commission.payment_instructions === undefined && fetchedInstructions === null;
+    const instructions = commission.payment_instructions !== undefined
+        ? commission.payment_instructions
+        : (fetchedData.commissionId === commission.id ? fetchedData.instructions : null);
+    const isLoadingInstructions = commission.payment_instructions === undefined
+        && (fetchedData.commissionId !== commission.id || fetchedData.instructions === null);
     const hasInstructions = Boolean(instructions?.bank_name && instructions?.account_number);
 
     const handleClose = () => {
