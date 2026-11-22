@@ -268,6 +268,68 @@ class HostBookingWorkflowTest extends TestCase
         $this->assertDatabaseHas('bookings', ['id' => $booking->id, 'status' => BookingStatus::PENDING->value]);
     }
 
+    public function test_confirm_is_rejected_when_room_has_in_progress_maintenance(): void
+    {
+        $host = User::factory()->host()->create();
+        $property = Property::factory()->create(['host_id' => $host->id, 'status' => PropertyStatus::ACTIVE]);
+        $room = Room::factory()->create(['property_id' => $property->id, 'capacity' => 4, 'status' => RoomStatus::ACTIVE]);
+        $checkIn = Carbon::now()->addDays(30)->format('Y-m-d');
+        $checkOut = Carbon::now()->addDays(32)->format('Y-m-d');
+        $booking = Booking::factory()->pending()->create(['room_id' => $room->id, 'check_in_date' => $checkIn, 'check_out_date' => $checkOut]);
+
+        // IN_PROGRESS maintenance blocks even if its end_date is in the past or different
+        Maintenance::factory()->create([
+            'room_id' => $room->id,
+            'status' => \App\Enums\MaintenanceStatus::IN_PROGRESS,
+            'start_date' => Carbon::now()->subDays(5)->format('Y-m-d'),
+            'end_date' => Carbon::now()->subDays(1)->format('Y-m-d'),
+        ]);
+
+        $this->actingAs($host)->postJson("/api/host/bookings/{$booking->id}/confirm")
+            ->assertStatus(409)->assertJsonPath('success', false)
+            ->assertJsonPath('errors.reasons.0', 'MAINTENANCE_OVERLAP');
+        $this->assertDatabaseHas('bookings', ['id' => $booking->id, 'status' => BookingStatus::PENDING->value]);
+    }
+
+    public function test_confirm_locks_room_before_booking_to_prevent_deadlock(): void
+    {
+        $host = User::factory()->host()->create();
+        $property = Property::factory()->create(['host_id' => $host->id, 'status' => PropertyStatus::ACTIVE]);
+        $room = Room::factory()->create(['property_id' => $property->id, 'capacity' => 4, 'status' => RoomStatus::ACTIVE]);
+        $checkIn = Carbon::now()->addDays(35)->format('Y-m-d');
+        $checkOut = Carbon::now()->addDays(37)->format('Y-m-d');
+        $booking = Booking::factory()->pending()->create(['room_id' => $room->id, 'check_in_date' => $checkIn, 'check_out_date' => $checkOut]);
+
+        $transactionQueries = [];
+        DB::listen(static function (QueryExecuted $query) use (&$transactionQueries, $room, $booking): void {
+            // Under RefreshDatabase, the test itself runs inside transaction level 1.
+            // The workflow service's DB::transaction() runs at level >= 2.
+            if (DB::transactionLevel() >= 2) {
+                $sql = strtolower($query->sql);
+                if (str_contains($sql, 'rooms') && in_array($room->id, $query->bindings, false)) {
+                    $transactionQueries[] = 'rooms';
+                } elseif (str_contains($sql, 'bookings') && in_array($booking->id, $query->bindings, false)) {
+                    $transactionQueries[] = 'bookings';
+                }
+            }
+        });
+
+        $this->actingAs($host)->postJson("/api/host/bookings/{$booking->id}/confirm")
+            ->assertOk()
+            ->assertJsonPath('data.status', BookingStatus::CONFIRMED->value);
+
+        $this->assertNotEmpty($transactionQueries);
+        $firstRoomLock = array_search('rooms', $transactionQueries, true);
+        $firstBookingLock = array_search('bookings', $transactionQueries, true);
+        $this->assertNotFalse($firstRoomLock, 'Room must be queried in confirm() transaction');
+        $this->assertNotFalse($firstBookingLock, 'Booking must be queried in confirm() transaction');
+        $this->assertLessThan(
+            $firstBookingLock,
+            $firstRoomLock,
+            'Room must be locked BEFORE Booking to follow Room -> Booking lock hierarchy'
+        );
+    }
+
     public function test_check_out_does_not_create_invoice(): void
     {
         $host = User::factory()->host()->create();

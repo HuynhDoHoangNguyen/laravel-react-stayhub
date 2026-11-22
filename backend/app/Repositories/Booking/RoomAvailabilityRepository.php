@@ -17,6 +17,7 @@ use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\DB;
 
 class RoomAvailabilityRepository
 {
@@ -73,17 +74,33 @@ class RoomAvailabilityRepository
 
     public function hasBlockingMaintenanceOverlap(int $roomId, string $checkIn, string $checkOut): bool
     {
-        return Maintenance::query()
+        $query = Maintenance::query()
             ->where('room_id', $roomId)
             ->whereNotIn('status', [MaintenanceStatus::CANCELLED->value, MaintenanceStatus::COMPLETED->value])
-            ->where('start_date', '<', $checkOut)
-            ->where('end_date', '>', $checkIn)
-            ->exists();
+            ->where(function (Builder $query) use ($checkIn, $checkOut) {
+                $query->where('status', MaintenanceStatus::IN_PROGRESS->value)
+                    ->orWhere(function (Builder $q) use ($checkIn, $checkOut) {
+                        $q->where('start_date', '<', $checkOut)
+                            ->where('end_date', '>', $checkIn);
+                    });
+            });
+
+        if (DB::transactionLevel() > 0) {
+            $query->lockForUpdate();
+        }
+
+        return $query->first(['id']) !== null;
     }
 
     public function hasHoldingBookingOverlap(int $roomId, string $checkIn, string $checkOut, ?int $ignoreBookingId = null): bool
     {
-        return $this->holdingBookings($roomId, $checkIn, $checkOut, $ignoreBookingId)->exists();
+        $query = $this->holdingBookings($roomId, $checkIn, $checkOut, $ignoreBookingId);
+
+        if (DB::transactionLevel() > 0) {
+            $query->lockForUpdate();
+        }
+
+        return $query->first(['id']) !== null;
     }
 
     /** @return Collection<int, Booking> */
