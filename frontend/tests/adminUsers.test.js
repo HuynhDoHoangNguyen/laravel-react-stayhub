@@ -91,3 +91,19 @@ test('failed CSRF request does not attempt or retry approval', async () => {
   await assert.rejects(createAdminUserManagementService(api).approveHost(42), error => error === failure);
   assert.equal(posts, 0);
 });
+
+test('approval result keeps account status separate from approval and preserves actual counts', async () => {
+  for (const status of ['ACTIVE', 'BLOCKED', 'INACTIVE']) {
+    adapter = async config => ({ status: 200, headers: {}, config, data: config.url === '/sanctum/csrf-cookie'
+      ? null : { success: true, message: 'Đã phê duyệt Đối tác thành công.', data: {
+        id: 42, role: 'HOST', status, is_host_approved: true, host_approval_status: 'APPROVED',
+        properties_count: 4, bookings_count: 0,
+      } } });
+    const result = await adminUserManagementService.approveHost(42);
+    assert.equal(result.message, 'Đã phê duyệt Đối tác thành công.');
+    assert.equal(result.data.status, status);
+    assert.equal(result.data.is_host_approved, true);
+    assert.equal(result.data.properties_count, 4);
+    assert.equal(result.data.bookings_count, 0);
+  }
+});

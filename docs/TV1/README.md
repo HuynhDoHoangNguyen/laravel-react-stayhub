@@ -23,7 +23,7 @@ Thư mục này lưu kết quả khảo sát và báo cáo triển khai của **
 | [UC40-REPORT.md](UC40-REPORT.md) | UC40-01/02: Admin xem danh sách và chi tiết Customer, tìm kiếm/lọc/phân trang, dialog và URL state | Hai task TECHNICAL PASS: backend/Node/lint/build và browser SQLite fixture; chờ developer review, chưa kiểm chứng runtime MySQL |
 | [UC41-REPORT.md](UC41-REPORT.md) | UC41-01/02: Admin xem danh sách/chi tiết Host, đếm cơ sở, URL state và dialog | Hai task TECHNICAL PASS: automated checks và browser SQLite fixture; chờ developer review, chưa kiểm chứng runtime MySQL |
 | [UC42-REPORT.md](UC42-REPORT.md) | UC42-01/02: nền tảng, API khóa/mở Customer/Host và UI Customer, xác nhận/recovery/session | Hai task TECHNICAL PASS: automated checks và 30 browser checks SQLite fixture; chờ developer review, còn Host UI UC42-03 và MySQL concurrency |
-| [MERGE-FIX-REPORT.md](MERGE-FIX-REPORT.md) | MERGE-FIX-01: hợp nhất route/contract Customer, Host và quản lý tổng hợp từ dev | Tests/browser PASS; chờ kiểm tra Git cuối và developer review; lỗi duyệt Host/count thuộc MERGE-FIX-02 còn mở trước khi chốt merge |
+| [MERGE-FIX-REPORT.md](MERGE-FIX-REPORT.md) | MERGE-FIX-01/02: hợp nhất route/contract, duyệt Host độc lập account status và counts thực | MERGE-FIX-02 TECHNICAL PASS: 3.262 backend passed/575 skipped, 545 Node, 28 browser và scope/cleanup PASS; chờ developer review, chưa kiểm MySQL concurrency |
 
 ## Quy ước
 

@@ -6,6 +6,16 @@ use App\Enums\PropertyType;
 use App\Enums\UserRole;
 use App\Enums\UserStatus;
 use App\Models\User;
+use App\Models\Property;
+use App\Models\Room;
+use App\Models\RoomType;
+use App\Models\Booking;
+use App\Enums\PropertyStatus;
+use App\Enums\BookingStatus;
+use App\Mappers\Admin\AdminUserMapper;
+use App\Services\Admin\AdminUserService;
+use App\Validators\Admin\AdminUserValidator;
+use Illuminate\Support\Facades\DB;
 use Database\Seeders\PartnerAgreementSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -194,5 +204,77 @@ class AdminUserManagementTest extends TestCase
         $this->actingAs($this->admin)->postJson("/api/admin/users/{$this->customer->id}/approve-host")
             ->assertStatus(422)
             ->assertJsonValidationErrors(['user_id']);
+    }
+
+    public function test_counts_have_real_values_for_each_owner_and_include_all_statuses(): void
+    {
+        $properties = [];
+        foreach (PropertyStatus::cases() as $status) {
+            $properties[] = Property::factory()->create(['host_id' => $this->approvedHost->id, 'status' => $status]);
+        }
+        $otherHost = User::factory()->host()->create();
+        Property::factory()->create(['host_id' => $otherHost->id]);
+        $zeroHost = User::factory()->host()->create();
+        $roomType = RoomType::factory()->create(['property_id' => $properties[0]->id]);
+        $room = Room::factory()->create(['property_id' => $properties[0]->id, 'room_type_id' => $roomType->id]);
+        foreach (BookingStatus::cases() as $status) {
+            Booking::factory()->create(['customer_id' => $this->customer->id, 'room_id' => $room->id, 'status' => $status]);
+        }
+        $otherCustomer = User::factory()->customer()->create();
+        Booking::factory()->create(['customer_id' => $otherCustomer->id, 'room_id' => $room->id]);
+        $zeroCustomer = User::factory()->customer()->create();
+
+        $rows = $this->actingAs($this->admin)->getJson('/api/admin/user-management?per_page=100')->assertOk()->json('data');
+        $rows = array_column($rows, null, 'id');
+        $this->assertSame(count(PropertyStatus::cases()), $rows[$this->approvedHost->id]['properties_count']);
+        $this->assertSame(1, $rows[$otherHost->id]['properties_count']);
+        $this->assertSame(0, $rows[$zeroHost->id]['properties_count']);
+        $this->assertSame(count(BookingStatus::cases()), $rows[$this->customer->id]['bookings_count']);
+        $this->assertSame(1, $rows[$otherCustomer->id]['bookings_count']);
+        $this->assertSame(0, $rows[$zeroCustomer->id]['bookings_count']);
+        foreach ($rows as $row) {
+            $this->assertIsInt($row['properties_count']);
+            $this->assertIsInt($row['bookings_count']);
+        }
+    }
+
+    public function test_listing_and_mapping_keep_query_count_constant_as_hosts_increase(): void
+    {
+        $validator = $this->app->make(AdminUserValidator::class);
+        $service = $this->app->make(AdminUserService::class);
+        $mapper = $this->app->make(AdminUserMapper::class);
+        $filters = $validator->validateListFilters(['role' => 'HOST', 'per_page' => 100]);
+        $counts = [];
+        foreach ([0, 9] as $add) {
+            if ($add) User::factory()->host()->count($add)->create();
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+            $result = $service->listUsersWithSummary($filters);
+            $mapped = $mapper->toPaginatedResponse($result['paginator'], $result['summary']);
+            json_encode($mapped, JSON_THROW_ON_ERROR);
+            $queries = DB::getQueryLog();
+            DB::disableQueryLog();
+            $counts[] = count($queries);
+            foreach ($queries as $query) $this->assertStringStartsWith('select ', strtolower($query['query']));
+        }
+        $this->assertSame([8, 8], $counts); // paginator 2 + six existing KPI aggregates
+    }
+
+    public function test_approval_http_keeps_blocked_and_inactive_statuses_and_uses_neutral_message(): void
+    {
+        $this->seed(PartnerAgreementSeeder::class);
+        $agreement = \App\Models\PartnerAgreement::firstOrFail();
+        foreach (['BLOCKED', 'INACTIVE'] as $status) {
+            $host = User::factory()->host()->create(['status' => $status, 'updated_at' => now()->subDay()]);
+            \App\Models\HostAgreementAcceptance::create(['host_id' => $host->id, 'partner_agreement_id' => $agreement->id,
+                'accepted_content_sha256' => $agreement->content_sha256, 'accepted_at' => now(), 'method' => 'REGISTRATION_PENDING']);
+            $before = $host->fresh()->getRawOriginal();
+            $this->actingAs($this->admin)->postJson('/api/admin/users/'.$host->id.'/approve-host')->assertOk()
+                ->assertJsonPath('message', 'Đã phê duyệt Đối tác thành công.')
+                ->assertJsonPath('data.is_host_approved', true)->assertJsonPath('data.status', $status);
+            $this->assertSame($before, $host->fresh()->getRawOriginal());
+            $this->actingAs($host->fresh())->getJson('/api/host/properties')->assertForbidden()
+                ->assertJsonPath('code', 'ACCOUNT_'.$status);
+        }
     }
 }

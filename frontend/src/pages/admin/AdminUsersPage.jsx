@@ -138,7 +138,7 @@ export default function AdminUsersPage() {
         try {
             const res = await adminUserManagementService.approveHost(user.id);
             if (!aliveRef.current || !isProfileAuthCurrent(auth)) return;
-            setSuccessMessage(res?.message || `Đã phê duyệt mở khóa tài khoản Đối tác "${user.name}".`);
+            setSuccessMessage(res?.message || `Đã phê duyệt Đối tác "${user.name}".`);
             handleReload();
         } catch (err) {
             if (!aliveRef.current || !isProfileAuthCurrent(auth)) return;
@@ -205,7 +205,7 @@ export default function AdminUsersPage() {
             return (
                 <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-emerald-800 text-[11px] font-semibold">
                     <CheckCircle2 className="mr-1 h-3 w-3" />
-                    Đã duyệt mở khóa
+                    Đã duyệt
                 </Badge>
             );
         }
@@ -229,7 +229,7 @@ export default function AdminUsersPage() {
                         Quản lý Người dùng & Phê duyệt Đối tác
                     </h1>
                     <p className="text-xs text-muted-foreground mt-1">
-                        Xem danh sách tài khoản toàn hệ thống, phê duyệt mở khóa chức năng kinh doanh cho Đối tác (Host) mới đăng ký và kiểm soát trạng thái hoạt động.
+                        Xem danh sách tài khoản toàn hệ thống và phê duyệt Đối tác (Host). Trạng thái phê duyệt và trạng thái tài khoản được quản lý riêng.
                     </p>
                 </div>
                 <Button
@@ -272,18 +272,18 @@ export default function AdminUsersPage() {
                     </div>
                     <p className="mt-2 font-display text-2xl font-bold text-amber-900">{summary.pending_hosts}</p>
                     <p className="mt-1 text-[11px] text-amber-800/90">
-                        Đã đồng ý hoa hồng 10% · Chờ mở khóa
+                        Đã chấp thuận hợp đồng · Chờ phê duyệt
                     </p>
                 </button>
 
                 <div className="rounded-2xl border border-border/70 bg-card p-5 shadow-xs">
                     <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-muted-foreground">Đối tác đã mở khóa</span>
+                        <span className="text-xs font-medium text-muted-foreground">Đối tác đã duyệt</span>
                         <Building2 className="h-4 w-4 text-emerald-700" />
                     </div>
                     <p className="mt-2 font-display text-2xl font-bold text-emerald-800">{summary.approved_hosts}</p>
                     <p className="mt-1 text-[11px] text-muted-foreground">
-                        Được phép đăng cơ sở & nhận đặt phòng
+                        Quyền kinh doanh còn phụ thuộc trạng thái tài khoản.
                     </p>
                 </div>
 
