@@ -188,6 +188,49 @@ class RoomAvailabilityRepository
         return $query->with(['property', 'roomType', 'amenities', 'images'])->paginate($perPage);
     }
 
+    /**
+     * Search active public properties filtered by keyword and/or room guest capacity BEFORE pagination.
+     *
+     * @param array{keyword: ?string, guest_count: ?int, page: int, per_page: int} $filters
+     */
+    public function searchPublicProperties(array $filters): LengthAwarePaginator
+    {
+        $keyword = $filters['keyword'] ?? null;
+        $guestCount = $filters['guest_count'] ?? null;
+        $page = (int) ($filters['page'] ?? 1);
+        $perPage = (int) ($filters['per_page'] ?? 12);
+
+        $publicRoomsScope = static function (Builder $roomQuery) use ($guestCount): void {
+            $roomQuery->where('rooms.status', RoomStatus::ACTIVE->value)
+                ->whereHas('roomType', fn (Builder $type) => $type->whereColumn('room_types.property_id', 'rooms.property_id'));
+            if ($guestCount !== null && $guestCount >= 1) {
+                $roomQuery->where('rooms.capacity', '>=', $guestCount);
+            }
+        };
+
+        $query = Property::query()
+            ->where('status', PropertyStatus::ACTIVE->value)
+            ->with(['images' => fn ($images) => $images->select(['id', 'property_id', 'image_path', 'is_primary'])
+                ->orderByDesc('is_primary')->orderBy('id')])
+            ->withMin(['rooms as starting_price' => $publicRoomsScope], 'price_per_night')
+            ->withCount(['reviews as review_count'])
+            ->withAvg('reviews as rating', 'rating');
+
+        if ($keyword !== null && $keyword !== '') {
+            $query->where(function (Builder $q) use ($keyword): void {
+                $q->where('name', 'like', "%{$keyword}%")
+                    ->orWhere('address', 'like', "%{$keyword}%");
+            });
+        }
+
+        if ($guestCount !== null && $guestCount >= 1) {
+            $query->whereHas('rooms', $publicRoomsScope);
+        }
+
+        return $query->orderBy('properties.id')
+            ->paginate($perPage, ['properties.*'], 'page', $page);
+    }
+
     private function holdingBookings(int $roomId, string $checkIn, string $checkOut, ?int $ignoreBookingId = null): Builder
     {
         $query = Booking::query()

@@ -2,9 +2,9 @@ import api from '../api/axios.js';
 import { createPublicPropertyApi } from '../api/publicPropertyApi.js';
 import { roomSearchApi as defaultRoomSearchApi } from '../api/roomSearchApi.js';
 import { mapPropertyFromRooms, mapPropertyRooms } from '../mappers/propertyMapper.js';
-import { mapPropertySearchResponse } from '../mappers/catalogMapper.js';
+import { mapCatalogListResponse, mapPropertySearchResponse } from '../mappers/catalogMapper.js';
 import { MOCK_PROPERTIES } from '../mocks/propertyMockData.js';
-import { createCatalogService } from './catalog.js';
+import { catalogError, createCatalogService } from './catalog.js';
 
 /**
  * Service to fetch and filter property data for public catalog, landing page, and search results.
@@ -118,6 +118,64 @@ export function createPropertyService(propertyApi, { dev = false, enableMocks = 
     },
 
     getPropertyById: catalog.getPropertyById,
+
+    /**
+     * Paginated public properties filtered by keyword and/or guest capacity on the backend BEFORE pagination.
+     */
+    async searchPaginatedProperties({ page = 1, per_page = 12, keyword = '', guest_count = null } = {}, options = {}) {
+      const trimmedKeyword = typeof keyword === 'string' ? keyword.trim() : '';
+      const parsedGuests = guest_count != null && Number.isInteger(Number(guest_count)) && Number(guest_count) >= 1
+        ? Number(guest_count)
+        : null;
+
+      if (!trimmedKeyword && parsedGuests === null) {
+        return catalog.getProperties({ page, per_page }, options);
+      }
+
+      if (isMockEnabled) {
+        let filtered = [...properties];
+        if (trimmedKeyword) {
+          const lower = trimmedKeyword.toLowerCase();
+          filtered = filtered.filter((p) =>
+            (p.name ?? '').toLowerCase().includes(lower) ||
+            (p.address ?? p.city ?? '').toLowerCase().includes(lower)
+          );
+        }
+        if (parsedGuests !== null) {
+          filtered = filtered.filter((p) =>
+            !Array.isArray(p.rooms) || p.rooms.some((r) => Number(r.capacity ?? 0) >= parsedGuests)
+          );
+        }
+        const total = filtered.length;
+        const lastPage = Math.max(1, Math.ceil(total / per_page));
+        const sliced = filtered.slice((page - 1) * per_page, page * per_page);
+        return {
+          data: sliced,
+          source: 'mock',
+          meta: {
+            current_page: page,
+            per_page,
+            total,
+            last_page: lastPage,
+          },
+          links: {},
+        };
+      }
+
+      try {
+        const query = { page, per_page };
+        if (trimmedKeyword) query.keyword = trimmedKeyword;
+        if (parsedGuests !== null) query.guest_count = parsedGuests;
+        const response = await api.get('/api/public/properties-search', {
+          timeout: 10000,
+          ...options,
+          params: query,
+        });
+        return { ...mapCatalogListResponse(response.data), source: 'api' };
+      } catch (error) {
+        throw catalogError(error);
+      }
+    },
 
     /**
      * TV2 checkout source: rooms that are bookable for the requested stay, from Room Search.

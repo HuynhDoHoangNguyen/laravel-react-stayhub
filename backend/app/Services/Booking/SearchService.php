@@ -33,6 +33,16 @@ class SearchService
     }
 
     /**
+     * Search public properties filtered by keyword and/or guest capacity before pagination.
+     *
+     * @param array{keyword: ?string, guest_count: ?int, page: int, per_page: int} $filters
+     */
+    public function searchProperties(array $filters): LengthAwarePaginator
+    {
+        return $this->repository->searchPublicProperties($filters);
+    }
+
+    /**
      * Validate that referenced entities exist in repository.
      *
      * @throws ValidationException

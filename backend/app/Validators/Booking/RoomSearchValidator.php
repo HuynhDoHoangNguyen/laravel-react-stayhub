@@ -152,6 +152,37 @@ class RoomSearchValidator
     }
 
     /**
+     * Validate raw input for public property search (before pagination).
+     *
+     * @param array<string, mixed> $input
+     * @return array{keyword: ?string, guest_count: ?int, page: int, per_page: int}
+     */
+    public function validateSearchProperties(array $input): array
+    {
+        $validated = $this->validation->make($input, [
+            'keyword' => ['nullable', 'string', 'max:255'],
+            'guest_count' => ['nullable', 'integer', 'min:1'],
+            'page' => ['nullable', 'integer', 'min:1', 'max:2147483647'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:24'],
+        ])->validate();
+
+        $keyword = isset($validated['keyword']) ? trim((string) $validated['keyword']) : '';
+
+        return [
+            'keyword' => $keyword !== '' ? $keyword : null,
+            'guest_count' => isset($validated['guest_count']) && $validated['guest_count'] !== ''
+                ? (int) $validated['guest_count']
+                : null,
+            'page' => isset($validated['page']) && $validated['page'] !== ''
+                ? (int) $validated['page']
+                : 1,
+            'per_page' => isset($validated['per_page']) && $validated['per_page'] !== ''
+                ? (int) $validated['per_page']
+                : 12,
+        ];
+    }
+
+    /**
      * Validate raw input and build CheckAvailabilityQuery DTO.
      *
      * @param array<string, mixed> $input

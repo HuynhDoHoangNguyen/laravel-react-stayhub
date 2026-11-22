@@ -258,4 +258,31 @@ class HostPartnerAgreementTest extends TestCase
         ])->assertStatus(409)
             ->assertJsonPath('code', 'ALREADY_AUTHENTICATED');
     }
+
+    public function test_fresh_default_database_seeder_initializes_partner_agreement_for_host_registration(): void
+    {
+        // Giả lập database hoàn toàn mới (trước khi chạy php artisan db:seed mặc định)
+        User::query()->delete();
+        PartnerAgreement::query()->delete();
+
+        // Chạy đúng quy trình dựng môi trường dev mặc định: php artisan db:seed (DatabaseSeeder)
+        $this->seed();
+
+        $publicRes = $this->getJson('/api/public/partner-agreements/current');
+        $publicRes->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.version', 'v1.0')
+            ->assertJsonPath('data.commission_rate_bps', 1000);
+
+        $sha256 = $publicRes->json('data.content_sha256');
+
+        $this->postJson('/api/public/host-register', [
+            'name' => 'Host Từ Database Mới',
+            'email' => 'freshdb-host@stayhub.test',
+            'password' => 'StrongPass123!',
+            'password_confirmation' => 'StrongPass123!',
+            'accepted' => true,
+            'content_sha256' => $sha256,
+        ])->assertStatus(201);
+    }
 }

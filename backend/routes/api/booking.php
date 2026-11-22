@@ -17,8 +17,9 @@ use Illuminate\Support\Facades\Route;
 
 // Public routes
 Route::prefix('public')->group(function () {
-    // Search route MUST be declared before /rooms/{room}
+    // Search routes MUST be declared before /rooms/{room}
     Route::get('/rooms/search', [RoomSearchController::class, 'index']);
+    Route::get('/properties-search', [RoomSearchController::class, 'searchProperties']);
     Route::get('/rooms/{room}/availability', [RoomAvailabilityController::class, 'show'])->whereNumber('room');
 
     Route::post('/bookings/preview', [BookingPreviewController::class, 'preview'])->middleware('throttle:60,1');

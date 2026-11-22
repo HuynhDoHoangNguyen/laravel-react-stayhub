@@ -134,6 +134,11 @@ export default function SearchResultsPage() {
     const barSearch = isDatelessBarSearch(navigation.roomSearch);
     const unsupported = navigation.tab === 'rooms' && !hasDates && !barSearch
         ? readRoomSearch(navigation.roomSearch).unsupported : [];
+    const propertyKeyword = (searchParams.get('city') ?? searchParams.get('keyword') ?? searchParams.get('q') ?? '').trim();
+    const hasPropertyGuestFilter = searchParams.has('guest_count') || searchParams.has('adults') || searchParams.has('children');
+    const propertyGuestCount = hasPropertyGuestFilter
+        ? parseAvailabilitySearchParams(navigation.roomSearch).guests
+        : null;
     const switchTab = tab => setSearchParams(changeSearchTab(search, tab));
     return <div className="min-h-screen bg-background">
         <SearchSummaryBar city={searchParams.get('city') ?? searchParams.get('keyword') ?? searchParams.get('q') ?? ''} startDate={searchParams.get('startDate') ?? searchParams.get('check_in_date') ?? ''}
@@ -164,7 +169,7 @@ export default function SearchResultsPage() {
                 <button type="button" className="mt-5 rounded-full bg-primary px-5 py-3 font-semibold text-primary-foreground"
                     onClick={() => setSearchParams(updateRoomSearch(navigation.roomSearch, {}, { clearUnsupported: true }))}>Chuyển sang lọc phòng cơ bản</button>
             </section> : navigation.tab === 'properties' ? navigation.propertyParams
-                ? <PropertyResultsPanel key={search} params={navigation.propertyParams} keyword={searchParams.get('city') ?? searchParams.get('keyword') ?? searchParams.get('q') ?? ''} onPageChange={page => { const next = new URLSearchParams(search); next.set('page', String(page)); setSearchParams(next); }}
+                ? <PropertyResultsPanel key={search} params={navigation.propertyParams} keyword={propertyKeyword} guestCount={propertyGuestCount} onPageChange={page => { const next = new URLSearchParams(search); next.set('page', String(page)); setSearchParams(next); }}
                     onShowRooms={() => switchTab('rooms')} view={view} onViewChange={setView} />
                 : <section role="alert"><EmptyState title="Tham số danh sách cơ sở không hợp lệ" message="Trang phải là số nguyên dương; số cơ sở mỗi trang từ 1 đến 24." /></section>
                 : <RoomResults key={navigation.roomSearch} search={navigation.roomSearch} navigate={setSearchParams} view={view} onViewChange={setView} />}
