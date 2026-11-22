@@ -2,13 +2,13 @@ import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import axios, { AxiosError, CanceledError } from 'axios';
 import { createAdminHostApi } from '../src/api/adminHostApi.js';
-import { mapAdminHosts } from '../src/mappers/adminHostMapper.js';
+import { mapAdminHosts, mapAdminHostDetail } from '../src/mappers/adminHostMapper.js';
 import { subscribeToAuthFailures } from '../src/services/authSession.js';
 
 let adapter;
 const sharedClient = axios.create({ adapter: (config) => adapter(config) });
 mock.module(new URL('../src/api/axios.js', import.meta.url).href, { defaultExport: sharedClient });
-const { getAdminHosts, createAdminHostService, normalizeHostQuery, readHostSearch,
+const { getAdminHosts, getAdminHost, normalizeHostId, createAdminHostService, normalizeHostQuery, readHostSearch,
   hostSearchParams, parseAdminHostError } = await import('../src/services/adminHostService.js');
 test.after(() => mock.restoreAll());
 
@@ -155,3 +155,75 @@ test('aborting the real transport cancels the request and keeps cancellation rec
     (error) => parseAdminHostError(error).isCancelled);
 });
 
+
+const detailBody = () => ({ data: { ...body().data[0], properties_count: 4, address: 'Địa chỉ fixture', gender: 'FEMALE',
+  date_of_birth: '2000-02-29', updated_at: '2026-11-22T08:15:00.123456Z' } });
+
+test('detail service uses the selected ID, shared transport and signal without list query', async () => {
+  let call;
+  adapter = async (config) => { call = config; return { status: 200, data: detailBody(), config, headers: {} }; };
+  const signal = new AbortController().signal;
+  const detail = await getAdminHost('14', { signal });
+  assert.equal(call.method, 'get'); assert.equal(call.url, '/api/admin/hosts/14');
+  assert.equal(call.params, undefined); assert.equal(call.signal, signal);
+  assert.equal(detail.phone, '0901234567'); assert.equal(detail.date_of_birth, '2000-02-29');
+});
+
+test('invalid detail IDs fail before transport', async () => {
+  let calls = 0;
+  const service = createAdminHostService({ getHost: async () => { calls++; return detailBody(); } });
+  for (const id of [0, -1, 1.5, true, false, null, undefined, [], ['14'], {}, '01', '+14', ' 14 ', '1e2', '../14', 9007199254740992]) {
+    await assert.rejects(service.getHost(id), (error) => error.isLocalValidation && error.fields.host.length > 0);
+  }
+  assert.equal(calls, 0); assert.equal(normalizeHostId('14'), 14);
+});
+
+test('detail mapper allowlists fields and preserves nullable values and all genders/statuses', () => {
+  const value = detailBody();
+  value.data.password = 'discard'; value.data.avatar = 'private-path'; value.data.role = 'CUSTOMER';
+  const result = mapAdminHostDetail(value, 14);
+  assert.deepEqual(Object.keys(result), ['id', 'name', 'email', 'phone', 'properties_count', 'address', 'gender', 'date_of_birth', 'status', 'created_at', 'updated_at']);
+  assert.equal(value.data.password, 'discard');
+  for (const gender of [null, 'MALE', 'FEMALE', 'OTHER']) {
+    for (const status of ['ACTIVE', 'INACTIVE', 'BLOCKED']) {
+      assert.equal(mapAdminHostDetail({ data: { ...result, gender, status } }, 14).gender, gender);
+    }
+  }
+  for (const field of ['phone', 'address', 'gender', 'date_of_birth', 'created_at', 'updated_at']) value.data[field] = null;
+  const nullable = mapAdminHostDetail(value, 14);
+  for (const field of ['phone', 'address', 'gender', 'date_of_birth', 'created_at', 'updated_at']) assert.equal(nullable[field], null);
+});
+
+test('detail mapper rejects wrong host and malformed fields instead of showing another account', () => {
+  const changes = [
+    (b) => { b.data.properties_count = '4'; }, (b) => { b.data.properties_count = -1; },
+    (b) => { b.data.id = 15; }, (b) => { b.data.id = '14'; }, (b) => { b.data.name = null; },
+    (b) => { b.data.email = null; }, (b) => { b.data.phone = 901234567; }, (b) => { b.data.address = {}; },
+    (b) => { b.data.gender = 'UNKNOWN'; }, (b) => { b.data.gender = ['MALE']; },
+    (b) => { b.data.status = 'DELETED'; }, (b) => { b.data.date_of_birth = '2026-02-29'; },
+    (b) => { b.data.date_of_birth = '2000-02-30'; }, (b) => { b.data.date_of_birth = '0000-01-01'; },
+    (b) => { b.data.created_at = '2026-02-30T00:00:00Z'; }, (b) => { b.data.updated_at = 'invalid'; },
+  ];
+  for (const change of changes) {
+    const value = detailBody(); change(value);
+    assert.throws(() => mapAdminHostDetail(value, 14), (error) => error.kind === 'contract');
+  }
+  for (const field of Object.keys(detailBody().data)) {
+    const value = detailBody(); delete value.data[field];
+    assert.throws(() => mapAdminHostDetail(value, 14));
+  }
+  for (const value of [null, {}, { data: [] }]) assert.throws(() => mapAdminHostDetail(value, 14));
+});
+
+test('detail errors keep identity and distinct HTTP/network/cancellation states without replay', async () => {
+  for (const status of [401, 403, 404, 422, 500]) {
+    const original = new AxiosError('Fixture', '', {}, null, { status, data: { message: 'Fixture denied' }, headers: {} });
+    let calls = 0;
+    const service = createAdminHostService({ getHost: async () => { calls++; throw original; } });
+    await assert.rejects(service.getHost(14), (error) => error === original);
+    assert.equal(calls, 1); assert.equal(parseAdminHostError(original).status, status);
+  }
+  const controller = new AbortController(); controller.abort();
+  await assert.rejects(createAdminHostApi(axios.create()).getHost(14, { signal: controller.signal }),
+    (error) => parseAdminHostError(error).isCancelled);
+});

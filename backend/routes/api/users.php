@@ -15,3 +15,7 @@ Route::get('/admin/users/{user}', [AdminCustomerController::class, 'show'])
 Route::get('/admin/hosts', [AdminHostController::class, 'index'])
     ->middleware(['auth:sanctum', 'account.active', 'role:ADMIN'])
     ->name('admin.hosts.index');
+
+Route::get('/admin/hosts/{host}', [AdminHostController::class, 'show'])
+    ->middleware(['auth:sanctum', 'account.active', 'role:ADMIN'])
+    ->name('admin.hosts.show');

@@ -6,7 +6,7 @@
 - Branch `feature/tv1-admin-management`, baseline HEAD `7ccc4c1`, working tree ban đầu sạch.
 - Scope được developer duyệt: API và trang danh sách Host, tìm kiếm/lọc/phân trang, số cơ sở, tests và báo cáo.
 - Trạng thái kỹ thuật: **TECHNICAL PASS**, H01–H07 có evidence dưới đây. Nghiệm thu developer chờ review kết quả; duyệt plan không phải nghiệm thu code.
-- UC41-02 xem chi tiết chưa triển khai. Không triển khai tạo/sửa/xóa/nâng role Host hoặc khóa/mở tài khoản UC42.
+- Tại thời điểm bàn giao UC41-01, UC41-02 chưa triển khai. Kết quả bổ sung UC41-02 ở mục 9. Không triển khai tạo/sửa/xóa/nâng role Host hoặc khóa/mở tài khoản UC42.
 
 Đã đối chiếu AGENTS.md, ARCHITECTURE.md, README, hướng dẫn frontend, ERD/use case/phân công/screen mockups, audit TV1 và source User/Property/Auth/UC40. UC41 thuộc TV1. Giữ contract Customer `/api/admin/users` và các file UC40, không refactor ngoài scope.
 
@@ -132,7 +132,145 @@ Fixture: 25 Host, 50 Property (mọi trạng thái), 1 Customer, 1 Admin; Host k
 
 - Tái sử dụng schema User/Property, Sanctum/account middleware, Common response, EloquentObjectMapper và theme/layout. Không thêm package hoặc sửa nghiệp vụ module khác.
 - Chưa kiểm chứng collation/tìm kiếm trên MySQL; không cam kết tìm tiếng Việt không dấu. SQLite/browser không thay thế evidence MySQL. Warning bundle/Fast Refresh ngoài scope vẫn giữ.
-- UC41-02 chưa triển khai; chưa tuyên bố toàn UC41 hoàn thành. Không có blocker kỹ thuật trong phạm vi UC41-01 đã duyệt.
+- Tại thời điểm bàn giao UC41-01, UC41-02 chưa triển khai và chưa tuyên bố toàn UC41 hoàn thành. Không có blocker kỹ thuật trong phạm vi UC41-01 đã duyệt.
 - Không commit/push/merge. Bàn giao kèm commit và description đề xuất để developer tự review/sử dụng.
 - Skills áp dụng: stayhub-task-planning cho scope/baseline/AC; stayhub-laravel cho raw validation/authorization/query/count/projection; stayhub-react cho domain layers/URL/cancellation/responsive; stayhub-verification cho automated/browser evidence/AC/report.
 - Bước tiếp theo đề xuất: **UC41-02 — Xem chi tiết Host**, cần scope/mini plan và duyệt riêng trước triển khai.
+
+## 9. UC41-02 — Xem chi tiết Host
+
+### 9.1. Baseline, mục tiêu và trạng thái
+
+- Ngày kiểm chứng: 22/11/2026, Asia/Ho_Chi_Minh.
+- Branch `feature/tv1-admin-management`, HEAD `2950d6c`; working tree ban đầu sạch sau merge dev.
+- Developer duyệt mini plan 17 file: API chi tiết Host, dialog từ danh sách, validation/authorization, property count và tests/report.
+- **UC41-02 TECHNICAL PASS**, HD01–HD07 có evidence bên dưới. Phạm vi đọc của UC41 (danh sách/chi tiết) đã có Backend/Frontend; nghiệm thu developer chờ review kết quả. Duyệt plan không phải nghiệm thu code.
+- Không triển khai sửa/xóa/nâng role hoặc UC42; không mở rộng sang danh sách/giám sát Property của UC43.
+
+Đã dùng baseline kiến trúc và kết quả rà soát sau merge: Controller/Validator/DTO/QueryService/Repository/Mapper/Common; Frontend Page/Dialog → Domain Service → Domain API/shared Axios → mapper. Không thay các lớp UC40 hoặc shared configuration.
+
+### 9.2. Backend, contract và nghiệp vụ
+
+Endpoint mới **GET /api/admin/hosts/{host}**, name `admin.hosts.show`. Route registry xác nhận Sanctum stateful, auth:sanctum, account.active, role:ADMIN. QueryService kiểm tra ADMIN ACTIVE cả khi gọi trực tiếp, trước lookup; tests xác nhận actor bị từ chối không query DB.
+
+Validator kiểm tra raw ID canonical nguyên dương trước cast, tới PHP_INT_MAX. Không nhận query/body GET, kể cả key có null/rỗng. Input sai trả 422 theo field `host`. Auth/account/role trước validation, validation trước lookup. Repository chọn đúng field, scope `role = HOST`, aggregate withCount('properties') trong cùng query.
+
+Response có một envelope data, gồm đúng:
+
+```text
+id, name, email, phone, properties_count, address,
+gender, date_of_birth, status, created_at, updated_at
+```
+
+Phone/address/gender/date_of_birth/timestamps nullable theo schema. Phone giữ string/số 0 đầu. Gender MALE/FEMALE/OTHER/null; ngày sinh YYYY-MM-DD, timestamps ISO UTC/null. Không trả password/token/session, role, email_verified_at, avatar path hay quan hệ khác.
+
+Host mục tiêu được phép ở ACTIVE/INACTIVE/BLOCKED; actor luôn ADMIN ACTIVE. ID không tồn tại, CUSTOMER hoặc ADMIN cùng 404 `{"message":"Không tìm thấy Host."}`. Khi Host đổi role sau lúc tải bảng, detail cũng trả privacy 404 này.
+
+Count lấy mới từ server, không dùng giá trị cũ trên row. Đếm mọi Property đang tồn tại của đúng Host, gồm ACTIVE/INACTIVE/BLOCKED/PENDING; Host chưa có cơ sở trả 0. Test đổi từ list count 0 sang detail count 4, kiểm không tính cơ sở của Host khác; direct-service detail/mapping chỉ có **1 SELECT**. Snapshot User/Property xác nhận thao tác đọc không ghi dữ liệu.
+
+### 9.3. Frontend và dialog lifecycle
+
+Trang Host thêm cột Thao tác/nút **Xem chi tiết** với accessible name theo ID. Dialog Radix dùng dependency có sẵn, tải detail theo ID đang chọn; service kiểm ID nguyên dương an toàn của JavaScript và mapper yêu cầu response ID trùng request. Count bắt buộc là số nguyên không âm; sai kiểu/thiếu field/ngày không hợp lệ là contract error, không hiển thị nhầm tài khoản.
+
+Dialog hiển thị thông tin cá nhân, trạng thái, số cơ sở và ngày tạo/cập nhật. Nullable hiển thị Chưa cập nhật. Ngày sinh format từ chuỗi ngày, không đổi timezone. Loading/error/retry/404 recovery có UI riêng. 404 cho phép **Đóng và tải lại danh sách** để phục hồi khi row đã biến mất/đổi role.
+
+Đóng bằng Đóng/Escape/pointer ngoài; Tab/Shift+Tab nằm trong modal. Trả focus đúng trigger; trigger không còn thì về heading Host. Giữ filters/page/draft chưa gửi khi đóng. AbortController + disposed flag + Auth snapshot loại bỏ response cũ khi đóng/đổi Host/unmount/đổi phiên. Account failure đi qua Auth interceptors hiện có; domain 403 không bị coi là mất session.
+
+Dialog vừa viewport, max-height 90dvh, footer Đóng luôn có thể thao tác và body cuộn nội bộ; email/địa chỉ dài wrap. Không thêm Frontend route/menu hoặc sửa AppRouter/AdminLayout.
+
+### 9.4. File tạo/sửa
+
+17 file đúng plan: **3 tạo, 14 sửa**, không xóa. Paths tính từ repository root.
+
+| Action | File | Vai trò |
+| --- | --- | --- |
+| Tạo | backend/app/DTOs/UserManagement/Requests/AdminHostDetailQuery.php | Typed detail ID |
+| Tạo | backend/app/DTOs/UserManagement/Responses/AdminHostDetailResponse.php | Detail contract/transforms |
+| Sửa | backend/app/Http/Controllers/UserManagement/AdminHostController.php | show/envelope/privacy 404 |
+| Sửa | backend/app/Validators/UserManagement/AdminHostValidator.php | Raw ID/query/body validation |
+| Sửa | backend/app/Services/UserManagement/AdminHostQueryService.php | Authorized detail workflow |
+| Sửa | backend/app/Repositories/UserManagement/AdminHostRepository.php | HOST lookup/allowlist/count |
+| Sửa | backend/app/Mappers/UserManagement/AdminHostMapper.php | Detail projection |
+| Sửa | backend/routes/api/users.php | Detail endpoint |
+| Sửa | backend/tests/Feature/UserManagement/AdminHostTest.php | Thêm 24 detail cases, giữ 39 list cases |
+| Sửa | frontend/src/api/adminHostApi.js | GET detail + signal |
+| Sửa | frontend/src/services/adminHostService.js | ID/response matching/service |
+| Sửa | frontend/src/mappers/adminHostMapper.js | Detail validation/projection |
+| Tạo | frontend/src/components/admin/users/AdminHostDetailDialog.jsx | Dialog/state/focus/recovery |
+| Sửa | frontend/src/pages/admin/AdminHostsPage.jsx | Action/selection/trigger |
+| Sửa | frontend/tests/adminHost.test.js | Thêm 5 tests, giữ 10 tests danh sách |
+| Sửa | docs/TV1/UC41-REPORT.md | Bổ sung mục này, giữ lịch sử UC41-01 |
+| Sửa | docs/TV1/README.md | Trạng thái UC41-01/02 |
+
+Không thay Model/Migration/Seeder, Auth/Sanctum/shared Axios, dependencies, UC40 hoặc Catalog/Booking/Invoice business logic. Không phát sinh file nguồn ngoài scope. Scripts và fixture browser ngoài repository là tài nguyên kiểm chứng tạm.
+
+### 9.5. Kết quả automated checks
+
+| Check | Exit | Kết quả |
+| --- | --- | --- |
+| php artisan test --compact --filter='AdminHostTest\|AdminCustomerTest' | 0 | **123 passed, 547 assertions**: 63 Host cases và 60 Customer regression cases; SQLite :memory:, session-cookie login thật và direct service |
+| php artisan test --compact | 0 | **2912 passed, 485 skipped, 12713 assertions**, 202.85 giây; MySQL suites cần runner/opt-in riêng được skip |
+| node --experimental-test-module-mocks --test tests/adminHost.test.js | 0 | **15 passed**, production API/service/mapper với shared transport mock |
+| node --experimental-test-module-mocks --test tests/*.test.js | 0 | **475 passed**, 0 failed/skipped |
+| npm.cmd run lint | 0 | 0 errors; 3 Fast Refresh warnings có sẵn trong badge/button/sidebar |
+| npm.cmd run build | 0 | 3414 modules, JS 1423.81 kB/gzip 378.55 kB; warning chunk lớn có sẵn |
+| php artisan route:list --path=api/admin/hosts -vv | 0 | index/show names và Auth/account/ADMIN middleware đúng |
+| Git scope/whitespace review | 0 | Đúng 17 file, không whitespace errors; cảnh báo LF→CRLF không phải lỗi |
+
+Focused tests lần đầu có lỗi fixture: thêm aggregate properties_count vào attributes khi tạo User và coi count là nullable trong Node fixture. Đã sửa fixture (count không phải cột DB và luôn là số nguyên), không thay schema hay production contract để chiều tests. Chạy lại focused/full checks đạt như bảng. Node module-mock ExperimentalWarning chỉ thuộc test runtime. PHPUnit chạy ngoài sandbox do giới hạn quyền is_readable vendor đã xác định trước đó; không đổi cấu hình dự án để né sandbox.
+
+### 9.6. Browser thật và evidence
+
+Chrome headless/CDP, Vite source thật localhost:15542 và Laravel source thật localhost:18542. APP_ENV local để CSRF hoạt động; login Admin qua form, returnTo=/admin/profile hợp lệ rồi mở Host. Fixture SQLite mới browser_test.sqlite và session database riêng ngoài repository, guard kiểm target trước boot. Chỉ migration/factory/mutation fixture do lượt này sở hữu, không dùng MySQL phát triển.
+
+Ban đầu có 25 Hosts, 50 Properties mọi trạng thái, 1 Customer, 1 Admin; Host nullable, ngày sinh nhuận và địa chỉ dài có sẵn. Script test thêm một Property PENDING sau khi list tải, đổi một Host sang Customer và khóa Admin để kiểm tra recovery/session; các thao tác này chỉ tác động SQLite fixture, không triển khai API mutation hoặc UC42.
+
+**25 browser checks PASS**, 26 request chi tiết, **0 JavaScript Runtime exception**. CSRF cookie request và X-XSRF-TOKEN login header được quan sát mà không in/lưu giá trị nhạy cảm.
+
+1. Hiển thị đúng Host được chọn và ngày sinh 29/02/2000.
+2. Detail lấy count mới 1 sau khi list đã tải count 0.
+3. Initial focus ở nút Đóng.
+4. Tab giữ focus trong modal.
+5. Shift+Tab giữ focus trong modal.
+6. Escape trả đúng focus trigger.
+7. Đóng giữ filter URL, page 2 và draft chưa gửi.
+8. Nút Đóng trả đúng focus trigger.
+9. Pointer ngoài đóng dialog.
+10. Đóng/mở nhanh dưới latency 600ms giữ Host mới nhất, gồm target INACTIVE.
+11. Detail target có 4 cơ sở đếm đủ mọi trạng thái.
+12. Đóng request đang chờ không làm dialog mở lại.
+13. Offline hiển thị lỗi/retry thay vì dữ liệu cũ.
+14. Retry lấy lại đúng Host.
+15. Tablet 768px: dialog vừa viewport.
+16. Tablet: nội dung dài wrap/cuộn nội bộ.
+17. Mobile 390px: dialog vừa viewport.
+18. Mobile: nội dung dài wrap/cuộn nội bộ.
+19. Nullable personal fields hiển thị Chưa cập nhật.
+20. Host đổi role sang Customer trả generic 404.
+21. 404 recovery tải lại bảng, giữ filter/page và loại row cũ.
+22. Trigger bị mất thì focus về heading Host.
+23. HTTP thật cùng privacy 404 cho Admin/Customer/ID thiếu.
+24. HTTP thật ID 01 trả 422 với errors.host.
+25. Admin BLOCKED bị invalidated session và UI về login, dialog bị gỡ.
+
+Ảnh desktop 1440px, tablet 768px và mobile 390px đã được mở kiểm tra trực quan. Đây là source sản phẩm thật trên runtime fixture SQLite, không phải nghiệm thu XAMPP/MySQL hoặc browser mock API.
+
+Đã đóng đúng Chrome fixture, dừng hai server Laravel/Vite và xóa database SQLite, browser profile, scripts cùng kết quả tạm trong thư mục fixture đã xác minh đường dẫn tuyệt đối. Không giữ account fixture hoặc server chạy nền, không thay dữ liệu MySQL phát triển.
+
+### 9.7. Acceptance criteria, giới hạn và bước tiếp theo
+
+| ID | Trạng thái kỹ thuật | Evidence |
+| --- | --- | --- |
+| HD01 — Admin ACTIVE only | PASS | HTTP guest/role/status + direct service không query khi denied; browser blocked-session |
+| HD02 — HOST scope/privacy 404 | PASS | Missing/Customer/Admin/changed-role tests và browser HTTP comparison |
+| HD03 — Contract/nullable/count | PASS | Exact JSON, all statuses/genders/nullables, fresh count 0→4, đúng Host/1 SELECT, Node malformed-response checks |
+| HD04 — Đúng Host/loại response cũ | PASS | Service ID matching; browser pending close/rapid reopen/latency |
+| HD05 — State/focus/recovery | PASS | Browser giữ URL/page/draft, Escape/Close/outside, fallback và 404 refresh |
+| HD06 — States/keyboard/responsive | PASS | Error/retry/nullable, keyboard và 3 viewport screenshots đã inspect |
+| HD07 — Read-only/regression/scope | PASS | User/Property snapshots, 123 focused tests, full Backend/Node/lint/build/Git review |
+
+Không có blocker kỹ thuật trong phạm vi đã duyệt. Nghiệm thu developer chờ review; chưa commit/push/merge. Chưa kiểm chứng runtime MySQL, collation của tìm kiếm UC41-01 vẫn là giới hạn đã ghi. Frontend giữ giới hạn ID nguyên dương an toàn của JavaScript; Backend dùng native PHP integer bounds.
+
+Skills áp dụng: stayhub-task-planning cho scope/baseline/AC; stayhub-laravel cho authorization/validation/projection/count/tests; stayhub-react cho dialog/domain layers/cancellation/focus; stayhub-verification cho automated/browser/MySQL evidence và report.
+
+Bước tiếp theo đề xuất: **UC42 — Khóa/mở tài khoản**, cần mini plan và chốt transitions/chính sách trước triển khai. Không tự bắt đầu UC42.

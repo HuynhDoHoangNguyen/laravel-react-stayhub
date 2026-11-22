@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { hostSearchParams, getAdminHosts, parseAdminHostError, readHostSearch } from '../../services/adminHostService';
 import { hostStatuses } from '../../mappers/adminHostMapper';
+import AdminHostDetailDialog from '../../components/admin/users/AdminHostDetailDialog';
 
 const dateFormat = new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh' });
 const inputClass = 'min-w-0 rounded-lg border border-border bg-background px-3 py-2 text-foreground focus-visible:outline-2 focus-visible:outline-primary';
@@ -27,6 +28,7 @@ function HostList({ query, change, reset, user, captureProfileAuth, isProfileAut
   const [revision, setRevision] = useState(0);
   const [view, setView] = useState(null);
   const [formError, setFormError] = useState(null);
+  const [selectedHost, setSelectedHost] = useState(null);
   useEffect(() => {
     const auth = captureProfileAuth();
     const controller = new AbortController();
@@ -97,7 +99,7 @@ function HostList({ query, change, reset, user, captureProfileAuth, isProfileAut
           <table className="w-full min-w-[760px] text-left text-sm">
             <caption className="sr-only">Danh sách Host, trang {result.meta.current_page}</caption>
             <thead className="bg-muted/60"><tr>
-              {['Mã Host', 'Họ tên', 'Email', 'Điện thoại', 'Số cơ sở', 'Trạng thái', 'Ngày tạo'].map((label) => <th key={label} scope="col" className="px-4 py-3 font-semibold">{label}</th>)}
+              {['Mã Host', 'Họ tên', 'Email', 'Điện thoại', 'Số cơ sở', 'Trạng thái', 'Ngày tạo', 'Thao tác'].map((label) => <th key={label} scope="col" className="px-4 py-3 font-semibold">{label}</th>)}
             </tr></thead>
             <tbody className="divide-y divide-border">
               {result.data.map((host) => <tr key={host.id} className="hover:bg-muted/30">
@@ -108,6 +110,8 @@ function HostList({ query, change, reset, user, captureProfileAuth, isProfileAut
                 <td className="whitespace-nowrap px-4 py-4">{new Intl.NumberFormat('vi-VN').format(host.properties_count)}</td>
                 <td className="px-4 py-4"><span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${badgeClass[host.status]}`}>{hostStatuses[host.status]}</span></td>
                 <td className="whitespace-nowrap px-4 py-4">{host.created_at === null ? 'Chưa cập nhật' : dateFormat.format(new Date(host.created_at))}</td>
+                <td className="whitespace-nowrap px-4 py-4"><button type="button" className={buttonClass}
+                  aria-label={`Xem chi tiết Host #${host.id}`} onClick={(event) => setSelectedHost({ id: host.id, trigger: event.currentTarget })}>Xem chi tiết</button></td>
               </tr>)}
             </tbody>
           </table>
@@ -122,6 +126,8 @@ function HostList({ query, change, reset, user, captureProfileAuth, isProfileAut
         </nav>
       </>}
     </div>
+    {selectedHost && <AdminHostDetailDialog key={selectedHost.id} hostId={selectedHost.id}
+      trigger={selectedHost.trigger} onClose={() => setSelectedHost(null)} onReloadList={retry} />}
   </>;
 }
 

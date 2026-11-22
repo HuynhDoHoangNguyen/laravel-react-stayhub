@@ -3,6 +3,8 @@
 namespace App\Services\UserManagement;
 
 use App\DTOs\UserManagement\Requests\AdminHostQueryRequest;
+use App\DTOs\UserManagement\Requests\AdminHostDetailQuery;
+use App\DTOs\UserManagement\Responses\AdminHostDetailResponse;
 use App\Mappers\UserManagement\AdminHostMapper;
 use App\Models\User;
 use App\Repositories\UserManagement\AdminHostRepository;
@@ -24,5 +26,13 @@ final class AdminHostQueryService
         $page->setCollection($page->getCollection()->map($this->mapper->toListItem(...)));
 
         return $page;
+    }
+
+    public function detail(User $actor, AdminHostDetailQuery $input): ?AdminHostDetailResponse
+    {
+        $this->validator->authorize($actor);
+        $host = $this->repository->findHost($input->hostId);
+
+        return $host === null ? null : $this->mapper->toDetail($host);
     }
 }

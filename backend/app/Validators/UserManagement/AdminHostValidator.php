@@ -3,6 +3,7 @@
 namespace App\Validators\UserManagement;
 
 use App\DTOs\UserManagement\Requests\AdminHostQueryRequest;
+use App\DTOs\UserManagement\Requests\AdminHostDetailQuery;
 use App\Enums\UserRole;
 use App\Enums\UserStatus;
 use App\Models\User;
@@ -19,6 +20,24 @@ final class AdminHostValidator
         if ($actor->role !== UserRole::ADMIN || $actor->status !== UserStatus::ACTIVE) {
             throw new AuthorizationException('Bạn không có quyền xem thông tin Host.');
         }
+    }
+
+    public function detail(string $host, array $query = [], array $body = []): AdminHostDetailQuery
+    {
+        $validator = $this->validation->make(['host' => $host], [
+            'host' => ['bail', 'required', 'regex:/\A[1-9][0-9]*\z/', 'integer', 'min:1', 'max:'.PHP_INT_MAX],
+        ], ['host.*' => 'Mã Host phải là số nguyên dương hợp lệ.']);
+        $validator->after(static function (Validator $validator) use ($query, $body): void {
+            foreach (array_keys($query) as $field) {
+                $validator->errors()->add((string) $field, 'Chi tiết Host không nhận tham số truy vấn.');
+            }
+            foreach (array_keys($body) as $field) {
+                $validator->errors()->add((string) $field, 'Chi tiết Host không nhận dữ liệu trong body.');
+            }
+        });
+        $data = $validator->validate();
+
+        return new AdminHostDetailQuery((int) $data['host']);
     }
 
     public function query(array $query, array $body = []): AdminHostQueryRequest

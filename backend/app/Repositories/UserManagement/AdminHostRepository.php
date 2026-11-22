@@ -10,6 +10,13 @@ use Illuminate\Database\Eloquent\Builder;
 
 final class AdminHostRepository
 {
+    public function findHost(int $hostId): ?User
+    {
+        return User::query()->select(['id', 'name', 'email', 'phone', 'address', 'gender',
+            'date_of_birth', 'status', 'created_at', 'updated_at'])
+            ->where('role', UserRole::HOST->value)->withCount('properties')->find($hostId);
+    }
+
     public function paginate(AdminHostQueryRequest $input): LengthAwarePaginator
     {
         $query = User::query()->select(['id', 'name', 'email', 'phone', 'status', 'created_at'])

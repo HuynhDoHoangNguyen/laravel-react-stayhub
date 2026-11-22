@@ -3,6 +3,8 @@
 namespace Tests\Feature\UserManagement;
 
 use App\DTOs\UserManagement\Requests\AdminHostQueryRequest;
+use App\DTOs\UserManagement\Requests\AdminHostDetailQuery;
+use App\Enums\Gender;
 use App\Enums\UserRole;
 use App\Enums\UserStatus;
 use App\Models\User;
@@ -259,4 +261,125 @@ class AdminHostTest extends TestCase
         $this->app->make(AdminHostQueryService::class)->listing($actor, new AdminHostQueryRequest());
     }
 
+    public function test_detail_guest_is_unauthorized_before_id_validation(): void
+    {
+        $this->browser('GET', '/api/admin/hosts/invalid')->assertUnauthorized();
+    }
+
+    #[DataProvider('otherRoles')]
+    public function test_detail_other_roles_are_forbidden_before_id_validation(string $role): void
+    {
+        $this->login(User::factory()->create(['role' => UserRole::from($role)]));
+        $this->browser('GET', '/api/admin/hosts/invalid')->assertForbidden();
+    }
+
+    #[DataProvider('inactiveStatuses')]
+    public function test_detail_blocks_an_existing_admin_session_after_status_change(string $status): void
+    {
+        $admin = $this->login();
+        $host = User::factory()->host()->create();
+        $admin->update(['status' => UserStatus::from($status)]);
+        $this->browser('GET', '/api/admin/hosts/'.$host->id)->assertForbidden()->assertJsonPath('code', 'ACCOUNT_'.$status);
+        $this->browser('GET', '/api/me')->assertUnauthorized();
+    }
+
+    public function test_detail_property_count_is_fresh_and_counts_only_the_target_host(): void
+    {
+        $admin = $this->login();
+        $host = User::factory()->host()->create();
+        $other = User::factory()->host()->create();
+        Property::factory()->count(2)->create(['host_id' => $other->id]);
+        $this->listing()->assertOk()->assertJsonPath('data.1.properties_count', 0);
+        foreach (PropertyStatus::cases() as $status) {
+            Property::factory()->create(['host_id' => $host->id, 'status' => $status]);
+        }
+        $before = DB::table('properties')->orderBy('id')->get()->toJson();
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        $detail = $this->app->make(AdminHostQueryService::class)->detail($admin, new AdminHostDetailQuery($host->id));
+        $this->assertSame(4, $detail->jsonSerialize()['properties_count']);
+        $this->assertCount(1, DB::getQueryLog());
+        DB::disableQueryLog();
+        $this->browser('GET', '/api/admin/hosts/'.$host->id)->assertOk()->assertJsonPath('data.properties_count', 4);
+        $this->assertSame($before, DB::table('properties')->orderBy('id')->get()->toJson());
+    }
+
+    public static function detailVariants(): array
+    {
+        return [['ACTIVE', 'FEMALE'], ['INACTIVE', 'MALE'], ['BLOCKED', 'OTHER']];
+    }
+
+    #[DataProvider('detailVariants')]
+    public function test_detail_exact_projection_dates_and_no_user_writes(string $status, string $gender): void
+    {
+        $this->freezeSecond();
+        $this->login();
+        $host = User::factory()->host()->create(['phone' => '0901234567', 'address' => 'Địa chỉ fixture',
+            'gender' => Gender::from($gender), 'date_of_birth' => '2000-02-29', 'status' => UserStatus::from($status),
+            'avatar' => 'profile-avatars/private-fixture.png']);
+        $before = DB::table('users')->orderBy('id')->get()->toJson();
+        $this->browser('GET', '/api/admin/hosts/'.$host->id)->assertOk()->assertExactJson(['data' => [
+            'id' => $host->id, 'name' => $host->name, 'email' => $host->email,
+            'phone' => '0901234567', 'properties_count' => 0, 'address' => 'Địa chỉ fixture', 'gender' => $gender,
+            'date_of_birth' => '2000-02-29', 'status' => $status,
+            'created_at' => now()->toISOString(), 'updated_at' => now()->toISOString(),
+        ]]);
+        $this->assertSame($before, DB::table('users')->orderBy('id')->get()->toJson());
+    }
+
+    public function test_detail_preserves_nullable_personal_fields_and_timestamps(): void
+    {
+        $this->login();
+        $host = User::factory()->host()->create(['phone' => null, 'address' => null, 'gender' => null,
+            'date_of_birth' => null, 'created_at' => null, 'updated_at' => null]);
+        $response = $this->browser('GET', '/api/admin/hosts/'.$host->id)->assertOk();
+        foreach (['phone', 'address', 'gender', 'date_of_birth', 'created_at', 'updated_at'] as $field) {
+            $response->assertJsonPath('data.'.$field, null);
+        }
+    }
+
+    public function test_detail_hides_missing_customer_admin_and_changed_role_behind_the_same_404(): void
+    {
+        $admin = $this->login();
+        $otherRole = User::factory()->customer()->create();
+        $host = User::factory()->host()->create();
+        $this->listing()->assertOk()->assertJsonPath('data.0.id', $host->id);
+        $host->update(['role' => UserRole::CUSTOMER]);
+        foreach ([$admin->id, $otherRole->id, $host->id, 999999] as $id) {
+            $this->browser('GET', '/api/admin/hosts/'.$id)->assertNotFound()->assertExactJson(['message' => 'Không tìm thấy Host.']);
+        }
+    }
+
+    public static function invalidDetailIds(): array
+    {
+        return [['0'], ['-1'], ['01'], ['+1'], ['1.0'], ['1e2'], ['abc'], ['9223372036854775808']];
+    }
+
+    #[DataProvider('invalidDetailIds')]
+    public function test_detail_rejects_noncanonical_and_overflow_ids(string $id): void
+    {
+        $this->login();
+        $this->browser('GET', '/api/admin/hosts/'.rawurlencode($id))->assertUnprocessable()->assertJsonValidationErrors('host');
+    }
+
+    public function test_detail_rejects_query_and_body_before_lookup(): void
+    {
+        $this->login();
+        $this->browser('GET', '/api/admin/hosts/999999?role=CUSTOMER')->assertUnprocessable()->assertJsonValidationErrors('role');
+        $this->browser('GET', '/api/admin/hosts/999999?q=')->assertUnprocessable()->assertJsonValidationErrors('q');
+        $this->browser('GET', '/api/admin/hosts/999999', ['status' => null])->assertUnprocessable()->assertJsonValidationErrors('status');
+    }
+
+    #[DataProvider('deniedActors')]
+    public function test_detail_service_denies_without_reading_the_database(string $role, string $status): void
+    {
+        $actor = User::factory()->make(['role' => UserRole::from($role), 'status' => UserStatus::from($status)]);
+        DB::enableQueryLog();
+        try {
+            $this->app->make(AdminHostQueryService::class)->detail($actor, new AdminHostDetailQuery(1));
+            $this->fail('Expected authorization denial.');
+        } catch (AuthorizationException) {
+            $this->assertSame([], DB::getQueryLog());
+        } finally { DB::disableQueryLog(); }
+    }
 }

@@ -1,7 +1,15 @@
 import api from '../api/axios.js';
 import { createAdminHostApi } from '../api/adminHostApi.js';
 import { localValidationError, normalizeApiError } from '../api/apiError.js';
-import { hostStatuses, mapAdminHosts } from '../mappers/adminHostMapper.js';
+import { hostStatuses, mapAdminHosts, mapAdminHostDetail } from '../mappers/adminHostMapper.js';
+
+export function normalizeHostId(value) {
+  const id = typeof value === 'string' || typeof value === 'number' ? Number(value) : NaN;
+  if (!Number.isSafeInteger(id) || id < 1 || String(id) !== String(value)) {
+    throw localValidationError('Mã Host không hợp lệ.', { host: ['Mã Host phải là số nguyên dương hợp lệ.'] });
+  }
+  return id;
+}
 
 export function normalizeHostQuery(input = {}) {
   const fields = Object.create(null);
@@ -50,6 +58,10 @@ export function hostSearchParams(input) {
 
 export function createAdminHostService(hostApi) {
   return {
+    async getHost(hostId, options = {}) {
+      const id = normalizeHostId(hostId);
+      return mapAdminHostDetail(await hostApi.getHost(id, options), id);
+    },
     async getHosts(input = {}, options = {}) {
       const query = normalizeHostQuery(input);
       const params = { page: query.page, per_page: query.per_page };
@@ -62,4 +74,5 @@ export function createAdminHostService(hostApi) {
 
 const service = createAdminHostService(createAdminHostApi(api));
 export const getAdminHosts = (query, options) => service.getHosts(query, options);
+export const getAdminHost = (hostId, options) => service.getHost(hostId, options);
 export const parseAdminHostError = normalizeApiError;

@@ -35,3 +35,31 @@ export function mapAdminHosts(body) {
   return { data, links, meta: { current_page, last_page, per_page, total } };
 }
 
+
+const nullableString = (value) => value === null || typeof value === 'string';
+function timestamp(value) {
+  if (value === null) return true;
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$/.test(value)) return false;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 19) === value.slice(0, 19);
+}
+function birthday(value) {
+  if (value === null) return true;
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || Number(value.slice(0, 4)) < 1) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+export function mapAdminHostDetail(body, expectedId) {
+  const row = body?.data;
+  if (!object(body) || !object(row) || !integer(row.id, 1) || row.id !== expectedId
+    || typeof row.name !== 'string' || typeof row.email !== 'string'
+    || !nullableString(row.phone) || !nullableString(row.address)
+    || ![null, 'MALE', 'FEMALE', 'OTHER'].includes(row.gender) || !birthday(row.date_of_birth)
+    || !integer(row.properties_count, 0) || typeof row.status !== 'string' || !Object.hasOwn(hostStatuses, row.status)
+    || !timestamp(row.created_at) || !timestamp(row.updated_at)) invalid();
+
+  return { id: row.id, name: row.name, email: row.email, phone: row.phone, properties_count: row.properties_count, address: row.address,
+    gender: row.gender, date_of_birth: row.date_of_birth, status: row.status,
+    created_at: row.created_at, updated_at: row.updated_at };
+}
