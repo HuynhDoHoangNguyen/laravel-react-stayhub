@@ -4,8 +4,10 @@ param(
     [switch]$Provision,
     # Negative control: the smoke test fails after writing to its owned transaction.
     [switch]$InjectTestFailure,
-    [ValidateSet('Functional', 'InvoiceCreateRace', 'ReviewRead', 'ReviewCreate', 'ReviewCreateRace')]
+    [ValidateSet('Functional', 'InvoiceCreateRace', 'ReviewRead', 'ReviewCreate', 'ReviewCreateRace', 'ChatData', 'ChatHttp', 'ChatRecovery', 'ChatBrowser', 'GuestChat', 'GuestChatBrowser', 'ChatLiveDryRun', 'ChatLive')]
     [string]$Suite = 'Functional',
+    [switch]$AllowLiveGemini,
+    [string]$VerifiedDryRun,
     [ValidateSet('None', 'AfterSchema', 'Collision')]
     [string]$InjectFailureAfter = 'None'
 )
@@ -13,6 +15,8 @@ param(
 #Requires -Version 7.0
 if (!$Provision) { throw 'Explicit -Provision is required; no database connection was opened.' }
 if ($Suite -ne 'Functional' -and $InjectTestFailure) { throw 'Smoke failure injection requires the Functional suite.' }
+if (($Suite -eq 'ChatLive' -and (!$AllowLiveGemini -or $VerifiedDryRun -cnotmatch '^[a-f0-9]{32}$')) -or
+    ($Suite -ne 'ChatLive' -and ($AllowLiveGemini -or $VerifiedDryRun))) { throw 'ChatLive requires explicit opt-in and a verified dry-run ID.' }
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -23,10 +27,12 @@ $schema = "stayhub_tv3_ac_test_$runId"
 $testUser = 'tv3ac_' + $runId.Substring(0, 16)
 $testPassword = [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
 $testAppKey = 'base64:' + [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+$liveGeminiKey = $null
+$browserSuites = @('ChatBrowser', 'GuestChatBrowser', 'ChatLiveDryRun', 'ChatLive')
 $evidence = Join-Path $repo ".agent-workspace/tv3/ac-env-01/$runId"
 $null = New-Item -ItemType Directory -Path $evidence
 $lifecycleArtifacts = Join-Path $evidence 'lifecycle'
-if ($Suite -in @('InvoiceCreateRace', 'ReviewCreateRace')) { $null = New-Item -ItemType Directory -Path $lifecycleArtifacts }
+if ($Suite -in @('InvoiceCreateRace', 'ReviewCreateRace', 'ChatRecovery')) { $null = New-Item -ItemType Directory -Path $lifecycleArtifacts }
 $php = (Get-Command php -ErrorAction Stop).Source
 $docker = (Get-Command docker -ErrorAction Stop).Source
 $container = $null
@@ -39,9 +45,13 @@ $protectedBefore = $null
 $failure = $null
 $cleanupFailure = $null
 $childTerminationFailed = $false
+$browserServices = [Collections.Generic.List[hashtable]]::new()
+$edgeProfile = Join-Path $evidence 'edge-profile'
 
 function Protect-Text([string]$Value) {
-    return $Value.Replace($testPassword, '[REDACTED]').Replace($testAppKey, '[REDACTED]')
+    $safe = $Value.Replace($testPassword, '[REDACTED]').Replace($testAppKey, '[REDACTED]')
+    if ($liveGeminiKey) { $safe = $safe.Replace($liveGeminiKey, '[REDACTED]') }
+    return $safe
 }
 
 function Save-Json([string]$Name, $Value) {
@@ -137,6 +147,118 @@ function Protected-Fingerprint {
     return $hashes
 }
 
+function New-BrowserPorts {
+    $listeners = [Collections.Generic.List[Net.Sockets.TcpListener]]::new()
+    try {
+        foreach ($index in 1..2) {
+            $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
+            $listeners.Add($listener)
+            $listener.Start()
+            $listener.LocalEndpoint.Port
+        }
+    } finally {
+        foreach ($listener in $listeners) { $listener.Stop() }
+    }
+}
+
+function Start-BrowserService([string]$Label, [string]$Exe, [string[]]$Arguments, [hashtable]$Environment, [string]$Directory) {
+    $start = [Diagnostics.ProcessStartInfo]::new($Exe)
+    $start.WorkingDirectory = $Directory
+    $start.UseShellExecute = $false
+    $start.CreateNoWindow = $true
+    $start.RedirectStandardOutput = $true
+    $start.RedirectStandardError = $true
+    foreach ($argument in $Arguments) { $start.ArgumentList.Add($argument) }
+    foreach ($entry in $Environment.GetEnumerator()) { $start.Environment[$entry.Key] = [string]$entry.Value }
+    $process = [Diagnostics.Process]::Start($start)
+    $browserServices.Add(@{ label = $Label; process = $process; output = $process.StandardOutput.ReadToEndAsync(); errors = $process.StandardError.ReadToEndAsync() })
+}
+
+function Wait-BrowserHttp([string]$Url) {
+    $deadline = [DateTime]::UtcNow.AddSeconds(25)
+    do {
+        if (@($browserServices | Where-Object { $_.process.HasExited }).Count -gt 0) { throw 'An owned browser service exited during startup.' }
+        try {
+            if ((Invoke-WebRequest -Uri $Url -TimeoutSec 2 -SkipHttpErrorCheck).StatusCode -eq 200) { return }
+        } catch { }
+        Start-Sleep -Milliseconds 150
+    } while ([DateTime]::UtcNow -lt $deadline)
+    throw "Owned browser service was not ready at $Url."
+}
+
+function Invoke-ChatBrowser([hashtable]$Environment) {
+    $guestBrowser = $Suite -eq 'GuestChatBrowser'
+    $liveMode = $Suite -in @('ChatLiveDryRun', 'ChatLive')
+    $node = (Get-Command node -ErrorAction Stop).Source
+    $edge = Join-Path ${env:ProgramFiles(x86)} 'Microsoft/Edge/Application/msedge.exe'
+    if (!(Test-Path -LiteralPath $edge -PathType Leaf)) { throw 'Microsoft Edge executable is missing.' }
+    $frontend = Join-Path $repo 'frontend'
+    $Environment.GEMINI_API_KEY = 'fake-uc17-browser-key'
+    $Environment.SUPPORT_CHAT_AI_ENABLED = 'false'
+    $Environment.SUPPORT_CHAT_ALLOW_EXTERNAL_QUESTIONS = 'false'
+    $Environment.SUPPORT_CHAT_RATE_LIMIT_PER_MINUTE = '10'
+    $Environment.SUPPORT_CHAT_TIMEOUT_MS = '12000'
+    $Environment.SUPPORT_CHAT_MAX_CONCURRENT = '2'
+    $Environment.SUPPORT_CHAT_MAX_OUTPUT_TOKENS = '500'
+    $Environment.GEMINI_MODEL = 'gemini-3.5-flash-lite'
+    $Environment.STAYHUB_UC17_LIVE_AUTHORIZED = '0'
+    $Environment.STAYHUB_UC17_BROWSER_PASSWORD = $testPassword
+    $Environment.STAYHUB_UC17_PHP = $php
+    $server = 'tests/Support/Uc17BrowserServer.php'
+    if ($Suite -eq 'ChatLiveDryRun') {
+        $guard = Invoke-Child $php @($server, 'guard-preflight') '' $Environment -WorkingDirectory $backend
+        Save-Json 'guard-preflight.json' ($guard.stdout | ConvertFrom-Json)
+    }
+    $prepared = Invoke-Child $php @($server, 'prepare') '' $Environment -WorkingDirectory $backend
+    Save-Json 'fixture-before.json' ($prepared.stdout | ConvertFrom-Json)
+    $serverEnvironment = $Environment.Clone()
+    if ($Suite -eq 'ChatLive') {
+        $claim = Join-Path $repo ".agent-workspace/tv3/ac-env-01/$VerifiedDryRun/live-consumed"
+        $ticket = [IO.File]::Open($claim, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+        $ticket.Dispose()
+        $serverEnvironment.GEMINI_API_KEY = $liveGeminiKey
+        $serverEnvironment.STAYHUB_UC17_LIVE_AUTHORIZED = '1'
+    }
+    Start-BrowserService 'laravel' $php @('-S', "127.0.0.1:$backendPort", '-t', 'public', $server) $serverEnvironment $backend
+    if ($Suite -eq 'ChatLive') { $serverEnvironment.GEMINI_API_KEY = '' }
+    Start-BrowserService 'vite' $node @('node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', [string]$frontendPort, '--strictPort') @{
+        VITE_BACKEND_URL = $manifest.backend_url; VITE_ENABLE_BOOKING_MOCKS = 'false'; VITE_ENABLE_PROPERTY_MOCKS = 'false'
+        VITE_ENABLE_GUEST_CHAT = ([string]($guestBrowser -or $liveMode)).ToLowerInvariant()
+    } $frontend
+    Wait-BrowserHttp "$($manifest.backend_url)/up"
+    Wait-BrowserHttp "$($manifest.frontend_url)/customer"
+    $null = New-Item -ItemType Directory -Path $edgeProfile
+    Start-BrowserService 'edge' $edge @('--headless=new', '--disable-gpu', '--disable-background-networking', '--disable-extensions', '--no-first-run',
+        '--no-default-browser-check', '--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1', "--user-data-dir=$edgeProfile", 'about:blank') @{} $frontend
+    $portFile = Join-Path $edgeProfile 'DevToolsActivePort'
+    $deadline = [DateTime]::UtcNow.AddSeconds(20)
+    while (!(Test-Path -LiteralPath $portFile) -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 150 }
+    $debugPort = [int](Get-Content -LiteralPath $portFile | Select-Object -First 1)
+    if ($debugPort -lt 1 -or $debugPort -gt 65535) { throw 'Invalid owned Edge debug port.' }
+    $Environment.STAYHUB_UC17_DEBUG_PORT = [string]$debugPort
+    Save-Json 'browser-services.json' @{ frontend = $manifest.frontend_url; backend = $manifest.backend_url; edge_debug_port = $debugPort;
+        pids = @($browserServices | ForEach-Object { @{ name = $_.label; pid = $_.process.Id } }) }
+
+    $browser = Invoke-Child $node @('tests/support/uc17Browser.mjs') '' $Environment -AllowFailure -WorkingDirectory $frontend -TimeoutSeconds 300
+    (Protect-Text $browser.stdout) | Set-Content -LiteralPath (Join-Path $evidence 'browser.json') -Encoding utf8
+    (Protect-Text $browser.stderr) | Set-Content -LiteralPath (Join-Path $evidence 'browser-stderr.txt') -Encoding utf8
+    Save-Json 'browser-exit.json' @{ exit = $browser.exit }
+    $audit = Invoke-Child $php @($server, 'audit') '' $Environment -WorkingDirectory $backend
+    $finalFixture = $audit.stdout | ConvertFrom-Json
+    Save-Json 'fixture-after.json' $finalFixture
+    if ($liveMode) {
+        Save-Json 'gemini-attempts.json' @{ simulated = ($Suite -eq 'ChatLiveDryRun'); model = 'gemini-3.5-flash-lite';
+            guest = $finalFixture.gemini.guest; customer = $finalFixture.gemini.customer }
+        if ($finalFixture.gemini.guest.attempts -ne 1 -or $finalFixture.gemini.customer.attempts -ne 1) { throw 'UC17 expected one Gemini attempt per flow.' }
+    }
+    if ($browser.exit -ne 0 -or $finalFixture.outbound_attempts -ne 0) { throw 'UC17 browser acceptance failed; see browser and fixture evidence.' }
+    $reported = $browser.stdout | ConvertFrom-Json
+    $expectedChecks = if ($liveMode) { 2 } elseif ($guestBrowser) { 5 } else { 7 }
+    if (!$reported.passed -or @($reported.checkpoints).Count -ne $expectedChecks -or @($reported.checkpoints | Where-Object { $_.status -ne 'PASS' }).Count -gt 0) {
+        throw 'UC17 browser evidence is incomplete.'
+    }
+}
+
 try {
     if ($env:APP_CONFIG_CACHE) { throw 'Refuse inherited configuration cache override.' }
     if ($env:APP_BASE_PATH -or (Test-Path -LiteralPath (Join-Path $repo '.env.testing'))) { throw 'Refuse alternate application base path or testing environment file.' }
@@ -144,6 +266,33 @@ try {
     if (!(Test-Path -LiteralPath (Join-Path $backend 'vendor/autoload.php'))) { throw 'Missing Composer dependencies.' }
     $protectedBefore = Protected-Fingerprint
     Save-Json 'protected-before.json' $protectedBefore
+    if ($Suite -eq 'ChatLive') {
+        $dryDirectory = Join-Path $repo ".agent-workspace/tv3/ac-env-01/$VerifiedDryRun"
+        $dryManifest = Get-Content -LiteralPath (Join-Path $dryDirectory 'manifest.json') -Raw | ConvertFrom-Json
+        $dryResult = Get-Content -LiteralPath (Join-Path $dryDirectory 'result.json') -Raw | ConvertFrom-Json
+        $dryGuard = Get-Content -LiteralPath (Join-Path $dryDirectory 'guard-preflight.json') -Raw | ConvertFrom-Json
+        $dryBrowser = Get-Content -LiteralPath (Join-Path $dryDirectory 'browser.json') -Raw | ConvertFrom-Json
+        $dryCleanup = Get-Content -LiteralPath (Join-Path $dryDirectory 'cleanup.json') -Raw | ConvertFrom-Json
+        $dryConnection = Get-Content -LiteralPath (Join-Path $dryDirectory 'connection.json') -Raw | ConvertFrom-Json
+        $dryScope = Get-Content -LiteralPath (Join-Path $dryDirectory 'protected-after.json') -Raw | ConvertFrom-Json -AsHashtable
+        # An independently changing development cache is reported by the runner. The gate checks the owned target and cleanup separately.
+        $onlyDevDrift = $dryResult.cleanup_failure -ceq 'Development fingerprint changed; do not restore or overwrite development data.'
+        if ($dryManifest.suite -ne 'ChatLiveDryRun' -or $dryResult.run_id -cne $VerifiedDryRun -or $dryResult.failure -or
+            (!$dryResult.passed -and !$onlyDevDrift) -or $dryBrowser.passed -ne $true -or
+            $dryConnection.identity.db -cne "stayhub_tv3_ac_test_$VerifiedDryRun" -or $dryConnection.development_read_denied -ne $true -or
+            $dryCleanup.schema_remaining -ne '0' -or $dryCleanup.user_remaining -ne '0' -or
+            $dryCleanup.connections_remaining -ne '0' -or $dryCleanup.owned_children_exited -ne $true -or
+            $dryGuard.network_attempts -ne 0 -or @($dryGuard.blocked).Count -ne 5 -or
+            (($dryScope | ConvertTo-Json -Compress) -cne ($protectedBefore | ConvertTo-Json -Compress))) { throw 'ChatLive requires a successful dry run of the current files.' }
+        $keyProbe = @'
+require 'backend/vendor/autoload.php';
+$values = Dotenv\Dotenv::parse(file_get_contents('.env'));
+$key = getenv('STAYHUB_UC17_LIVE_GEMINI_API_KEY') ?: ($values['GEMINI_API_KEY'] ?? '');
+if (!preg_match('/\A[!-~]{20,200}\z/', $key)) {exit(2);}
+echo $key;
+'@
+        $script:liveGeminiKey = (Invoke-Child $php @('-r', $keyProbe)).stdout
+    }
     $phpProbe = Invoke-Child $php @('-r', 'if (PHP_VERSION_ID < 80200 || PHP_INT_SIZE !== 8 || !extension_loaded("pdo_mysql")) {exit(1);} echo PHP_VERSION;')
     $ids = (Invoke-Child $docker @('compose', 'ps', '-q', 'mysql')).stdout.Trim()
     if ($ids -notmatch '^[a-f0-9]{12,64}$') { throw 'Expected exactly one existing Compose MySQL container; none created or started by runner.' }
@@ -187,6 +336,11 @@ echo json_encode(array_intersect_key($v, array_flip($keys)), JSON_THROW_ON_ERROR
         development_database = $development; admin_account = $identity[3]; server_uuid = $identity[2]; version = $identity[1]; container = $container; php = $phpProbe.stdout;
         head = (Invoke-Child 'git' @('rev-parse', 'HEAD')).stdout.Trim(); dirty_state = (Invoke-Child 'git' @('status', '--short')).stdout;
         suite = $Suite; created_utc = [DateTime]::UtcNow.ToString('o') }
+    if ($Suite -in $browserSuites) {
+        $backendPort, $frontendPort = New-BrowserPorts
+        $manifest.backend_url = "http://127.0.0.1:$backendPort"
+        $manifest.frontend_url = "http://127.0.0.1:$frontendPort"
+    }
     Save-Json 'manifest.json' $manifest
     $before = Development-Fingerprint
     Save-Json 'development-before.json' $before
@@ -296,19 +450,93 @@ echo json_encode(['identity'=>$identity, 'grants'=>$grants, 'settings'=>$setting
         $requiredMarkers = @('review create lifecycle actual commit', 'review create race waiter rechecks')
     }
 
-    $tests = Invoke-Child $php $testArguments '' $envMap -AllowFailure -WorkingDirectory $backend -TimeoutSeconds 300
-    (Protect-Text ($tests.stdout + $tests.stderr)) | Set-Content -LiteralPath (Join-Path $evidence 'tests.txt')
-    Save-Json 'test-result.json' @{ exit = $tests.exit; command = 'php ' + ($testArguments -join ' '); engine = 'MySQL Docker' }
-    foreach ($marker in $requiredMarkers) {
-        if (($tests.stdout + $tests.stderr) -notmatch [regex]::Escape($marker)) { throw 'Required MySQL suite marker missing.' }
+    if ($Suite -eq 'ChatData') {
+        $testArguments = @('artisan', 'test', '--no-ansi', '--do-not-cache-result',
+            'tests/Feature/Chat/ChatTurnPersistenceMySqlTest.php')
+        $requiredMarkers = @('chat migration preserves legacy rows', 'chat success commits exactly one pair',
+            'chat pair rolls back', 'chat foreign keys preserve tombstones')
     }
-    if (($tests.stdout + $tests.stderr) -match '(?i)skipped|WARN') { throw 'MySQL suite did not execute without skips/warnings.' }
-    if ($tests.exit -ne 0) { throw 'TV3_AC test run failed; see sanitized tests.txt.' }
+
+    if ($Suite -eq 'ChatHttp') {
+        $envMap.GEMINI_API_KEY = 'fake-chat-http-key'
+        $envMap.SUPPORT_CHAT_AI_ENABLED = 'false'
+        $envMap.SUPPORT_CHAT_ALLOW_EXTERNAL_QUESTIONS = 'false'
+        $testArguments = @('artisan', 'test', '--no-ansi', '--do-not-cache-result',
+            'tests/Feature/Chat/ChatMessageHttpMySqlTest.php')
+        $requiredMarkers = @('customer chat persists and replays', 'customer chat rejects requests outside the web session',
+            'customer chat retry after timeout', 'customer chat limits requests', 'customer chat blocks external input')
+    }
+
+    if ($Suite -eq 'ChatRecovery') {
+        $envMap.GEMINI_API_KEY = 'fake-chat-recovery-key'
+        $envMap.SUPPORT_CHAT_AI_ENABLED = 'false'
+        $envMap.SUPPORT_CHAT_ALLOW_EXTERNAL_QUESTIONS = 'false'
+        $envMap.STAYHUB_CHAT_RECOVERY_ARTIFACTS = $lifecycleArtifacts
+        $testArguments = @('artisan', 'test', '--no-ansi', '--do-not-cache-result',
+            'tests/Feature/Chat/ChatRecoveryHttpMySqlTest.php')
+        $requiredMarkers = @('chat recovery concurrent duplicate', 'chat recovery replays after committed response',
+            'chat recovery late worker', 'chat recovery expired worker', 'chat recovery insufficient slot budget')
+    }
+
+    if ($Suite -eq 'GuestChat') {
+        $envMap.GEMINI_API_KEY = 'fake-uc17-guest-key'
+        $envMap.SUPPORT_CHAT_AI_ENABLED = 'false'
+        $envMap.SUPPORT_CHAT_ALLOW_EXTERNAL_QUESTIONS = 'false'
+        $envMap.SUPPORT_GUEST_CHAT_ALLOW_PROVIDER = 'false'
+        $testArguments = @('artisan', 'test', '--no-ansi', '--do-not-cache-result',
+            'tests/Feature/Chat/GuestChatMessageHttpMySqlTest.php')
+        $requiredMarkers = @('guest chat projects only the safe topic', 'guest chat routes personal questions',
+            'guest chat lists only public rooms', 'guest chat limits session ip and route',
+            'guest chat shares the provider slot', 'guest chat validates input')
+    }
+
+    if ($Suite -in $browserSuites) {
+        Invoke-ChatBrowser $envMap
+    } else {
+        $tests = Invoke-Child $php $testArguments '' $envMap -AllowFailure -WorkingDirectory $backend -TimeoutSeconds 300
+        (Protect-Text ($tests.stdout + $tests.stderr)) | Set-Content -LiteralPath (Join-Path $evidence 'tests.txt')
+        Save-Json 'test-result.json' @{ exit = $tests.exit; command = 'php ' + ($testArguments -join ' '); engine = 'MySQL Docker' }
+        foreach ($marker in $requiredMarkers) {
+            if (($tests.stdout + $tests.stderr) -notmatch [regex]::Escape($marker)) { throw 'Required MySQL suite marker missing.' }
+        }
+        if (($tests.stdout + $tests.stderr) -match '(?i)skipped|WARN') { throw 'MySQL suite did not execute without skips/warnings.' }
+        if ($tests.exit -ne 0) { throw 'TV3_AC test run failed; see sanitized tests.txt.' }
+    }
 } catch {
     $failure = Protect-Text $_.Exception.Message
 } finally {
     $cleanupErrors = [Collections.Generic.List[string]]::new()
-    if ($Suite -in @('InvoiceCreateRace', 'ReviewCreateRace')) {
+    if ($Suite -in $browserSuites) {
+        $serviceAudit = @()
+        for ($index = $browserServices.Count - 1; $index -ge 0; $index--) {
+            $service = $browserServices[$index]
+            $process = $service.process
+            try {
+                if (!$process.HasExited) { $process.Kill($true) }
+                if (!$process.WaitForExit(10000)) { throw 'Owned browser service did not exit.' }
+                $serviceAudit += @{ name = $service.label; pid = $process.Id; exited = $true }
+                # Keep diagnostics out of the registry of evidence until sanitized.
+                foreach ($stream in @('output', 'errors')) {
+                    if ($service[$stream].Wait(2000)) {
+                        (Protect-Text $service[$stream].Result) | Set-Content -LiteralPath (Join-Path $evidence "$($service.label)-$stream.txt")
+                    }
+                }
+            } catch {
+                $childTerminationFailed = $true
+                $cleanupErrors.Add((Protect-Text $_.Exception.Message))
+            } finally { $process.Dispose() }
+        }
+        try {
+            if (Test-Path -LiteralPath $edgeProfile) {
+                $resolved = (Resolve-Path -LiteralPath $edgeProfile).Path
+                if ($childTerminationFailed -or $resolved -cne [IO.Path]::GetFullPath($edgeProfile) -or
+                    ((Get-Item -LiteralPath $resolved).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Refuse unverified Edge profile cleanup.' }
+                Remove-Item -LiteralPath $resolved -Recurse -Force
+            }
+            Save-Json 'browser-cleanup.json' @{ services = $serviceAudit; profile_remaining = (Test-Path -LiteralPath $edgeProfile) }
+        } catch { $cleanupErrors.Add((Protect-Text $_.Exception.Message)) }
+    }
+    if ($Suite -in @('InvoiceCreateRace', 'ReviewCreateRace', 'ChatRecovery')) {
         try {
             $workerAudit = @()
             foreach ($spawnFile in (Get-ChildItem -LiteralPath $lifecycleArtifacts -Filter '*-spawn.json' -Recurse -File)) {
@@ -381,8 +609,9 @@ echo json_encode(['identity'=>$identity, 'grants'=>$grants, 'settings'=>$setting
         } catch { $cleanupFailure = "$cleanupFailure $($_.Exception.Message)".Trim() }
     }
     foreach ($artifact in (Get-ChildItem -LiteralPath $evidence -File -Recurse)) {
+        if ($Suite -in $browserSuites -and $artifact.FullName.StartsWith($edgeProfile + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { continue }
         $artifactText = [IO.File]::ReadAllText($artifact.FullName)
-        if ($artifactText.Contains($testPassword) -or $artifactText.Contains($testAppKey)) {
+        if ($artifactText.Contains($testPassword) -or $artifactText.Contains($testAppKey) -or ($liveGeminiKey -and $artifactText.Contains($liveGeminiKey))) {
             [IO.File]::WriteAllText($artifact.FullName, (Protect-Text $artifactText))
             $cleanupFailure = "$cleanupFailure Secret detected and redacted in evidence.".Trim()
         }
@@ -391,6 +620,7 @@ echo json_encode(['identity'=>$identity, 'grants'=>$grants, 'settings'=>$setting
         passed = ($null -eq $failure -and $null -eq $cleanupFailure); finished_utc = [DateTime]::UtcNow.ToString('o') }
     $testPassword = $null
     $testAppKey = $null
+    $liveGeminiKey = $null
 }
 Write-Output "TV3_AC evidence: $evidence"
 if ($failure -or $cleanupFailure) { throw "TV3_AC failed: $failure Cleanup: $cleanupFailure" }

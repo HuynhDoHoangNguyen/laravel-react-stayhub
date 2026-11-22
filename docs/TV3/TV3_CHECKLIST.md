@@ -1,6 +1,6 @@
 # StayHub TV3 — Tiến độ và việc còn lại
 
-Cập nhật: 2026-11-22 (Asia/Bangkok). **16/18 UC CLOSED TV3, còn UC17 và UC61.**
+Cập nhật: 2026-11-22 (Asia/Bangkok). **17/18 UC CLOSED TV3, còn UC61.**
 Owner: TV3. [Phân công](../stayhub-team-work-assignment.md) · [Mục lục hồ sơ](README.md).
 
 ## 1. Cách đọc trạng thái
@@ -16,7 +16,7 @@ Owner: TV3. [Phân công](../stayhub-team-work-assignment.md) · [Mục lục h�
 | --- | --- | --- | --- |
 | UC15 — Xem hóa đơn cá nhân | [x] | [x] TV3 | Invoice read; T01; ma trận chung |
 | UC16 — Tạo Review | [x] | [x] TV3 | Review create/eligibility; synthetic entry, T03 |
-| UC17 — Chat với chatbot | [ ] | [ ] | Còn provider, API/UI hỏi đáp, lưu message và xử lý lỗi |
+| UC17 — Chat với chatbot | [x] | [x] TV3 | **V1 CLOSED TV3 ngày 2026-11-22.** Tư vấn chung Guest/Customer, gợi ý Catalog công khai, lưu và replay Customer. Owner duyệt D1 đóng riêng và giữ UC61 mở. [Hồ sơ UC17](UC17_V1_CONTRACT.md#8-uc17-close-01) |
 | UC34 — Tạo Invoice từ Booking | [x] | [x] TV3 | Create/commit/rollback/race; T02 |
 | UC35 — Chi tiết Invoice Host | [x] | [x] TV3 | Detail/items/ownership; T01 |
 | UC36 — Cập nhật trạng thái thanh toán | [x] | [x] TV3 | Payment API/UI; F01/F02 đã đóng, tích hợp TV2 hoãn |
@@ -33,7 +33,7 @@ Owner: TV3. [Phân công](../stayhub-team-work-assignment.md) · [Mục lục h�
 | UC60 — Kiểm tra điều kiện Review | [x] | [x] TV3 | Qua UC16; ownership/COMPLETED/validation/unique/race, T03 |
 | UC61 — Ngữ cảnh nội bộ chatbot | [ ] | [ ] | Còn allowlist, authorization và context service |
 
-UC56/57/58 qua UC34; UC60 qua UC16, không cần API/UI riêng. Còn mở **UC17 và UC61**.
+UC56/57/58 qua UC34; UC60 qua UC16, không cần API/UI riêng. Còn mở **UC61**.
 
 ## 3. FAQ và Chat History
 
@@ -59,6 +59,7 @@ UC56/57/58 qua UC34; UC60 qua UC16, không cần API/UI riêng. Còn mở **UC17
 | Admin Invoice | UC45 CLOSED TV3 | [Handover UC45](UC45_ACCEPTANCE_HANDOVER.md) |
 | Admin Dashboard | UC47 CLOSED TV3 | [Handover UC47](UC47_ACCEPTANCE_HANDOVER.md) |
 | Statistics | UC48 CLOSED TV3; CSS/VND cũng đã nghiệm thu | [Handover UC48](UC48_ACCEPTANCE_HANDOVER.md) |
+| Chatbot | UC17-CLOSE-01 — TECHNICAL PASS tài liệu / OWNER ACCEPTED phạm vi V1 và UC17-GUEST-01 | [Hồ sơ UC17](UC17_V1_CONTRACT.md#8-uc17-close-01) |
 
 ## 5. Dependency tích hợp còn mở
 
