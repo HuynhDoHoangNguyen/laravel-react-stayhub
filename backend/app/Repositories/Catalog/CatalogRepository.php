@@ -12,15 +12,64 @@ use App\Models\Maintenance;
 use App\Models\Amenity;
 use App\Models\Property;
 use App\Models\PropertyImage;
+use App\Models\RoomImage;
 use App\Models\Room;
 use App\Models\RoomType;
 use App\Models\Review;
+use App\Services\Catalog\PublicImageUrl;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Query\JoinClause;
 
 class CatalogRepository
 {
+    /** @return Collection<int, RoomImage> */
+    public function getRoomImages(int $roomId, bool $lock = false): Collection
+    {
+        $query = RoomImage::query()->where('room_id', $roomId)->orderByDesc('is_primary')->orderBy('id');
+        if ($lock) $query->lockForUpdate();
+
+        return $query->get();
+    }
+
+    public function createRoomImage(array $attributes): RoomImage
+    {
+        return RoomImage::create($attributes)->refresh();
+    }
+
+    public function setRoomImagePrimary(int $roomId, ?int $imageId): void
+    {
+        $others = RoomImage::query()->where('room_id', $roomId)->where('is_primary', true);
+        if ($imageId !== null) $others->whereKeyNot($imageId);
+        $others->update(['is_primary' => false]);
+        if ($imageId !== null) RoomImage::query()->where('room_id', $roomId)->whereKey($imageId)
+            ->where('is_primary', false)->update(['is_primary' => true]);
+    }
+
+    public function deleteRoomImage(RoomImage $image): void
+    {
+        if (!$image->delete()) throw new \RuntimeException('Room image deletion failed.');
+    }
+
+    public function roomImagePathReferenced(string $path): bool
+    {
+        $key = PublicImageUrl::publicDiskKey($path);
+        if ($key === null) return false;
+        foreach ([RoomImage::class, PropertyImage::class] as $model) {
+            if ($model::query()->whereIn('image_path', [$key, '/storage/'.$key])->exists()) return true;
+        }
+        foreach ([RoomImage::class, PropertyImage::class] as $model) {
+            // Legacy URLs may contain encoded paths, query strings or a configured public base path.
+            // Read in bounded batches; normalization stays identical for both image tables.
+            foreach ($model::query()->select(['id', 'image_path'])->lazyById(200) as $image) {
+                if (PublicImageUrl::publicDiskKey($image->image_path) === $key) return true;
+            }
+        }
+
+        return false;
+    }
+
     public function findPublicRoom(int $id): ?Room
     {
         return $this->publicRoomCandidates()->with([
@@ -134,6 +183,39 @@ class CatalogRepository
     public function lockPropertyRoom(Property $property, int $roomId): ?Room
     {
         return $property->rooms()->whereKey($roomId)->lockForUpdate()->first();
+    }
+
+    /** @return Collection<int, Amenity> */
+    public function getHostRoomAmenityOptions(int $roomId): Collection
+    {
+        return Amenity::query()
+            ->leftJoin('room_amenities', function (JoinClause $join) use ($roomId): void {
+                $join->on('room_amenities.amenity_id', '=', 'amenities.id')
+                    ->where('room_amenities.room_id', $roomId);
+            })
+            ->where(fn (Builder $query) => $query->where('amenities.status', true)
+                ->orWhereNotNull('room_amenities.room_id'))
+            ->select(['amenities.id', 'amenities.name', 'amenities.status'])
+            ->selectRaw('CASE WHEN room_amenities.room_id IS NULL THEN 0 ELSE 1 END AS assigned_to_room')
+            ->withCasts(['assigned_to_room' => 'boolean'])
+            ->orderBy('amenities.name')->orderBy('amenities.id')->get();
+    }
+
+    public function lockAmenity(int $amenityId): ?Amenity
+    {
+        return Amenity::query()->whereKey($amenityId)->lockForUpdate()->first();
+    }
+
+    /** The caller holds the room lock. */
+    public function assignRoomAmenity(Room $room, Amenity $amenity): bool
+    {
+        return $room->amenities()->syncWithoutDetaching([$amenity->id])['attached'] !== [];
+    }
+
+    /** The caller holds the room lock. */
+    public function removeRoomAmenity(Room $room, int $amenityId): bool
+    {
+        return $room->amenities()->detach($amenityId) !== 0;
     }
 
     public function updateHostRoom(Room $room, RoomType $type, UpdateHostRoomRequest $input): bool
@@ -286,7 +368,7 @@ class CatalogRepository
 
     public function imagePathReferenced(string $path): bool
     {
-        return PropertyImage::query()->where('image_path', $path)->exists();
+        return $this->roomImagePathReferenced($path);
     }
 
     /** @return Collection<int, PropertyImage> */
