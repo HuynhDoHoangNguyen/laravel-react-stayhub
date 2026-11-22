@@ -9,6 +9,7 @@ use App\Exceptions\ErrorCode;
 use App\Mappers\Invoice\InvoiceMapper;
 use App\Models\User;
 use App\Repositories\Invoice\InvoiceRepository;
+use App\Services\Commission\CommissionChargeService;
 use App\Validators\Invoice\InvoicePaymentValidator;
 use Illuminate\Support\Facades\DB;
 use Psr\Log\LoggerInterface;
@@ -20,6 +21,7 @@ final class InvoicePaymentService
         private readonly InvoicePaymentValidator $validator,
         private readonly InvoiceMapper $mapper,
         private readonly LoggerInterface $logger,
+        private readonly CommissionChargeService $commissionChargeService,
     ) {}
 
     public function update(UpdateInvoicePaymentStatusRequest $command, User $actor): InvoiceResponse
@@ -34,6 +36,7 @@ final class InvoicePaymentService
             $changed = $this->validator->requiresTransition($invoice, $command);
             if ($changed) {
                 $this->repository->markPaid($invoice);
+                $this->commissionChargeService->activateDue((int) $invoice->id, $invoice->paid_at ?? now());
             }
             $response = $this->mapper->toResponse($this->repository->loadInvoiceItems($invoice), true);
             // Check serialization while rollback is still possible, including nested items.

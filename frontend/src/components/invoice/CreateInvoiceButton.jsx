@@ -1,38 +1,12 @@
-import { useState } from 'react';
-import { createHostInvoice, parseInvoiceError } from '../../services/invoiceService';
 import './Invoice.css';
 
-/**
- * Nút hành động Lập hóa đơn độc lập, tái sử dụng cho Host Dashboard hoặc Bảng Booking.
- */
-function CreateInvoiceButton({ bookingId, onSuccess, onError, disabled = false, className = '' }) {
-    const [loading, setLoading] = useState(false);
-
-    const handleClick = async () => {
-        if (loading || disabled || !bookingId) return;
-
-        setLoading(true);
-        try {
-            const result = await createHostInvoice(bookingId);
-            if (onSuccess) {
-                onSuccess(result.data);
-            }
-        } catch (err) {
-            const parsed = parseInvoiceError(err);
-            if (onError) {
-                onError(parsed);
-            }
-        } finally {
-            setLoading(false);
-        }
-    };
-
+function CreateInvoiceButton({ onClick, loading = false, disabled = false }) {
     return (
         <button
             type="button"
-            className={`btn-invoice-action ${className}`}
-            onClick={handleClick}
-            disabled={loading || disabled || !bookingId}
+            className="btn-invoice-action"
+            onClick={onClick}
+            disabled={loading || disabled}
             aria-busy={loading}
         >
             {loading ? (

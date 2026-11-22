@@ -534,6 +534,28 @@ test('PR12-02: SearchRoomCard wires "Đặt ngay" CTA directly to customer check
   assert.equal((code.match(/<Link\s+to=\{roomHref\}[^>]*>Xem chi tiết phòng<\/Link>/g) ?? []).length, 2);
 });
 
+test('UX-ENHANCE-01: Direct booking CTA and date picker in checkout form when dates not preselected', async () => {
+  const searchCardPath = fileURLToPath(new URL('../src/components/search/SearchRoomCard.jsx', import.meta.url));
+  const cardCode = await readFile(searchCardPath, 'utf8');
+
+  // Verify non-availability search offers "Đặt phòng" CTA
+  assert.match(cardCode, /<Link\s+to=\{checkoutHref\}[^>]*>Đặt phòng<\/Link>/);
+
+  // Verify CheckoutGuestsStep contains date inputs and date validation
+  const guestsStepPath = fileURLToPath(new URL('../src/components/checkout/CheckoutGuestsStep.jsx', import.meta.url));
+  const guestsCode = await readFile(guestsStepPath, 'utf8');
+  assert.match(guestsCode, /id="checkout-check-in-date"/);
+  assert.match(guestsCode, /id="checkout-check-out-date"/);
+  assert.match(guestsCode, /disabled=\{!isValidDateRange\s*\|\|\s*isOverCapacity\}/);
+
+  // Verify CustomerCheckoutPage manages updateDates and preserves preview invalidation
+  const checkoutCode = await readFile(checkoutPath, 'utf8');
+  assert.match(checkoutCode, /const\s+updateDates\s*=\s*\(newStartDate,\s*newEndDate\)\s*=>\s*\{/);
+  assert.match(checkoutCode, /setStartDate\(newStartDate\);/);
+  assert.match(checkoutCode, /setEndDate\(newEndDate\);/);
+  assert.match(checkoutCode, /previewRequestIdRef\.current\s*\+=\s*1;/);
+});
+
 test('UC8 room header and breadcrumb use the owning property link with query and navigation state', async () => {
   const path = fileURLToPath(new URL('../src/pages/public/RoomDetailPage.jsx', import.meta.url));
   const code = await readFile(path, 'utf8');

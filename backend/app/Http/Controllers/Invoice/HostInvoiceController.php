@@ -7,6 +7,7 @@ use App\Enums\UserRole;
 use App\Validators\Invoice\InvoiceValidator;
 use App\Mappers\Invoice\InvoiceMapper;
 use App\Http\Controllers\Controller;
+use App\Exceptions\AppException;
 use App\Exceptions\Invoice\DuplicateInvoiceException;
 use App\Services\Invoice\InvoiceQueryService;
 use App\Services\Invoice\InvoiceService;
@@ -75,6 +76,26 @@ class HostInvoiceController extends Controller
         $invoices = $this->queryService->getHostInvoices($request->user(), $filters);
 
         return ApiResponse::page($invoices);
+    }
+
+    public function bookingContext(Request $request, mixed $booking): JsonResponse
+    {
+        try {
+            $host = $request->user();
+            $this->validator->authorize($host, UserRole::HOST);
+            $bookingId = $this->validator->validateBookingContextId($booking);
+
+            return ApiResponse::success($this->queryService->getHostBookingContext($bookingId, $host));
+        } catch (AppException $exception) {
+            return ApiResponse::error($exception->getMessage(), $exception->errorCode, $exception->status, $exception->errors);
+        }
+    }
+
+    public function eligibleBookings(Request $request): JsonResponse
+    {
+        $query = $this->validator->validateEligibleBookingQuery($request->query());
+
+        return ApiResponse::page($this->queryService->getHostEligibleBookings($request->user(), $query));
     }
 
     public function show(Request $request, mixed $invoice): JsonResponse

@@ -16,6 +16,48 @@ const isId = (value) => Number.isSafeInteger(value) && value > 0;
 const isDecimal = (value) => typeof value === 'string' && /^\d+\.\d{2}$/.test(value);
 const isNullableDate = (value) => value === null || (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value) && Number.isFinite(Date.parse(value)));
 
+function mapInvoiceBookingSummary(data) {
+  requireValue(isObject(data) && isId(data.booking_id));
+  const context = { booking_id: data.booking_id };
+  for (const field of ['booking_code', 'customer_name', 'property_name', 'room_name']) {
+    requireValue(typeof data[field] === 'string' && data[field].trim().length > 0);
+    context[field] = data[field];
+  }
+  for (const field of ['check_in_date', 'check_out_date']) {
+    const value = data[field];
+    requireValue(typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value))
+      && new Date(value).toISOString().slice(0, 10) === value);
+    context[field] = value;
+  }
+  return context;
+}
+
+export function mapHostInvoiceBookingContext(body, bookingId) {
+  const data = body?.data;
+  const context = mapInvoiceBookingSummary(data);
+  requireValue(context.booking_id === Number(bookingId) && typeof data.booking_status === 'string'
+    && data.booking_status.trim().length > 0);
+  const { can_create, invoice } = data;
+  requireValue(invoice === null || (isObject(invoice) && isId(invoice.id)
+    && typeof invoice.invoice_code === 'string' && invoice.invoice_code.trim().length > 0));
+  requireValue(can_create === (data.booking_status === 'COMPLETED' && invoice === null));
+  return { ...context, booking_status: data.booking_status, can_create,
+    invoice: invoice === null ? null : { id: invoice.id, invoice_code: invoice.invoice_code } };
+}
+
+export function mapHostEligibleBookings(body) {
+  requireValue(isObject(body) && Array.isArray(body.data) && isObject(body.meta) && isObject(body.links));
+  const { current_page, last_page, per_page, total } = body.meta;
+  requireValue(isId(current_page) && isId(last_page) && isId(per_page) && per_page <= 50
+    && Number.isSafeInteger(total) && total >= 0 && body.data.length <= per_page);
+  for (const field of ['first', 'last', 'prev', 'next']) {
+    requireValue(body.links[field] === null || typeof body.links[field] === 'string');
+  }
+  const data = body.data.map(mapInvoiceBookingSummary);
+  requireValue(new Set(data.map((row) => row.booking_id)).size === data.length);
+  return { data, meta: structuredClone(body.meta), links: structuredClone(body.links) };
+}
+
 /** Host options use current names; never infer options from invoice snapshot rows. */
 export function mapAdminInvoiceHostOptionsResponse(body) {
   requireValue(isObject(body) && Array.isArray(body.data) && isObject(body.meta) && isObject(body.links));
@@ -87,9 +129,11 @@ export function mapInvoiceListResponse(body) {
 }
 
 /** @returns {{data: Object}} Detail requires explicit items, including a valid empty array. */
-export function mapInvoiceDetailResponse(body) {
+export function mapInvoiceDetailResponse(body, expectedBookingId = null) {
   requireValue(isObject(body));
-  return { ...structuredClone(body), data: mapInvoice(body.data, true) };
+  const data = mapInvoice(body.data, true);
+  requireValue(expectedBookingId === null || data.booking_id === Number(expectedBookingId));
+  return { ...structuredClone(body), data };
 }
 
 /** Admin projection is independent of the richer Host/Customer contract. */

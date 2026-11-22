@@ -1,6 +1,6 @@
 # Tài liệu TV3 — Hướng dẫn tra cứu
 
-Cập nhật 2026-11-21 (Asia/Bangkok). **15/18 UC CLOSED TV3**; còn UC17/44/61. FAQ Management và Chat History nằm ngoài số đếm 18 UC. Trạng thái này không phải nghiệm thu end-to-end toàn hệ thống.
+Cập nhật 2026-11-22 (Asia/Bangkok). **18/18 UC CLOSED TV3** theo phạm vi đã nghiệm thu, gồm UC17 V1 và UC61 V1. FAQ Management, Chat History và các dependency tích hợp được theo dõi riêng trong checklist.
 
 ## Đọc tài liệu nào?
 
@@ -12,11 +12,15 @@ Cập nhật 2026-11-21 (Asia/Bangkok). **15/18 UC CLOSED TV3**; còn UC17/44/61
 | Contract thanh toán Invoice hiện hành | [INVOICE_PAYMENT_WORKFLOW.md](INVOICE_PAYMENT_WORKFLOW.md) |
 | UC36: nghiệm thu, 12 gate và tích hợp TV2 | [UC36_TV2_HANDOVER.md](UC36_TV2_HANDOVER.md) |
 | UC39: Dashboard Host, contract, QA và giới hạn | [UC39_ACCEPTANCE_HANDOVER.md](UC39_ACCEPTANCE_HANDOVER.md) |
+| UC44: Admin Booking Monitoring V1, bằng chứng và hồ sơ đã nghiệm thu | [UC44_ACCEPTANCE_HANDOVER.md](UC44_ACCEPTANCE_HANDOVER.md) |
 | UC45: Admin Invoice Monitoring | [UC45_ACCEPTANCE_HANDOVER.md](UC45_ACCEPTANCE_HANDOVER.md) |
 | UC47: Admin Dashboard | [UC47_ACCEPTANCE_HANDOVER.md](UC47_ACCEPTANCE_HANDOVER.md) |
 | UC48: Admin Statistics, contract, QA và giới hạn | [UC48_ACCEPTANCE_HANDOVER.md](UC48_ACCEPTANCE_HANDOVER.md) |
+| UC61 V1: dữ liệu công khai cho chatbot, lưu và replay của Customer, bằng chứng 11 task | [UC61_ACCEPTANCE_HANDOVER.md](UC61_ACCEPTANCE_HANDOVER.md) |
 
-Thư mục có **10 file**, gồm README này. Checklist chỉ giữ hiện trạng; contract/AC/evidence riêng nằm tại hồ sơ chức năng. Không ghi lại toàn bộ Mini Plan/Task Result vào checklist.
+Thư mục hiện có **13 file**. UC44 V1 CLOSED TV3 theo phạm vi đã kiểm chứng ngày 2026-11-22. [Hồ sơ đóng UC44](UC44_ACCEPTANCE_HANDOVER.md#21-uc44-close-01)
+
+Checklist ghi hiện trạng nghiệm thu. Contract, tiêu chí và bằng chứng được lưu trong hồ sơ chức năng tương ứng.
 
 ## Hồ sơ đã hợp nhất
 

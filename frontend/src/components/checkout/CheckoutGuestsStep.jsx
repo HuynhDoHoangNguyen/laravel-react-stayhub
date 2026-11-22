@@ -1,11 +1,25 @@
-import { User, Phone, Mail, Users, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
+import { User, Phone, Mail, Users, AlertCircle, ArrowRight, ShieldCheck, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { addDaysToIsoDate } from '../../utils/propertyBooking.js';
+
+function getTodayIso() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
 export function CheckoutGuestsStep({
   user,
   room,
+  startDate,
+  endDate,
+  onDatesChange,
+  nights = 1,
+  isValidDateRange = true,
   adults,
   children,
   note,
@@ -20,7 +34,7 @@ export function CheckoutGuestsStep({
 
   const handleNext = (e) => {
     e.preventDefault();
-    if (isOverCapacity) {
+    if (!isValidDateRange || isOverCapacity) {
       return;
     }
     onContinue();
@@ -39,7 +53,7 @@ export function CheckoutGuestsStep({
               Thông tin liên hệ
             </h2>
           </div>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/[0.08] px-3 py-1 text-[11px] font-semibold text-primary">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/[0.08] px-3.5 py-1 text-[11px] font-semibold text-primary">
             <ShieldCheck className="h-3.5 w-3.5" />
             Tài khoản hội viên
           </span>
@@ -98,7 +112,86 @@ export function CheckoutGuestsStep({
           </div>
         </div>
       </Card>
-      {/* 2. Guest Count & Capacity Card */}
+
+      {/* 2. Stay Dates & Duration Card */}
+      <Card className="rounded-3xl border-border/70 bg-white p-6 shadow-xs sm:p-8">
+        <div className="flex items-center justify-between border-b border-border/60 pb-4">
+          <div>
+            <span className="text-[10.5px] font-semibold uppercase tracking-[0.2em] text-accent">
+              ✦ Thời gian lưu trú
+            </span>
+            <h2 className="mt-0.5 font-display text-xl font-bold text-primary sm:text-2xl">
+              Chọn ngày nhận &amp; trả phòng
+            </h2>
+          </div>
+          {isValidDateRange && nights > 0 && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/[0.08] px-3.5 py-1 text-xs font-semibold text-primary">
+              <Calendar className="h-3.5 w-3.5" />
+              {nights} đêm lưu trú
+            </span>
+          )}
+        </div>
+
+        <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2">
+          {/* Check-in Date */}
+          <div className="space-y-1.5">
+            <label htmlFor="checkout-check-in-date" className="text-xs font-semibold text-ink flex items-center gap-1.5">
+              <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+              <span>Ngày nhận phòng (Check-in)</span>
+            </label>
+            <Input
+              id="checkout-check-in-date"
+              type="date"
+              min={getTodayIso()}
+              value={startDate || ''}
+              onChange={(e) => {
+                const newCheckIn = e.target.value;
+                let newCheckOut = endDate;
+                if (newCheckIn && newCheckOut && newCheckOut <= newCheckIn) {
+                  newCheckOut = addDaysToIsoDate(newCheckIn, 1);
+                }
+                if (onDatesChange) {
+                  onDatesChange(newCheckIn, newCheckOut);
+                }
+              }}
+              className="h-11 w-full rounded-xl border-border/70 bg-surface/30 text-xs font-medium text-ink transition-colors focus:border-primary focus:bg-white"
+            />
+            <p className="text-[11px] text-muted-foreground">Giờ nhận phòng tiêu chuẩn từ 14:00</p>
+          </div>
+
+          {/* Check-out Date */}
+          <div className="space-y-1.5">
+            <label htmlFor="checkout-check-out-date" className="text-xs font-semibold text-ink flex items-center gap-1.5">
+              <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+              <span>Ngày trả phòng (Check-out)</span>
+            </label>
+            <Input
+              id="checkout-check-out-date"
+              type="date"
+              min={startDate || getTodayIso()}
+              value={endDate || ''}
+              onChange={(e) => {
+                if (onDatesChange) {
+                  onDatesChange(startDate, e.target.value);
+                }
+              }}
+              className="h-11 w-full rounded-xl border-border/70 bg-surface/30 text-xs font-medium text-ink transition-colors focus:border-primary focus:bg-white"
+            />
+            <p className="text-[11px] text-muted-foreground">Giờ trả phòng tiêu chuẩn trước 12:00</p>
+          </div>
+        </div>
+
+        {!isValidDateRange && (
+          <div className="mt-4 rounded-xl bg-destructive/10 p-3.5 border border-destructive/20 text-xs text-destructive flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+            <span>
+              Vui lòng chọn ngày nhận phòng và ngày trả phòng hợp lệ (ngày trả phòng phải sau ngày nhận phòng ít nhất 1 đêm).
+            </span>
+          </div>
+        )}
+      </Card>
+
+      {/* 3. Guest Count & Capacity Card */}
       <Card className="rounded-3xl border-border/70 bg-white p-6 shadow-xs sm:p-8">
         <div className="border-b border-border/60 pb-4">
           <span className="text-[10.5px] font-semibold uppercase tracking-[0.2em] text-accent">
@@ -196,7 +289,7 @@ export function CheckoutGuestsStep({
         </div>
       </Card>
 
-      {/* 3. Special Requests Card */}
+      {/* 4. Special Requests Card */}
       <Card className="rounded-3xl border-border/70 bg-white p-6 shadow-xs sm:p-8">
         <div className="border-b border-border/60 pb-4">
           <span className="text-[10.5px] font-semibold uppercase tracking-[0.2em] text-accent">
@@ -232,7 +325,7 @@ export function CheckoutGuestsStep({
       <div className="flex items-center justify-end pt-2">
         <Button
           type="submit"
-          disabled={isOverCapacity}
+          disabled={!isValidDateRange || isOverCapacity}
           className="h-11 rounded-xl px-6 text-xs font-semibold"
         >
           <span>Tiếp tục kiểm tra đơn</span>

@@ -2,13 +2,26 @@
 
 namespace App\Repositories\Booking;
 
+use App\Enums\PropertyStatus;
 use App\Models\Property;
 use App\Models\Service;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 
 class ServiceRepository
 {
+    /** @return Collection<int, Service> */
+    public function findPublishedForProperty(int $propertyId, string $name): Collection
+    {
+        return Service::query()
+            ->where('property_id', $propertyId)
+            ->where('name', $name)
+            ->where('status', true)
+            ->whereHas('property', fn (Builder $property) => $property->where('status', PropertyStatus::ACTIVE->value))
+            ->orderBy('id')->limit(2)->get(['name', 'unit', 'price']);
+    }
+
     public function listForHost(int $hostId, array $filters, int $perPage): LengthAwarePaginator
     {
         $query = Service::query()

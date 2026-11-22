@@ -1,7 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import axios, { AxiosError } from 'axios';
-import { registerCustomer, createRegistrationSubmission, validateRegistration } from '../src/services/registration.js';
+import {
+    registerCustomer,
+    registerHost,
+    createRegistrationSubmission,
+    validateRegistration,
+    validateHostRegistration,
+} from '../src/services/registration.js';
 import { subscribeToAuthFailures } from '../src/services/authSession.js';
 
 const payload = {
@@ -202,4 +208,49 @@ test('a current rejection releases the form for an explicit user retry', async (
     await assert.rejects(submission.submit(payload), (error) => error === failure);
     assert.equal(submission.isPending(), false);
     assert.deepEqual(await submission.submit(payload), { data: { message: 'Fixture success' } });
+});
+
+test('host registration validation requires partner agreement clickwrap acceptance and sha256', () => {
+    const missingClickwrap = validateHostRegistration({
+        ...payload,
+        accepted: false,
+        content_sha256: '',
+    });
+    assert.ok(missingClickwrap.accepted);
+    assert.ok(missingClickwrap.content_sha256);
+
+    const validHostPayload = validateHostRegistration({
+        ...payload,
+        accepted: true,
+        content_sha256: 'a'.repeat(64),
+    });
+    assert.deepEqual(validHostPayload, {});
+});
+
+test('host registration initializes CSRF and posts whitelisted payload with agreement clickwrap to /api/public/host-register', async () => {
+    const { client, requests } = clientFixture();
+    const sha256 = 'b'.repeat(64);
+    const response = await registerHost(client, {
+        ...payload,
+        accepted: true,
+        content_sha256: ` ${sha256} `,
+        role: 'ADMIN',
+        status: 'BLOCKED',
+    });
+    assert.deepEqual(response, { message: 'Fixture registration confirmed' });
+    assert.deepEqual(requests.map(({ url, method }) => [url, method]), [
+        ['/sanctum/csrf-cookie', 'get'],
+        ['/api/public/host-register', 'post'],
+    ]);
+    const posted = JSON.parse(requests[1].data);
+    assert.deepEqual(Object.keys(posted).sort(), [
+        'accepted',
+        'content_sha256',
+        'email',
+        'name',
+        'password',
+        'password_confirmation',
+    ]);
+    assert.equal(posted.accepted, true);
+    assert.equal(posted.content_sha256, sha256);
 });

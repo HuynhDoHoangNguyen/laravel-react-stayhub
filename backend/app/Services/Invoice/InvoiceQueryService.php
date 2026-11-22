@@ -2,15 +2,19 @@
 
 namespace App\Services\Invoice;
 
+use App\DTOs\Invoice\Requests\HostEligibleBookingQuery;
+use App\DTOs\Invoice\Responses\HostEligibleBookingResponse;
 use App\DTOs\Invoice\Requests\InvoiceFilterRequest;
 use App\DTOs\Invoice\Requests\AdminInvoiceFilterRequest;
 use App\DTOs\Invoice\Responses\AdminInvoiceListItemResponse;
 use App\DTOs\Invoice\Responses\InvoiceResponse;
+use App\DTOs\Invoice\Responses\HostInvoiceBookingContextResponse;
 use App\Enums\UserRole;
 use App\Exceptions\AppException;
 use App\Exceptions\ErrorCode;
 use App\Mappers\Invoice\InvoiceMapper;
 use App\Models\Invoice;
+use App\Models\Booking;
 use App\Models\User;
 use App\Repositories\Invoice\InvoiceRepository;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -69,6 +73,27 @@ class InvoiceQueryService
     {
         $this->authorizeRole($host, UserRole::HOST);
         return $this->mapDetail($this->repository->findForHost($invoiceId, $host->id));
+    }
+
+    public function getHostBookingContext(int $bookingId, User $host): HostInvoiceBookingContextResponse
+    {
+        $this->authorizeRole($host, UserRole::HOST);
+        $booking = $this->repository->findBookingContextForHost($bookingId, $host->id);
+        if ($booking === null) {
+            throw new AppException('INVOICE_BOOKING_NOT_FOUND', 'Không tìm thấy đơn đặt phòng.', 404);
+        }
+
+        return $this->mapper->toHostBookingContext($booking);
+    }
+
+    /** @return LengthAwarePaginator<int, HostEligibleBookingResponse> */
+    public function getHostEligibleBookings(User $host, HostEligibleBookingQuery $filters): LengthAwarePaginator
+    {
+        $this->authorizeRole($host, UserRole::HOST);
+        $page = $this->repository->paginateEligibleBookingsForHost($host->id, $filters);
+        $page->setCollection($page->getCollection()->map(fn (Booking $booking) => $this->mapper->toHostEligibleBooking($booking)));
+
+        return $page;
     }
 
     /** @return LengthAwarePaginator<int, InvoiceResponse> */

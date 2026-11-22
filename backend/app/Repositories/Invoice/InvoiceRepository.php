@@ -2,6 +2,8 @@
 
 namespace App\Repositories\Invoice;
 
+use App\DTOs\Invoice\Requests\HostEligibleBookingQuery;
+use App\Enums\BookingStatus;
 use App\DTOs\Invoice\Requests\InvoiceFilterRequest;
 use App\DTOs\Invoice\Requests\AdminInvoiceFilterRequest;
 use App\Models\Invoice;
@@ -109,6 +111,34 @@ final class InvoiceRepository
             ->where('id', $bookingId)
             ->lockForUpdate()
             ->first();
+    }
+
+    public function findBookingContextForHost(int $bookingId, int $hostId): ?Booking
+    {
+        return Booking::forHost($hostId)
+            ->with(['customer:id,name', 'room:id,property_id,name', 'room.property:id,name', 'invoice:id,booking_id,invoice_code'])
+            ->find($bookingId);
+    }
+
+    /** @return LengthAwarePaginator<int, Booking> */
+    public function paginateEligibleBookingsForHost(int $hostId, HostEligibleBookingQuery $filters): LengthAwarePaginator
+    {
+        $query = Booking::forHost($hostId)
+            ->where('status', BookingStatus::COMPLETED->value)
+            ->whereDoesntHave('invoice')
+            ->with(['customer:id,name', 'room:id,property_id,name', 'room.property:id,name']);
+
+        if ($filters->search !== null) {
+            $needle = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $filters->search).'%';
+            $query->where(function (Builder $group) use ($needle): void {
+                $group->whereRaw("booking_code LIKE ? ESCAPE '!'", [$needle])
+                    ->orWhereHas('customer', fn (Builder $customer) => $customer->whereRaw("name LIKE ? ESCAPE '!'", [$needle]));
+            });
+        }
+
+        return $query->orderByDesc('check_out_date')->orderByDesc('id')
+            ->paginate($filters->perPage, ['id', 'booking_code', 'customer_id', 'room_id', 'check_in_date', 'check_out_date'], 'page', $filters->page)
+            ->appends($filters->toQuery());
     }
 
     public function invoiceExistsForBooking(int $bookingId): bool

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { BedDouble, RefreshCw, Save } from 'lucide-react';
 import { hostPropertyService } from '../../services/hostPropertyService';
 import { hostRoomService } from '../../services/hostRoomService';
 
@@ -16,6 +17,10 @@ const messages = {
     419: 'Phiên bảo mật đã hết hạn. Vui lòng gửi lại.',
     422: 'Vui lòng kiểm tra thông tin đã nhập.',
 };
+
+const inputClass = 'mt-2 block min-h-11 w-full min-w-0 rounded-xl border border-border bg-background px-3 py-2.5 text-sm shadow-sm focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20 aria-invalid:border-red-400 disabled:opacity-60';
+const buttonClass = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none';
+const secondaryButton = buttonClass + ' border border-border bg-card text-primary hover:bg-surface';
 
 export default function HostRoomCreateForm({ propertyId, onCreated, onCancel, onCheck, attempt, ready }) {
     const request = useRef(null);
@@ -75,51 +80,78 @@ export default function HostRoomCreateForm({ propertyId, onCreated, onCancel, on
         }
     }
 
-    const inputClass = 'mt-1 block w-full rounded-xl border border-border bg-background px-3 py-2';
-    const buttonClass = 'rounded-xl border border-border px-4 py-2 text-primary disabled:opacity-50';
-    return <form onSubmit={submit} className="space-y-4 rounded-xl border border-border p-4">
-        <h3 className="font-semibold">Thêm phòng</h3>
-        {types.status === 'loading' && <p role="status">Đang tải loại phòng...</p>}
-        {types.status === 'error' && <div><p role="alert">Không thể tải loại phòng.</p>
-            <button type="button" onClick={reloadTypes} className={buttonClass}>Tải lại loại phòng</button></div>}
-        {types.status === 'ready' && types.items.length === 0 && <p role="status">
-            Cơ sở chưa có loại phòng. <a href="#host-room-types-title" className="text-primary underline">Thêm loại phòng trước</a>
-            <button type="button" onClick={reloadTypes} className={'ml-3 ' + buttonClass}>Tải lại loại phòng</button>
-        </p>}
-        <fieldset disabled={pending || uncertain} className="grid min-w-0 gap-4 sm:grid-cols-2">
-            {fields.map(({ name, label, type = 'text', ...attributes }) => <div key={name} className="min-w-0">
-                <label htmlFor={'create-room-' + name}>{label}</label>
-                <input id={'create-room-' + name} name={name} type={type} required {...attributes}
-                    ref={name === 'room_number' ? firstInput : undefined} className={inputClass}
-                    aria-invalid={Boolean(errors[name])} aria-describedby={errors[name] ? 'create-room-' + name + '-error' : undefined} />
-                {errors[name] && <p id={'create-room-' + name + '-error'} className="mt-1 text-sm text-destructive">{errors[name].join(' ')}</p>}
-            </div>)}
+    function renderField({ name, label, type = 'text', ...attributes }) {
+        const id = 'create-room-' + name;
+        return <div key={name} className="min-w-0">
+            <label htmlFor={id} className="text-sm font-medium">{label}</label>
+            <input id={id} name={name} type={type} required {...attributes}
+                ref={name === 'room_number' ? firstInput : undefined} className={inputClass}
+                aria-invalid={Boolean(errors[name])} aria-describedby={errors[name] ? id + '-error' : undefined} />
+            {errors[name] && <p id={id + '-error'} className="mt-2 break-words text-sm text-destructive">{errors[name].join(' ')}</p>}
+        </div>;
+    }
+
+    const noTypes = types.status === 'ready' && types.items.length === 0;
+    const canSubmit = ready && types.status === 'ready' && !noTypes && !pending && !uncertain;
+    const canResubmit = uncertain && checkAttempt !== null && attempt >= checkAttempt && ready;
+
+    return <form onSubmit={submit} aria-labelledby="create-room-title" aria-busy={pending}
+        className="min-w-0 space-y-5 rounded-2xl border border-primary/20 bg-surface/40 p-4 shadow-sm sm:p-5">
+        <h3 id="create-room-title" className="flex items-center gap-2 text-base font-semibold text-primary">
+            <BedDouble size={18} aria-hidden="true" />
+            Thêm phòng
+        </h3>
+        {error && <p role="alert" className="break-words rounded-xl border border-red-200 bg-red-50 p-4 text-sm leading-6 text-red-800">{error}</p>}
+        <fieldset disabled={pending || uncertain} className="min-w-0 space-y-5">
+            <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+                {fields.slice(0, 2).map(renderField)}
+            </div>
             <div className="min-w-0">
-                <label htmlFor="create-room-type">Loại phòng</label>
+                <label htmlFor="create-room-type" className="text-sm font-medium">Loại phòng</label>
                 <select id="create-room-type" name="room_type_id" required className={inputClass}
                     disabled={types.status !== 'ready'} aria-invalid={Boolean(errors.room_type_id)}
                     aria-describedby={errors.room_type_id ? 'create-room-type-error' : undefined}>
                     <option value="">Chọn loại phòng</option>
                     {types.status === 'ready' && types.items.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                 </select>
-                {errors.room_type_id && <p id="create-room-type-error" className="mt-1 text-sm text-destructive">{errors.room_type_id.join(' ')}</p>}
+                {errors.room_type_id && <p id="create-room-type-error" className="mt-2 break-words text-sm text-destructive">{errors.room_type_id.join(' ')}</p>}
+                {types.status === 'loading' && <p role="status" className="mt-2 text-sm text-muted-foreground">Đang tải loại phòng...</p>}
+                {(types.status === 'error' || noTypes) && <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                    {types.status === 'error'
+                        ? <p role="alert">Không thể tải loại phòng.</p>
+                        : <div className="space-y-1">
+                            <p role="status">Cơ sở chưa có loại phòng.</p>
+                            <a href="#host-room-types-title" className="rounded-sm font-medium text-primary underline underline-offset-4 focus-visible:ring-2 focus-visible:ring-primary">Thêm loại phòng trước</a>
+                        </div>}
+                    <button type="button" onClick={reloadTypes} className={secondaryButton}>
+                        <RefreshCw size={16} aria-hidden="true" />
+                        Tải lại loại phòng
+                    </button>
+                </div>}
             </div>
-            <div className="min-w-0 sm:col-span-2">
-                <label htmlFor="create-room-description">Mô tả</label>
+            <div className="grid min-w-0 gap-4 rounded-xl border border-border/70 bg-card/60 p-4 sm:grid-cols-2">
+                {fields.slice(2).map(renderField)}
+            </div>
+            <div className="min-w-0">
+                <label htmlFor="create-room-description" className="text-sm font-medium">
+                    Mô tả <span className="font-normal text-muted-foreground">(không bắt buộc)</span>
+                </label>
                 <textarea id="create-room-description" name="description" maxLength={10000} rows={3} className={inputClass}
                     aria-invalid={Boolean(errors.description)} aria-describedby={errors.description ? 'create-room-description-error' : undefined} />
-                {errors.description && <p id="create-room-description-error" className="mt-1 text-sm text-destructive">{errors.description.join(' ')}</p>}
+                {errors.description && <p id="create-room-description-error" className="mt-2 break-words text-sm text-destructive">{errors.description.join(' ')}</p>}
             </div>
-            <button type="submit" disabled={!ready || types.status !== 'ready' || types.items.length === 0}
-                className={buttonClass}>{pending ? 'Đang lưu phòng...' : 'Lưu phòng'}</button>
         </fieldset>
-        {error && <p role="alert">{error}</p>}
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
+            <button type="submit" disabled={!canSubmit}
+                className={buttonClass + ' bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow-md'}>
+                <Save size={16} aria-hidden="true" />
+                {pending ? 'Đang lưu phòng...' : 'Lưu phòng'}
+            </button>
+            <button type="button" disabled={pending} onClick={onCancel} className={secondaryButton}>Hủy</button>
             {uncertain && <button type="button" onClick={() => { setCheckAttempt(attempt + 1); onCheck(); }}
-                className={buttonClass}>Kiểm tra danh sách</button>}
-            {uncertain && checkAttempt !== null && attempt >= checkAttempt && ready && <button type="button"
-                onClick={() => { setUncertain(false); setError(''); }} className={buttonClass}>Cho phép gửi lại</button>}
-            <button type="button" disabled={pending} onClick={onCancel} className={buttonClass}>Hủy</button>
+                className={secondaryButton}>Kiểm tra danh sách</button>}
+            {canResubmit && <button type="button"
+                onClick={() => { setUncertain(false); setError(''); }} className={secondaryButton}>Cho phép gửi lại</button>}
         </div>
     </form>;
 }

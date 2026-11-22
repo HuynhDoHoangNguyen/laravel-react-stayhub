@@ -18,6 +18,12 @@ export function createInvoiceApi(client) {
     async createHostInvoice(id, { signal } = {}) {
       return (await client.post(`/api/host/bookings/${requireApiId(id, 'Mã đơn đặt phòng')}/invoice`, undefined, { signal })).data;
     },
+    async getHostInvoiceBookingContext(id, { signal } = {}) {
+      return (await client.get(`/api/host/bookings/${requireApiId(id, 'Mã đơn đặt phòng')}/invoice-context`, { signal })).data;
+    },
+    async getHostEligibleBookings(params, { signal } = {}) {
+      return (await client.get('/api/host/invoices/eligible-bookings', { params, signal })).data;
+    },
     async getHostInvoices(params, { signal } = {}) {
       return (await client.get('/api/host/invoices', { params, signal })).data;
     },

@@ -26,6 +26,8 @@ class Booking extends Model
         'number_of_nights',
         'price_per_night',
         'room_total',
+        'commission_rate_bps',
+        'host_agreement_acceptance_id',
         'status',
         'note',
     ];
@@ -39,6 +41,7 @@ class Booking extends Model
             'number_of_nights' => 'integer',
             'price_per_night' => 'decimal:2',
             'room_total' => 'decimal:2',
+            'commission_rate_bps' => 'integer',
             'status' => BookingStatus::class,
         ];
     }
@@ -71,6 +74,11 @@ class Booking extends Model
     public function review(): HasOne
     {
         return $this->hasOne(Review::class, 'booking_id');
+    }
+
+    public function hostAgreementAcceptance(): BelongsTo
+    {
+        return $this->belongsTo(HostAgreementAcceptance::class, 'host_agreement_acceptance_id');
     }
 
     public function scopeHoldingRoom(Builder $query): Builder

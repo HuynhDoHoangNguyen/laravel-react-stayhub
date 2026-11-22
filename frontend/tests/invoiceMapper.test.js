@@ -1,7 +1,46 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mapInvoiceListResponse, mapInvoiceDetailResponse, mapAdminInvoiceListResponse, mapAdminInvoiceHostOptionsResponse, mapAdminInvoicePropertyOptionsResponse } from '../src/mappers/invoiceMapper.js';
+import { mapInvoiceListResponse, mapInvoiceDetailResponse, mapAdminInvoiceListResponse, mapAdminInvoiceHostOptionsResponse, mapAdminInvoicePropertyOptionsResponse, mapHostInvoiceBookingContext, mapHostEligibleBookings } from '../src/mappers/invoiceMapper.js';
 import { normalizeApiError } from '../src/api/apiError.js';
+
+test('booking context projects fields and rejects inconsistent eligibility or a different booking', () => {
+  const data = {
+    booking_id: 13, booking_code: 'BK-13', customer_name: 'Khách', property_name: 'Cơ sở', room_name: 'Phòng',
+    check_in_date: '2026-11-20', check_out_date: '2026-11-22', booking_status: 'COMPLETED', can_create: true, invoice: null,
+  };
+  assert.deepEqual(mapHostInvoiceBookingContext({ data: { ...data, customer_email: 'private@example.test' } }, '13'), data);
+  const existing = { ...data, can_create: false, invoice: { id: 7, invoice_code: 'INV-7' } };
+  assert.deepEqual(mapHostInvoiceBookingContext({ data: existing }, 13), existing);
+
+  for (const change of [{ booking_id: 12 }, { booking_status: 'CONFIRMED' }, { invoice: undefined },
+    { invoice: existing.invoice }, { can_create: 'true' }, { check_in_date: '2026-02-30' }]) {
+    assert.throws(() => mapHostInvoiceBookingContext({ data: { ...data, ...change } }, 13),
+      (error) => error.code === 'INVALID_INVOICE_RESPONSE');
+  }
+});
+
+test('create result cannot be displayed for a different booking', () => {
+  assert.throws(() => mapInvoiceDetailResponse({ data: { ...invoice(), items: [] } }, 13),
+    (error) => error.code === 'INVALID_INVOICE_RESPONSE');
+});
+
+test('eligible bookings project public picker fields and reject malformed rows and pages', () => {
+  const booking = {
+    booking_id: 13, booking_code: 'BK-13', customer_name: 'Khách', property_name: 'Cơ sở', room_name: 'Phòng',
+    check_in_date: '2026-11-20', check_out_date: '2026-11-22',
+  };
+  const source = freeze(list([{ ...booking, customer_email: 'private@example.test' }]));
+  const result = mapHostEligibleBookings(source);
+  assert.deepEqual(result.data, [booking]);
+  assert.deepEqual(result.meta, source.meta);
+  assert.deepEqual(mapHostEligibleBookings(list([])).data, []);
+
+  for (const data of [[booking, booking], [{ ...booking, booking_id: 0 }], [{ ...booking, check_out_date: '2026-02-30' }]]) {
+    assert.throws(() => mapHostEligibleBookings(list(data)), (error) => error.code === 'INVALID_INVOICE_RESPONSE');
+  }
+  const invalid = { ...source, meta: { ...source.meta, per_page: 51 } };
+  assert.throws(() => mapHostEligibleBookings(invalid), (error) => error.code === 'INVALID_INVOICE_RESPONSE');
+});
 
 function invoice() {
   return {

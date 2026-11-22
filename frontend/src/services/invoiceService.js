@@ -1,7 +1,7 @@
 import api from '../api/axios.js';
 import { createInvoiceApi } from '../api/invoiceApi.js';
 import { normalizeApiError } from '../api/apiError.js';
-import { mapInvoiceListResponse, mapInvoiceDetailResponse, mapAdminInvoiceListResponse, mapAdminInvoiceHostOptionsResponse, mapAdminInvoicePropertyOptionsResponse } from '../mappers/invoiceMapper.js';
+import { mapInvoiceListResponse, mapInvoiceDetailResponse, mapAdminInvoiceListResponse, mapAdminInvoiceHostOptionsResponse, mapAdminInvoicePropertyOptionsResponse, mapHostInvoiceBookingContext, mapHostEligibleBookings } from '../mappers/invoiceMapper.js';
 import { requireApiId } from '../api/apiId.js';
 
 /** Invoice domain boundary; injected API preserves the production Axios/Auth pipeline. */
@@ -42,7 +42,14 @@ export function createInvoiceService(invoiceApi) {
       return result;
     },
     async createHostInvoice(id, options = {}) {
-      return mapInvoiceDetailResponse(await invoiceApi.createHostInvoice(id, options));
+      return mapInvoiceDetailResponse(await invoiceApi.createHostInvoice(id, options), id);
+    },
+    async getHostInvoiceBookingContext(id, options = {}) {
+      return mapHostInvoiceBookingContext(await invoiceApi.getHostInvoiceBookingContext(id, options), id);
+    },
+    async getHostEligibleBookings({ page = 1, perPage = 10, search = '' } = {}, options = {}) {
+      const query = listParams({ page, perPage, search });
+      return mapHostEligibleBookings(await invoiceApi.getHostEligibleBookings(query, options));
     },
     async getHostInvoices(params = {}, options = {}) {
       return mapInvoiceListResponse(await invoiceApi.getHostInvoices(listParams(params), options));
@@ -60,6 +67,14 @@ export function createInvoiceService(invoiceApi) {
 }
 
 const invoiceService = createInvoiceService(createInvoiceApi(api));
+
+export async function getHostInvoiceBookingContext(id, options = {}) {
+    return invoiceService.getHostInvoiceBookingContext(id, options);
+}
+
+export async function getHostEligibleBookings(params = {}, options = {}) {
+    return invoiceService.getHostEligibleBookings(params, options);
+}
 
 export async function getAdminInvoicePropertyOptions(params = {}, options = {}) {
     return invoiceService.getAdminInvoicePropertyOptions(params, options);

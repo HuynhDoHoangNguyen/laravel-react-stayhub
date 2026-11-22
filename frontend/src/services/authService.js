@@ -1,12 +1,21 @@
 import api from '../api/axios';
 import { normalizeAuthError, subscribeToAuthFailures } from './authSession';
-import { registerCustomer } from './registration';
+import { registerCustomer, registerHost } from './registration';
 
 const options = { timeout: 10000 };
 
 export const authService = {
     register(payload, options) {
         return registerCustomer(api, payload, options);
+    },
+
+    registerHost(payload, options) {
+        return registerHost(api, payload, options);
+    },
+
+    async getPublicPartnerAgreement(reqOptions = {}) {
+        const response = await api.get('/api/public/partner-agreements/current', { ...options, ...reqOptions });
+        return response.data;
     },
 
     async login({ email, password, expectedRole }) {

@@ -13,15 +13,64 @@ use App\Models\Maintenance;
 use App\Models\Amenity;
 use App\Models\Property;
 use App\Models\PropertyImage;
+use App\Models\RoomImage;
 use App\Models\Room;
 use App\Models\RoomType;
 use App\Models\Review;
+use App\Services\Catalog\PublicImageUrl;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Query\JoinClause;
 
 class CatalogRepository
 {
+    /** @return Collection<int, RoomImage> */
+    public function getRoomImages(int $roomId, bool $lock = false): Collection
+    {
+        $query = RoomImage::query()->where('room_id', $roomId)->orderByDesc('is_primary')->orderBy('id');
+        if ($lock) $query->lockForUpdate();
+
+        return $query->get();
+    }
+
+    public function createRoomImage(array $attributes): RoomImage
+    {
+        return RoomImage::create($attributes)->refresh();
+    }
+
+    public function setRoomImagePrimary(int $roomId, ?int $imageId): void
+    {
+        $others = RoomImage::query()->where('room_id', $roomId)->where('is_primary', true);
+        if ($imageId !== null) $others->whereKeyNot($imageId);
+        $others->update(['is_primary' => false]);
+        if ($imageId !== null) RoomImage::query()->where('room_id', $roomId)->whereKey($imageId)
+            ->where('is_primary', false)->update(['is_primary' => true]);
+    }
+
+    public function deleteRoomImage(RoomImage $image): void
+    {
+        if (!$image->delete()) throw new \RuntimeException('Room image deletion failed.');
+    }
+
+    public function roomImagePathReferenced(string $path): bool
+    {
+        $key = PublicImageUrl::publicDiskKey($path);
+        if ($key === null) return false;
+        foreach ([RoomImage::class, PropertyImage::class] as $model) {
+            if ($model::query()->whereIn('image_path', [$key, '/storage/'.$key])->exists()) return true;
+        }
+        foreach ([RoomImage::class, PropertyImage::class] as $model) {
+            // Legacy URLs may contain encoded paths, query strings or a configured public base path.
+            // Read in bounded batches; normalization stays identical for both image tables.
+            foreach ($model::query()->select(['id', 'image_path'])->lazyById(200) as $image) {
+                if (PublicImageUrl::publicDiskKey($image->image_path) === $key) return true;
+            }
+        }
+
+        return false;
+    }
+
     public function findPublicRoom(int $id): ?Room
     {
         return $this->publicRoomCandidates()->with([
@@ -32,6 +81,14 @@ class CatalogRepository
             'amenities' => fn ($amenities) => $amenities->select(['amenities.id', 'amenities.name'])
                 ->where('amenities.status', true)->orderBy('amenities.id'),
         ])->find($id, ['id', 'property_id', 'room_type_id', 'room_number', 'name', 'description', 'capacity', 'price_per_night']);
+    }
+
+    public function findPublicRoomForAvailability(int $id): ?Room
+    {
+        return $this->publicRoomCandidates()
+            ->with(['property' => fn ($property) => $property->select(['id', 'name', 'status'])
+                ->where('status', PropertyStatus::ACTIVE->value)])
+            ->find($id, ['id', 'property_id', 'name', 'status', 'capacity']);
     }
 
     /** Public catalog filtering; deliberately not a date-based availability query. */
@@ -46,6 +103,10 @@ class CatalogRepository
         ]);
         if ($filters->minPrice !== null) $query->where('rooms.price_per_night', '>=', $filters->minPrice);
         if ($filters->maxPrice !== null) $query->where('rooms.price_per_night', '<=', $filters->maxPrice);
+        if ($filters->maxPriceExclusive !== null) {
+            $query->whereRaw('rooms.price_per_night < CAST(? AS DECIMAL(16,2))', [$filters->maxPriceExclusive]);
+        }
+        if ($filters->propertyId !== null) $query->where('rooms.property_id', $filters->propertyId);
         if ($filters->guestCount !== null) $query->where('rooms.capacity', '>=', $filters->guestCount);
         if ($filters->minRating !== null) {
             // Review belongs to Property. Compare the raw average, before display rounding.
@@ -77,6 +138,36 @@ class CatalogRepository
         })->orderBy('name')->orderBy('id')->get(['id', 'name']);
     }
 
+    /** @param list<string> $amenityNames @return Collection<int, Room> */
+    public function findPublicRoomAmenityCandidates(int $propertyId, array $amenityNames, ?string $roomName = null): Collection
+    {
+        return $this->publicRoomAmenityCandidates($propertyId, $roomName, 'amenities.name', $amenityNames);
+    }
+
+    /** @param list<int> $amenityIds @return Collection<int, Room> */
+    public function findPublicRoomAmenityCandidatesByIds(int $propertyId, array $amenityIds, ?string $roomName = null): Collection
+    {
+        return $this->publicRoomAmenityCandidates($propertyId, $roomName, 'amenities.id', $amenityIds);
+    }
+
+    private function publicRoomAmenityCandidates(int $propertyId, ?string $roomName, string $column, array $values): Collection
+    {
+        $rooms = $this->publicRoomCandidates()
+            ->select(['rooms.id', 'rooms.name'])
+            ->where('rooms.property_id', $propertyId)
+            ->orderBy('rooms.id');
+        $enabledAmenity = static fn (Builder $amenities): Builder => $amenities
+            ->where('amenities.status', true)->whereIn($column, $values);
+
+        if ($roomName === null) {
+            return $rooms->whereHas('amenities', $enabledAmenity)->limit(3)->get();
+        }
+
+        // Resolve ambiguity across all public rooms with that name, including rooms without the amenity.
+        return $rooms->where('rooms.name', $roomName)
+            ->withExists(['amenities as has_requested_amenity' => $enabledAmenity])->limit(2)->get();
+    }
+
     private function publicRoomCandidates(): Builder
     {
         $query = Room::query();
@@ -85,7 +176,7 @@ class CatalogRepository
         return $query;
     }
 
-    private function scopePublicRoomCandidates(Builder $query): void
+    public function scopePublicRoomCandidates(Builder $query): void
     {
         self::publicRooms($query);
         $query->whereHas('property', fn (Builder $property) => $property->where('status', PropertyStatus::ACTIVE->value))
@@ -163,6 +254,39 @@ class CatalogRepository
     public function lockPropertyRoom(Property $property, int $roomId): ?Room
     {
         return $property->rooms()->whereKey($roomId)->lockForUpdate()->first();
+    }
+
+    /** @return Collection<int, Amenity> */
+    public function getHostRoomAmenityOptions(int $roomId): Collection
+    {
+        return Amenity::query()
+            ->leftJoin('room_amenities', function (JoinClause $join) use ($roomId): void {
+                $join->on('room_amenities.amenity_id', '=', 'amenities.id')
+                    ->where('room_amenities.room_id', $roomId);
+            })
+            ->where(fn (Builder $query) => $query->where('amenities.status', true)
+                ->orWhereNotNull('room_amenities.room_id'))
+            ->select(['amenities.id', 'amenities.name', 'amenities.status'])
+            ->selectRaw('CASE WHEN room_amenities.room_id IS NULL THEN 0 ELSE 1 END AS assigned_to_room')
+            ->withCasts(['assigned_to_room' => 'boolean'])
+            ->orderBy('amenities.name')->orderBy('amenities.id')->get();
+    }
+
+    public function lockAmenity(int $amenityId): ?Amenity
+    {
+        return Amenity::query()->whereKey($amenityId)->lockForUpdate()->first();
+    }
+
+    /** The caller holds the room lock. */
+    public function assignRoomAmenity(Room $room, Amenity $amenity): bool
+    {
+        return $room->amenities()->syncWithoutDetaching([$amenity->id])['attached'] !== [];
+    }
+
+    /** The caller holds the room lock. */
+    public function removeRoomAmenity(Room $room, int $amenityId): bool
+    {
+        return $room->amenities()->detach($amenityId) !== 0;
     }
 
     public function updateHostRoom(Room $room, RoomType $type, UpdateHostRoomRequest $input): bool
@@ -315,7 +439,7 @@ class CatalogRepository
 
     public function imagePathReferenced(string $path): bool
     {
-        return PropertyImage::query()->where('image_path', $path)->exists();
+        return $this->roomImagePathReferenced($path);
     }
 
     /** @return Collection<int, PropertyImage> */
@@ -378,6 +502,14 @@ class CatalogRepository
             ->paginate($perPage, ['properties.*'], 'page', $page);
     }
 
+    /** @return Collection<int, Property> */
+    public function findPublicPropertyCandidates(string|int $reference): Collection
+    {
+        return $this->activeProperties()
+            ->where(is_int($reference) ? 'id' : 'name', $reference)
+            ->orderBy('id')->limit(4)->get(['id', 'name', 'address']);
+    }
+
     public function findPublicProperty(int $id): ?Property
     {
         return $this->publicProperties()->with(['rooms' => function ($rooms): void {
@@ -392,12 +524,17 @@ class CatalogRepository
 
     private function publicProperties(): Builder
     {
-        return Property::query()->where('status', PropertyStatus::ACTIVE->value)
+        return $this->activeProperties()
             ->with(['images' => fn ($images) => $images->select(['id', 'property_id', 'image_path', 'is_primary'])
                 ->orderByDesc('is_primary')->orderBy('id')])
             ->withMin(['rooms as starting_price' => self::publicRooms(...)], 'price_per_night')
             // TV3 public review semantics currently have no moderation/status filter.
             ->withCount(['reviews as review_count'])->withAvg('reviews as rating', 'rating');
+    }
+
+    private function activeProperties(): Builder
+    {
+        return Property::query()->where('status', PropertyStatus::ACTIVE->value);
     }
 
     private static function publicRooms(Builder $query): void

@@ -101,6 +101,31 @@ final class HostRoomMaintenanceListTest extends TestCase
         $this->getJson($this->endpoint('0'.$room->id))->assertNotFound();
     }
 
+    public function test_host_pending_approval_cannot_list_maintenance_for_an_owned_room(): void
+    {
+        $host = User::factory()->create(['role' => 'HOST']);
+        $room = $this->room($host);
+        $this->schedule($room, '2026-12-02', 'SCHEDULED');
+        $hash = hash('sha256', 'Fixture terms');
+        $agreementId = DB::table('partner_agreements')->insertGetId([
+            'version' => 'uc23-approval',
+            'title' => 'UC23 fixture agreement',
+            'terms_body' => 'Fixture terms',
+            'content_sha256' => $hash,
+            'effective_at' => now(),
+        ]);
+        DB::table('host_agreement_acceptances')->insert([
+            'host_id' => $host->id,
+            'partner_agreement_id' => $agreementId,
+            'accepted_content_sha256' => $hash,
+            'accepted_at' => now(),
+            'method' => 'REGISTRATION_PENDING',
+        ]);
+
+        $this->actingAs($host)->getJson($this->endpoint($room->id))->assertForbidden()
+            ->assertJsonPath('code', 'HOST_APPROVAL_PENDING')->assertJsonMissingPath('data');
+    }
+
     public function test_rejects_invalid_pages_and_unapproved_query_parameters(): void
     {
         $owner = User::factory()->create(['role' => 'HOST']);

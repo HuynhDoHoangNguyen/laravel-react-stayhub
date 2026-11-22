@@ -10,6 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { HostConfirmDialog } from '@/components/bookings/HostConfirmDialog';
+import { useAuth } from '@/hooks/useAuth';
+import { getHostInvoiceBookingContext, parseInvoiceError } from '@/services/invoiceService';
 
 function DetailItem({ icon: Icon, label, children }) {
   return (
@@ -23,8 +25,52 @@ function DetailItem({ icon: Icon, label, children }) {
   );
 }
 
+function BookingInvoiceSection({ bookingId, captureProfileAuth, isProfileAuthCurrent }) {
+  const [view, setView] = useState({ loading: true });
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const auth = captureProfileAuth();
+    if (!isProfileAuthCurrent(auth)) return;
+
+    const current = () => !controller.signal.aborted && isProfileAuthCurrent(auth);
+    getHostInvoiceBookingContext(bookingId, { signal: controller.signal }).then(
+      (context) => { if (current()) setView({ context }); },
+      (error) => { if (current()) setView({ error: parseInvoiceError(error).message }); },
+    );
+    return () => controller.abort();
+  }, [bookingId, attempt, captureProfileAuth, isProfileAuthCurrent]);
+
+  const { context, error, loading } = view;
+  return (
+    <Card className="space-y-3 rounded-2xl border-border/70 p-5 shadow-xs sm:p-6" aria-busy={loading}>
+      <h2 className="font-display text-xl font-bold text-primary">Hóa đơn</h2>
+      {loading && <p role="status" className="text-sm text-muted-foreground">Đang tải thông tin hóa đơn…</p>}
+      {error && <>
+        <p role="alert" className="text-sm text-rose-800">{error}</p>
+        <Button type="button" variant="outline" onClick={() => {
+          setView({ loading: true });
+          setAttempt((previous) => previous + 1);
+        }}>Thử lại</Button>
+      </>}
+      {context?.invoice && <>
+        <p className="break-words text-sm text-muted-foreground">{context.invoice.invoice_code}</p>
+        <Button asChild><Link to={`/host/invoices/${context.invoice.id}`}>Xem hóa đơn</Link></Button>
+      </>}
+      {context?.can_create && (
+        <Button asChild><Link to={`/host/bookings/${context.booking_id}/create-invoice`}>Lập hóa đơn</Link></Button>
+      )}
+      {context && !context.invoice && !context.can_create && (
+        <p className="text-sm text-muted-foreground">Có thể lập hóa đơn sau khi đơn đặt phòng hoàn tất.</p>
+      )}
+    </Card>
+  );
+}
+
 export default function HostBookingDetailPage() {
   const { bookingId } = useParams();
+  const { user, captureProfileAuth, isProfileAuthCurrent } = useAuth();
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -228,6 +274,10 @@ export default function HostBookingDetailPage() {
           </form>
         )}
       </Card>
+      {user && String(booking.id) === bookingId && (
+        <BookingInvoiceSection key={`${user.id}:${bookingId}:${booking.status}`} bookingId={bookingId}
+          captureProfileAuth={captureProfileAuth} isProfileAuthCurrent={isProfileAuthCurrent} />
+      )}
       <HostConfirmDialog
         open={Boolean(pendingTransition)}
         description={pendingTransition?.confirmation || ''}
