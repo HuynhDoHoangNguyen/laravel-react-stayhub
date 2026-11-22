@@ -27,8 +27,9 @@ class AdminCommissionController extends Controller
         $this->validator->authorizeAdmin($request->user());
 
         $perPage = $this->validator->validatePerPage($request->get('per_page', 15));
+        $dateFilters = $this->validator->validateAdminCommissionDateFilters($request->query->all());
         $paginator = $this->service->listCommissions(
-            $request->only(['status', 'host_id']),
+            [...$request->only(['status', 'host_id']), ...$dateFilters],
             $perPage
         );
 
@@ -43,8 +44,9 @@ class AdminCommissionController extends Controller
         $this->validator->authorizeAdmin($request->user());
 
         $perPage = $this->validator->validatePerPage($request->get('per_page', 15));
+        $dateFilters = $this->validator->validateAdminRemittanceDateFilters($request->query->all());
         $paginator = $this->service->listRemittances(
-            $request->only(['status']),
+            [...$request->only(['status']), ...$dateFilters],
             $perPage
         );
 

@@ -3,6 +3,7 @@
 namespace App\Validators\Commission;
 
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -10,6 +11,45 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class CommissionValidator
 {
+    public function validateAdminCommissionDateFilters(array $query): array
+    {
+        $filters = $this->validateAdminDateFilters($query, [
+            'date_field' => ['sometimes', 'required', 'string', 'in:created_at,settled_at,due_at'],
+        ]);
+
+        return ['date_field' => 'created_at', ...$filters];
+    }
+
+    public function validateAdminRemittanceDateFilters(array $query): array
+    {
+        return $this->validateAdminDateFilters($query);
+    }
+
+    private function validateAdminDateFilters(array $query, array $extraRules = []): array
+    {
+        $dayRules = ['sometimes', 'required', 'string', 'date_format:Y-m-d', 'regex:/\A[1-9][0-9]{3}-[0-9]{2}-[0-9]{2}\z/'];
+        $endRules = array_key_exists('from_date', $query) ? [...$dayRules, 'after_or_equal:from_date'] : $dayRules;
+        $validated = Validator::make($query, [
+            ...$extraRules,
+            'from_date' => $dayRules,
+            'to_date' => $endRules,
+        ], [
+            'date_field.*' => 'Mốc thời gian không hợp lệ.',
+            'from_date.*' => 'Ngày bắt đầu phải là ngày hợp lệ theo định dạng YYYY-MM-DD.',
+            'to_date.after_or_equal' => 'Ngày kết thúc phải từ ngày bắt đầu trở đi.',
+            'to_date.*' => 'Ngày kết thúc phải là ngày hợp lệ theo định dạng YYYY-MM-DD.',
+        ])->validate();
+
+        $start = isset($validated['from_date']) ? CarbonImmutable::parse($validated['from_date'], 'Asia/Ho_Chi_Minh') : null;
+        $end = isset($validated['to_date']) ? CarbonImmutable::parse($validated['to_date'], 'Asia/Ho_Chi_Minh')->addDay() : null;
+
+        return [
+            ...array_intersect_key($validated, $extraRules),
+            'date_start' => $start?->utc(),
+            'date_end_exclusive' => $end?->utc(),
+        ];
+    }
+
     /**
      * Ủy quyền truy cập: Bắt buộc role HOST.
      */
