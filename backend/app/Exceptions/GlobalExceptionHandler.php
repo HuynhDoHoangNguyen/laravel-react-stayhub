@@ -35,6 +35,8 @@ final class GlobalExceptionHandler
         'admin.dashboard.show',
         'admin.invoices.index',
         'admin.invoices.filter-options',
+        'admin.bookings.index',
+        'admin.bookings.filter-options',
         'host.invoices.index', 'host.invoices.show', 'host.bookings.invoice.store',
         'host.invoices.payment-status.update',
         'customer.invoices.index', 'customer.invoices.show',

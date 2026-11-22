@@ -5,6 +5,8 @@ import logoMark from "@/assets/logo-mark.png";
 import { Toaster } from "@/components/ui/sonner";
 import { useAuth } from "@/hooks/useAuth";
 import AccountDropdown from "@/components/common/AccountDropdown";
+import GuestChatWidget from "@/components/chat/GuestChatWidget";
+import { publicChatEnabled } from "@/services/chatbotService";
 import {
   Sheet,
   SheetContent,
@@ -314,6 +316,10 @@ export default function PublicLayout() {
           </div>
         </div>
       </footer>
+
+      {publicChatEnabled && !loading && !isLoggingOut && !isAuthenticated && (isHomePage || location.pathname === "/search") && (
+        <GuestChatWidget key={location.pathname} />
+      )}
 
       {/* Global Toaster */}
       <Toaster position="top-center" />
