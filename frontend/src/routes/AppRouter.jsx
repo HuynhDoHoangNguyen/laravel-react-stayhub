@@ -47,6 +47,7 @@ import AdminBookingListPage from '../pages/admin/AdminBookingListPage';
 import AdminInvoiceListPage from '../pages/admin/AdminInvoiceListPage';
 import AdminCustomersPage from '../pages/admin/AdminCustomersPage';
 import AdminHostsPage from '../pages/admin/AdminHostsPage';
+import AdminPropertiesPage from '../pages/admin/AdminPropertiesPage';
 import AdminCommissionsPage from '../pages/admin/AdminCommissionsPage';
 import AdminUsersPage from '../pages/admin/AdminUsersPage';
 import ProfilePage from '../components/profile/ProfilePage';
@@ -117,6 +118,7 @@ function AppRouter() {
                     <Route path="invoices" element={<AdminInvoiceListPage />} />
                     <Route path="users" element={<AdminCustomersPage />} />
                     <Route path="hosts" element={<AdminHostsPage />} />
+                    <Route path="properties" element={<AdminPropertiesPage />} />
                     <Route path="commissions" element={<AdminCommissionsPage />} />
                     <Route path="profile" element={<ProfilePage />} />
                 </Route>

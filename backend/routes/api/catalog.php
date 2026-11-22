@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Catalog\PublicPropertyController;
+use App\Http\Controllers\Catalog\AdminPropertyController;
 use App\Http\Controllers\Catalog\PublicRoomController;
 use App\Http\Controllers\Catalog\HostPropertyController;
 use App\Http\Controllers\Catalog\HostPropertyImageController;
@@ -28,6 +29,14 @@ Route::get('/public/rooms/{room}', [PublicRoomController::class, 'show']);
 
 Route::get('/public/properties', [PublicPropertyController::class, 'index']);
 Route::get('/public/properties/{property}', [PublicPropertyController::class, 'show'])->whereNumber('property');
+
+Route::get('/admin/properties', [AdminPropertyController::class, 'index'])
+    ->middleware(['auth:sanctum', 'account.active', 'role:ADMIN'])
+    ->name('admin.properties.index');
+
+Route::get('/admin/properties/{property}', [AdminPropertyController::class, 'show'])
+    ->middleware(['auth:sanctum', 'account.active', 'role:ADMIN'])
+    ->name('admin.properties.show');
 
 Route::get('/host/properties', [HostPropertyController::class, 'index'])
     ->middleware(['auth:sanctum', 'account.active', EnsureHostIsApproved::class]);
