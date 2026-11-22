@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { customerSearchParams, getAdminCustomers, parseAdminUserError, readCustomerSearch } from '../../services/adminUserService';
+import { customerSearchParams, getAdminCustomer, getAdminCustomers, parseAdminUserError, readCustomerSearch } from '../../services/adminUserService';
 import { customerStatuses } from '../../mappers/adminUserMapper';
 import AdminCustomerDetailDialog from '../../components/admin/users/AdminCustomerDetailDialog';
+import AccountStatusDialog from '../../components/admin/users/AccountStatusDialog';
 
 const dateFormat = new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh' });
 const inputClass = 'min-w-0 rounded-lg border border-border bg-background px-3 py-2 text-foreground focus-visible:outline-2 focus-visible:outline-primary';
@@ -29,6 +30,9 @@ function CustomerList({ query, change, reset, user, captureProfileAuth, isProfil
   const [view, setView] = useState(null);
   const [formError, setFormError] = useState(null);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [statusTarget, setStatusTarget] = useState(null);
+  const [statusNotice, setStatusNotice] = useState(null);
+  const statusFocusRef = useRef(null);
   useEffect(() => {
     const auth = captureProfileAuth();
     const controller = new AbortController();
@@ -48,6 +52,14 @@ function CustomerList({ query, change, reset, user, captureProfileAuth, isProfil
   const loading = visible === null;
   const result = visible?.result;
   const error = formError ?? visible?.error;
+  useEffect(() => {
+    if (!loading && statusFocusRef.current) {
+      const { trigger, id } = statusFocusRef.current;
+      statusFocusRef.current = null;
+      (trigger.isConnected ? trigger : document.querySelector(`[data-account-status-id="${id}"]`)
+        ?? document.getElementById('admin-customers-title'))?.focus();
+    }
+  }, [loading, revision]);
   function apply(next) {
     try {
       change(customerSearchParams({ ...query, ...next }));
@@ -56,7 +68,14 @@ function CustomerList({ query, change, reset, user, captureProfileAuth, isProfil
   }
   function retry() { setFormError(null); setRevision((previous) => previous + 1); }
   function resetAll() { setDraft(''); setFormError(null); setRevision((previous) => previous + 1); reset(); }
+  function finishStatus(result) {
+    statusFocusRef.current = { trigger: statusTarget.trigger, id: statusTarget.id };
+    setStatusTarget(null);
+    if (result) setStatusNotice(`${result.changed ? 'Đã cập nhật' : 'Đã kiểm tra'} tài khoản khách hàng #${result.id}: ${customerStatuses[result.status]}.`);
+    retry();
+  }
   return <>
+    {statusNotice && <p role="status" className="mb-4 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-emerald-950">{statusNotice}</p>}
     <form className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_auto_auto_auto]" onSubmit={(event) => {
       event.preventDefault(); apply({ q: draft, page: 1 });
     }}>
@@ -109,8 +128,16 @@ function CustomerList({ query, change, reset, user, captureProfileAuth, isProfil
                 <td className="whitespace-nowrap px-4 py-4">{customer.phone || 'Chưa cập nhật'}</td>
                 <td className="px-4 py-4"><span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${badgeClass[customer.status]}`}>{customerStatuses[customer.status]}</span></td>
                 <td className="whitespace-nowrap px-4 py-4">{customer.created_at === null ? 'Chưa cập nhật' : dateFormat.format(new Date(customer.created_at))}</td>
-                <td className="whitespace-nowrap px-4 py-4"><button type="button" className={buttonClass}
-                  aria-label={`Xem chi tiết khách hàng #${customer.id}`} onClick={(event) => setSelectedCustomer({ id: customer.id, trigger: event.currentTarget })}>Xem chi tiết</button></td>
+                <td className="px-4 py-4"><div className="flex flex-wrap gap-2"><button type="button" className={`${buttonClass} whitespace-nowrap`}
+                  aria-label={`Xem chi tiết khách hàng #${customer.id}`} onClick={(event) => setSelectedCustomer({ id: customer.id, trigger: event.currentTarget })}>Xem chi tiết</button>
+                  {customer.status !== 'INACTIVE' && <button type="button" className={`${buttonClass} whitespace-nowrap`}
+                    data-account-status-id={customer.id}
+                    aria-label={`${customer.status === 'ACTIVE' ? 'Khóa' : 'Mở khóa'} tài khoản khách hàng #${customer.id}`}
+                    onClick={(event) => {
+                      setStatusNotice(null);
+                      setStatusTarget({ id: customer.id, desiredStatus: customer.status === 'ACTIVE' ? 'BLOCKED' : 'ACTIVE', trigger: event.currentTarget });
+                    }}>{customer.status === 'ACTIVE' ? 'Khóa tài khoản' : 'Mở khóa'}</button>}
+                </div></td>
               </tr>)}
             </tbody>
           </table>
@@ -127,6 +154,8 @@ function CustomerList({ query, change, reset, user, captureProfileAuth, isProfil
     </div>
     {selectedCustomer && <AdminCustomerDetailDialog key={selectedCustomer.id} customerId={selectedCustomer.id}
       trigger={selectedCustomer.trigger} onClose={() => setSelectedCustomer(null)} onReloadList={retry} />}
+    {statusTarget && <AccountStatusDialog key={statusTarget.id} accountId={statusTarget.id} desiredStatus={statusTarget.desiredStatus}
+      loadAccount={getAdminCustomer} trigger={statusTarget.trigger} onClose={() => finishStatus()} onSuccess={finishStatus} />}
   </>;
 }
 
