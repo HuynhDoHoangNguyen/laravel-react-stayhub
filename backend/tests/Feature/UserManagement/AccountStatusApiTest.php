@@ -206,32 +206,39 @@ class AccountStatusApiTest extends TestCase
         $this->assertSame($before, $this->snapshot());
     }
 
-    public function test_customer_session_is_denied_after_block_and_not_restored_by_unblock(): void
+    public static function accountSessions(): array
     {
-        $customer = $this->login(User::factory()->customer()->create());
-        $customerCookie = $this->sessionCookie;
-        $this->browser('GET', '/api/profile')->assertOk();
+        return [[UserRole::CUSTOMER, '/api/profile'], [UserRole::HOST, '/api/host/properties']];
+    }
+
+    #[DataProvider('accountSessions')]
+    public function test_session_is_denied_after_block_and_not_restored_by_unblock(UserRole $role, string $protectedRoute): void
+    {
+        $target = $this->login(User::factory()->create(['role' => $role]));
+        $targetCookie = $this->sessionCookie;
+        $this->browser('GET', $protectedRoute)->assertOk();
         $this->login();
-        $this->patchStatus($customer->id)->assertOk();
+        $this->patchStatus($target->id)->assertOk();
         $adminCookie = $this->sessionCookie;
 
-        $this->sessionCookie = $customerCookie;
-        $this->browser('GET', '/api/profile')->assertForbidden()->assertJsonPath('code', 'ACCOUNT_BLOCKED');
+        $this->sessionCookie = $targetCookie;
+        $this->browser('GET', $protectedRoute)->assertForbidden()->assertJsonPath('code', 'ACCOUNT_BLOCKED');
         $invalidatedCookie = $this->sessionCookie;
         $this->browser('GET', '/api/me')->assertUnauthorized();
 
         $this->sessionCookie = $adminCookie;
-        $this->patchStatus($customer->id, ['status' => 'ACTIVE', 'expected_status' => 'BLOCKED'])->assertOk();
+        $this->patchStatus($target->id, ['status' => 'ACTIVE', 'expected_status' => 'BLOCKED'])->assertOk();
         $this->sessionCookie = $invalidatedCookie;
         $this->browser('GET', '/api/me')->assertUnauthorized();
-        $this->login($customer);
-        $this->browser('GET', '/api/profile')->assertOk();
+        $this->login($target);
+        $this->browser('GET', $protectedRoute)->assertOk();
     }
 
-    public function test_blocked_customer_cannot_login_and_admin_session_stays_valid(): void
+    #[DataProvider('roles')]
+    public function test_blocked_account_cannot_login_and_admin_session_stays_valid(string $role): void
     {
         $actor = $this->login();
-        $target = User::factory()->customer()->create();
+        $target = User::factory()->create(['role' => UserRole::from($role)]);
         $this->patchStatus($target->id)->assertOk();
         $adminCookie = $this->sessionCookie;
         $this->sessionCookie = null;

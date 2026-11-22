@@ -225,3 +225,27 @@ Lịch sử sửa test/runner: lần PHPUnit đầu dừng vì helper tên patch
 - Browser fixture/scripts/Chrome profile là tài nguyên QA tạm bên workspace phụ; cleanup được ghi ở check cuối. Không sửa .env hoặc DB development.
 - Đã áp dụng [stayhub-task-planning](../../.agents/skills/stayhub-task-planning/SKILL.md) để chốt baseline/scope, [stayhub-laravel](../../.agents/skills/stayhub-laravel/SKILL.md) cho HTTP boundary và contract, [stayhub-react](../../.agents/skills/stayhub-react/SKILL.md) cho mutation/recovery/focus, [stayhub-verification](../../.agents/skills/stayhub-verification/SKILL.md) để đối chiếu AC với evidence và giới hạn môi trường.
 - Task kế tiếp đề xuất: UC42-03 — tích hợp khóa/mở Host và nghiệm thu phần còn lại; cần plan/scope riêng được duyệt.
+
+## 10. UC42-03 — Khóa/mở từ danh sách Host
+
+Baseline `3e054ab` trên `feature/tv1-admin-management`. Người dùng yêu cầu thực hiện ngay. Trang `/admin/hosts` có nút khóa cho ACTIVE và mở khóa cho BLOCKED. Host INACTIVE không có thao tác. Hộp thoại UC42 lấy dữ liệu mới qua `getAdminHost`, giữ ý định đã chọn và gửi `expected_status` qua PATCH dùng chung. Cơ chế chống gửi trùng và đọc lại khi có xung đột hoặc kết quả chưa rõ được tái sử dụng.
+
+Trang hiển thị thông báo sau khi cập nhật rồi tải lại danh sách theo URL hiện tại. Bộ lọc, phân trang và nội dung tìm kiếm chưa gửi được giữ trong lần tải lại. Focus quay về nút thao tác sau refresh nếu còn, hoặc về tiêu đề trang. Phê duyệt Host tiếp tục là thao tác riêng.
+
+| File | Thay đổi |
+| --- | --- |
+| frontend/src/pages/admin/AdminHostsPage.jsx | Tích hợp dialog, thông báo và focus sau refresh |
+| backend/tests/Feature/UserManagement/AccountStatusApiTest.php | Mở rộng kiểm thử đăng nhập và vòng đời session cho Host |
+| docs/TV1/UC42-REPORT.md và docs/TV1/README.md | Ghi nhận triển khai và evidence |
+
+| Kiểm tra | Kết quả |
+| --- | --- |
+| Backend tập trung (UC40/41/42 và phê duyệt Host) | 237 passed, 1.039 assertions |
+| Full backend | 3.264 passed, 575 skipped, 14.366 assertions |
+| Full Node | 545 passed |
+| Lint / build | PASS. Còn 3 cảnh báo Fast Refresh và cảnh báo kích thước chunk có sẵn |
+| Browser Chrome + React/Laravel + SQLite riêng | PASS. Đăng nhập Admin, ẩn thao tác INACTIVE, khóa/mở bằng hai PATCH đúng payload, giữ filter và draft, focus khi dòng rời bộ lọc và khi dòng còn, 0 lỗi JS chưa xử lý |
+
+HTTP tests kiểm chứng phiên Host bị từ chối ở request được bảo vệ kế tiếp khi đang BLOCKED, login mới bị từ chối, mở khóa không khôi phục phiên đã bị hủy và có thể đăng nhập lại. Độ đồng thời MySQL chưa được kiểm chứng. Browser smoke tập trung vào luồng trang Host, còn các ca transport lỗi dùng evidence của Node và các lượt kiểm tra dialog trước đó.
+
+Các kiểm tra kỹ thuật của UC42-03 đạt. Đã dừng PHP, Vite và Chrome QA, rồi xóa fixture tạm. `git diff --check` đạt. Chờ developer review.

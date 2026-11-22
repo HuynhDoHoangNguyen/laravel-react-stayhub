@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { hostSearchParams, getAdminHosts, parseAdminHostError, readHostSearch } from '../../services/adminHostService';
+import { hostSearchParams, getAdminHost, getAdminHosts, parseAdminHostError, readHostSearch } from '../../services/adminHostService';
 import { hostStatuses } from '../../mappers/adminHostMapper';
 import AdminHostDetailDialog from '../../components/admin/users/AdminHostDetailDialog';
+import AccountStatusDialog from '../../components/admin/users/AccountStatusDialog';
 
 const dateFormat = new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh' });
 const inputClass = 'min-w-0 rounded-lg border border-border bg-background px-3 py-2 text-foreground focus-visible:outline-2 focus-visible:outline-primary';
@@ -29,6 +30,9 @@ function HostList({ query, change, reset, user, captureProfileAuth, isProfileAut
   const [view, setView] = useState(null);
   const [formError, setFormError] = useState(null);
   const [selectedHost, setSelectedHost] = useState(null);
+  const [statusTarget, setStatusTarget] = useState(null);
+  const [statusNotice, setStatusNotice] = useState('');
+  const statusFocusRef = useRef(null);
   useEffect(() => {
     const auth = captureProfileAuth();
     const controller = new AbortController();
@@ -48,6 +52,21 @@ function HostList({ query, change, reset, user, captureProfileAuth, isProfileAut
   const loading = visible === null;
   const result = visible?.result;
   const error = formError ?? visible?.error;
+  useEffect(() => {
+    if (loading || statusFocusRef.current === null) return;
+    const id = statusFocusRef.current;
+    statusFocusRef.current = null;
+    const action = document.querySelector(`[data-host-status-id="${id}"]`);
+    (action ?? document.getElementById('admin-hosts-title'))?.focus();
+  }, [loading]);
+
+  function finishStatus(account) {
+    statusFocusRef.current = statusTarget.id;
+    setStatusTarget(null);
+    if (account) setStatusNotice(`Đã cập nhật tài khoản Host #${account.id}: ${hostStatuses[account.status]}.`);
+    retry();
+  }
+
   function apply(next) {
     try {
       change(hostSearchParams({ ...query, ...next }));
@@ -57,6 +76,7 @@ function HostList({ query, change, reset, user, captureProfileAuth, isProfileAut
   function retry() { setFormError(null); setRevision((previous) => previous + 1); }
   function resetAll() { setDraft(''); setFormError(null); setRevision((previous) => previous + 1); reset(); }
   return <>
+    {statusNotice && <p role="status" className="mb-4 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-emerald-950">{statusNotice}</p>}
     <form className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_auto_auto_auto]" onSubmit={(event) => {
       event.preventDefault(); apply({ q: draft, page: 1 });
     }}>
@@ -110,8 +130,18 @@ function HostList({ query, change, reset, user, captureProfileAuth, isProfileAut
                 <td className="whitespace-nowrap px-4 py-4">{new Intl.NumberFormat('vi-VN').format(host.properties_count)}</td>
                 <td className="px-4 py-4"><span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${badgeClass[host.status]}`}>{hostStatuses[host.status]}</span></td>
                 <td className="whitespace-nowrap px-4 py-4">{host.created_at === null ? 'Chưa cập nhật' : dateFormat.format(new Date(host.created_at))}</td>
-                <td className="whitespace-nowrap px-4 py-4"><button type="button" className={buttonClass}
-                  aria-label={`Xem chi tiết Host #${host.id}`} onClick={(event) => setSelectedHost({ id: host.id, trigger: event.currentTarget })}>Xem chi tiết</button></td>
+                <td className="px-4 py-4"><div className="flex flex-wrap gap-2">
+                  <button type="button" className={`${buttonClass} whitespace-nowrap`}
+                    aria-label={`Xem chi tiết Host #${host.id}`} onClick={(event) => setSelectedHost({ id: host.id, trigger: event.currentTarget })}>Xem chi tiết</button>
+                  {['ACTIVE', 'BLOCKED'].includes(host.status) && <button type="button" className={`${buttonClass} whitespace-nowrap`}
+                    data-host-status-id={host.id}
+                    aria-label={`${host.status === 'ACTIVE' ? 'Khóa' : 'Mở khóa'} tài khoản Host #${host.id}`}
+                    onClick={(event) => {
+                      setStatusNotice('');
+                      setStatusTarget({ id: host.id, trigger: event.currentTarget,
+                        desiredStatus: host.status === 'ACTIVE' ? 'BLOCKED' : 'ACTIVE' });
+                    }}>{host.status === 'ACTIVE' ? 'Khóa tài khoản' : 'Mở khóa'}</button>}
+                </div></td>
               </tr>)}
             </tbody>
           </table>
@@ -128,6 +158,9 @@ function HostList({ query, change, reset, user, captureProfileAuth, isProfileAut
     </div>
     {selectedHost && <AdminHostDetailDialog key={selectedHost.id} hostId={selectedHost.id}
       trigger={selectedHost.trigger} onClose={() => setSelectedHost(null)} onReloadList={retry} />}
+    {statusTarget && <AccountStatusDialog key={statusTarget.id} accountId={statusTarget.id}
+      desiredStatus={statusTarget.desiredStatus} loadAccount={getAdminHost} trigger={statusTarget.trigger}
+      accountLabel="Host" fallbackFocusId="admin-hosts-title" onClose={() => finishStatus()} onSuccess={finishStatus} />}
   </>;
 }
 
