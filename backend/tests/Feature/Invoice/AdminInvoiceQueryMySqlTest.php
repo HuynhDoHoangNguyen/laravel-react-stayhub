@@ -46,7 +46,7 @@ final class AdminInvoiceQueryMySqlTest extends Uc45MySqlTestCase
         $this->assertInstanceOf(AdminInvoiceListItemResponse::class, $page->items()[0]);
         $body = PageResponse::toResponse($page)->getData(true);
         $this->assertSame(['data', 'links', 'meta'], array_keys($body));
-        $this->assertSame(['id', 'invoice_code', 'booking_id', 'customer_name', 'property_name', 'room_name',
+        $this->assertSame(['id', 'invoice_code', 'booking_id', 'booking_code', 'customer_name', 'property_name', 'room_name',
             'total_amount', 'payment_status', 'paid_at', 'created_at'], array_keys($body['data'][0]));
         foreach ($body['data'] as $item) {
             $this->assertSame('208.50', $item['total_amount']);

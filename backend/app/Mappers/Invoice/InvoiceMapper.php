@@ -61,7 +61,7 @@ final class InvoiceMapper
     public function toAdminListItem(Invoice $invoice): AdminInvoiceListItemResponse
     {
         return $this->objectMapper->map($invoice, AdminInvoiceListItemResponse::class, [
-            'id', 'invoice_code', 'booking_id', 'customer_name', 'property_name', 'room_name',
+            'id', 'invoice_code', 'booking_id', 'booking_code', 'customer_name', 'property_name', 'room_name',
             'total_amount', 'payment_status', 'paid_at', 'created_at',
         ]);
     }

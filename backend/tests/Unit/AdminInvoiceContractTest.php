@@ -124,7 +124,7 @@ final class AdminInvoiceContractTest extends TestCase
     public function test_projection_uses_only_loaded_attributes_preserves_snapshot_values_and_null_dates(): void
     {
         $invoice = (new Invoice())->setDateFormat('Y-m-d H:i:s')->forceFill([
-            'id' => 7, 'invoice_code' => 'INV-7', 'booking_id' => 11, 'customer_name' => 'Khách snapshot',
+            'id' => 7, 'invoice_code' => 'INV-7', 'booking_id' => 11, 'booking_code' => 'BK-11', 'customer_name' => 'Khách snapshot',
             'property_name' => 'Cơ sở snapshot', 'room_name' => 'Phòng snapshot', 'total_amount' => '1234567.89',
             'payment_status' => 'UNPAID', 'paid_at' => null, 'created_at' => null,
             'customer_email' => 'must-not-leak@example.test', 'customer_phone' => '0900000000',
@@ -134,7 +134,7 @@ final class AdminInvoiceContractTest extends TestCase
         $response = $this->mapper()->toAdminListItem($invoice);
         $this->assertInstanceOf(AdminInvoiceListItemResponse::class, $response);
         $this->assertSame([
-            'id' => 7, 'invoice_code' => 'INV-7', 'booking_id' => 11, 'customer_name' => 'Khách snapshot',
+            'id' => 7, 'invoice_code' => 'INV-7', 'booking_id' => 11, 'booking_code' => 'BK-11', 'customer_name' => 'Khách snapshot',
             'property_name' => 'Cơ sở snapshot', 'room_name' => 'Phòng snapshot', 'total_amount' => '1234567.89',
             'payment_status' => 'UNPAID', 'paid_at' => null, 'created_at' => null,
         ], json_decode(json_encode($response, JSON_THROW_ON_ERROR), true, flags: JSON_THROW_ON_ERROR));
@@ -145,11 +145,12 @@ final class AdminInvoiceContractTest extends TestCase
     public function test_projection_serializes_paid_at_in_utc_without_calculating_state(): void
     {
         $invoice = (new Invoice())->setDateFormat('Y-m-d H:i:s')->setRawAttributes([
-            'id' => 1, 'invoice_code' => 'I', 'booking_id' => 1, 'customer_name' => 'C', 'property_name' => 'P',
+            'id' => 1, 'invoice_code' => 'I', 'booking_id' => 1, 'booking_code' => null, 'customer_name' => 'C', 'property_name' => 'P',
             'room_name' => 'R', 'total_amount' => '0.00', 'payment_status' => 'REFUNDED',
             'paid_at' => '2026-11-18T10:00:00+07:00', 'created_at' => '2026-11-18T02:00:00Z',
         ]);
         $result = $this->mapper()->toAdminListItem($invoice)->jsonSerialize();
+        $this->assertNull($result['booking_code']);
         $this->assertSame('REFUNDED', $result['payment_status']);
         $this->assertSame('2026-11-18T03:00:00.000000Z', $result['paid_at']);
         $this->assertSame('2026-11-18T02:00:00.000000Z', $result['created_at']);

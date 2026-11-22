@@ -11,7 +11,7 @@ final class AdminInvoiceApiAcceptanceMySqlTest extends Uc45MySqlTestCase
 {
     private const LIST = '/api/admin/invoices';
     private const OPTIONS = '/api/admin/invoices/filter-options';
-    private const ADMIN_FIELDS = ['id', 'invoice_code', 'booking_id', 'customer_name', 'property_name', 'room_name',
+    private const ADMIN_FIELDS = ['id', 'invoice_code', 'booking_id', 'booking_code', 'customer_name', 'property_name', 'room_name',
         'total_amount', 'payment_status', 'paid_at', 'created_at'];
     private array $fixture;
 

@@ -145,6 +145,10 @@ export function mapAdminInvoiceListResponse(body) {
   const data = body.data.map((row) => {
     requireValue(isObject(row) && isId(row.id) && isId(row.booking_id) && isDecimal(row.total_amount));
     const result = { id: row.id, booking_id: row.booking_id };
+    if (Object.hasOwn(row, 'booking_code')) {
+      requireValue(row.booking_code === null || (typeof row.booking_code === 'string' && row.booking_code.trim() !== ''));
+      result.booking_code = row.booking_code;
+    }
     for (const field of ['invoice_code', 'customer_name', 'property_name', 'room_name']) {
       requireValue(typeof row[field] === 'string');
       result[field] = row[field];
