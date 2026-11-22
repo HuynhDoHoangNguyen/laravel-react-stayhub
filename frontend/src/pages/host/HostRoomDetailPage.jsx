@@ -6,6 +6,7 @@ import { formatCatalogPrice } from '../../services/catalog';
 import HostRoomEditForm from '../../components/catalog/HostRoomEditForm';
 import HostRoomStatusForm from '../../components/catalog/HostRoomStatusForm';
 import CatalogImage from '../../components/catalog/CatalogImage';
+import HostRoomMaintenancePanel from '../../components/catalog/HostRoomMaintenancePanel';
 
 const roomStatuses = { ACTIVE: 'Đang hoạt động', MAINTENANCE: 'Đang bảo trì', INACTIVE: 'Ngưng hoạt động' };
 const propertyStatuses = { ACTIVE: 'Đang hoạt động', INACTIVE: 'Ngưng hoạt động', PENDING: 'Chờ duyệt', BLOCKED: 'Đã khóa' };
@@ -135,6 +136,7 @@ function RoomDetail({ roomId }) {
                         </li>)}
                     </ul>}
             </section>
+            <HostRoomMaintenancePanel roomId={room.id} />
         </article>}
     </div>;
 }

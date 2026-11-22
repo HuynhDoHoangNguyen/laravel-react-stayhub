@@ -6,6 +6,7 @@ use App\Http\Controllers\Catalog\HostPropertyController;
 use App\Http\Controllers\Catalog\HostPropertyImageController;
 use App\Http\Controllers\Catalog\HostRoomTypeController;
 use App\Http\Controllers\Catalog\HostRoomController;
+use App\Http\Controllers\Catalog\HostRoomMaintenanceController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/public/rooms', [PublicRoomController::class, 'index']);
@@ -56,6 +57,9 @@ Route::put('/host/rooms/{room}', [HostRoomController::class, 'update'])
     ->middleware(['auth:sanctum', 'account.active']);
 
 Route::get('/host/rooms/{room}', [HostRoomController::class, 'show'])
+    ->middleware(['auth:sanctum', 'account.active']);
+
+Route::get('/host/rooms/{room}/maintenances', [HostRoomMaintenanceController::class, 'index'])
     ->middleware(['auth:sanctum', 'account.active']);
 
 Route::post('/host/properties/{property}/room-types', [HostRoomTypeController::class, 'store'])

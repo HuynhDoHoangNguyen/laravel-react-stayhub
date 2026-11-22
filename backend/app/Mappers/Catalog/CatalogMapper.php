@@ -6,6 +6,7 @@ use App\DTOs\Catalog\Responses\HostPropertyResponse;
 use App\DTOs\Catalog\Responses\HostRoomTypeResponse;
 use App\DTOs\Catalog\Responses\HostRoomResponse;
 use App\DTOs\Catalog\Responses\HostRoomDetailResponse;
+use App\DTOs\Catalog\Responses\HostRoomMaintenanceResponse;
 use App\DTOs\Catalog\Responses\HostPropertyDetailResponse;
 use App\DTOs\Catalog\Responses\PublicPropertyDetailResponse;
 use App\DTOs\Catalog\Responses\PublicPropertyListItemResponse;
@@ -15,6 +16,7 @@ use App\DTOs\Catalog\Responses\PublicRoomListItemResponse;
 use App\DTOs\Catalog\Responses\PublicRoomFilterOptionsResponse;
 use App\Mappers\EloquentObjectMapper;
 use App\Models\Amenity;
+use App\Models\Maintenance;
 use App\Models\Property;
 use App\Models\PropertyImage;
 use App\DTOs\Catalog\Responses\HostPropertyImageResponse;
@@ -66,6 +68,17 @@ final class CatalogMapper
                 return ['id' => $type->id, 'name' => $type->name, 'property' => ['id' => $property->id, 'name' => $property->name]];
             })->values()->all(),
             $amenities->map(static fn (Amenity $amenity) => ['id' => $amenity->id, 'name' => $amenity->name])->values()->all(),
+        );
+    }
+
+    public function toHostRoomMaintenance(Maintenance $maintenance): HostRoomMaintenanceResponse
+    {
+        return new HostRoomMaintenanceResponse(
+            id: $maintenance->id,
+            startDate: $maintenance->getRawOriginal('start_date'),
+            endDate: $maintenance->getRawOriginal('end_date'),
+            reason: $maintenance->reason,
+            status: $maintenance->status->value,
         );
     }
 

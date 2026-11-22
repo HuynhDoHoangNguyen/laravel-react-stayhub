@@ -3,6 +3,7 @@
 namespace App\Repositories\Catalog;
 
 use App\DTOs\Catalog\Requests\CreateHostRoomRequest;
+use App\DTOs\Catalog\Requests\CreateHostRoomMaintenanceRequest;
 use App\DTOs\Catalog\Requests\UpdateHostRoomRequest;
 use App\DTOs\Catalog\Requests\PublicRoomFilterQuery;
 use App\Enums\PropertyStatus;
@@ -116,12 +117,40 @@ class CatalogRepository
             ->select(['id', 'status', 'start_date', 'end_date'])->orderBy('id')->toBase()->lockForUpdate()->get();
     }
 
+    /** The caller holds the room lock and has checked the current conflict facts. */
+    public function createHostRoomMaintenance(Room $room, CreateHostRoomMaintenanceRequest $input): Maintenance
+    {
+        $timestamp = (new Maintenance())->freshTimestampString();
+        // The conflict readers expect date-only values, including on SQLite.
+        $id = Maintenance::query()->insertGetId([
+            'room_id' => $room->getKey(),
+            'start_date' => $input->startDate,
+            'end_date' => $input->endDate,
+            'reason' => $input->reason,
+            'status' => MaintenanceStatus::SCHEDULED->value,
+            'created_at' => $timestamp,
+            'updated_at' => $timestamp,
+        ]);
+
+        return $room->maintenances()->findOrFail($id);
+    }
+
     public function changeHostRoomStatus(Room $room, RoomStatus $status): void
     {
         $room->status = $status;
         if (!$room->save()) {
             throw new \RuntimeException('Room status update failed.');
         }
+    }
+
+    public function paginateHostRoomMaintenances(int $hostId, int $roomId, int $page): LengthAwarePaginator
+    {
+        return Maintenance::query()
+            ->where('room_id', $roomId)
+            ->whereHas('room.property', fn (Builder $property) => $property->where('host_id', $hostId))
+            ->orderByDesc('start_date')
+            ->orderByDesc('id')
+            ->paginate(15, ['id', 'start_date', 'end_date', 'reason', 'status'], 'page', $page);
     }
 
     public function findHostRoomPropertyId(int $hostId, int $roomId): ?int

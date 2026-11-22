@@ -20,6 +20,7 @@ use App\DTOs\Catalog\Requests\HostPropertyDetailQuery;
 use App\DTOs\Catalog\Requests\HostRoomTypeListQuery;
 use App\DTOs\Catalog\Requests\HostRoomListQuery;
 use App\DTOs\Catalog\Requests\HostRoomDetailQuery;
+use App\DTOs\Catalog\Requests\HostRoomMaintenanceListQuery;
 use App\DTOs\Catalog\Requests\UploadHostPropertyImageRequest;
 use App\DTOs\Catalog\Requests\HostPropertyImageRequest;
 use App\Models\User;
@@ -275,6 +276,32 @@ final class CatalogValidator
         $validator->validate();
 
         return new HostRoomDetailQuery($id);
+    }
+
+    public function validateHostRoomMaintenanceList(User $actor, string $room, array $query): ?HostRoomMaintenanceListQuery
+    {
+        $target = $this->validateHostRoomDetail($actor, $room, []);
+        if ($target === null) {
+            return null;
+        }
+
+        $validator = $this->validation->make($query, [
+            'page' => ['bail', 'sometimes', 'required', 'integer', 'between:1,2147483647',
+                static function (string $attribute, mixed $value, Closure $fail): void {
+                    if ((string) (int) $value !== (string) $value) {
+                        $fail('Trang phải là số nguyên dương hợp lệ.');
+                    }
+                }],
+        ], ['page.*' => 'Trang phải là số nguyên dương hợp lệ.']);
+        $validator->after(static function (Validator $validator) use ($query): void {
+            foreach (array_diff(array_keys($query), ['page']) as $field) {
+                $validator->errors()->add($field, 'Danh sách lịch bảo trì chỉ hỗ trợ tham số trang.');
+            }
+        });
+
+        $data = $validator->validate();
+
+        return new HostRoomMaintenanceListQuery($target->roomId, (int) ($data['page'] ?? 1));
     }
 
     public function validateHostRoomList(User $actor, string $property, array $query): ?HostRoomListQuery
