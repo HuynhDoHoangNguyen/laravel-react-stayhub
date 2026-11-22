@@ -16,6 +16,7 @@ Thư mục này lưu kết quả khảo sát và báo cáo triển khai của **
 | [UC51-REPORT.md](UC51-REPORT.md) | UC51: query kiểm tra lịch bảo trì theo khoảng lưu trú, contract bàn giao TV2 | Lõi query và automated tests PASS; chưa tích hợp Availability/Booking TV2 |
 | [UC52-REPORT.md](UC52-REPORT.md) | UC52: validator kiểm tra sức chứa một phòng, contract bàn giao TV2 và unit tests | Lõi validator và automated tests PASS; chưa tích hợp Availability/Booking TV2 |
 | [UC40-REPORT.md](UC40-REPORT.md) | UC40-01/02: Admin xem danh sách và chi tiết Customer, tìm kiếm/lọc/phân trang, dialog và URL state | Hai task TECHNICAL PASS: backend/Node/lint/build và browser SQLite fixture; chờ developer review, chưa kiểm chứng runtime MySQL |
+| [UC41-REPORT.md](UC41-REPORT.md) | UC41-01: Admin tra cứu Host, lọc/phân trang và đếm cơ sở mọi trạng thái, URL state | UC41-01 TECHNICAL PASS: automated checks và browser SQLite fixture; UC41-02 chưa triển khai, chờ developer review |
 
 ## Quy ước
 
