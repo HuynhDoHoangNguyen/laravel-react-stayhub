@@ -130,7 +130,7 @@ const SidebarProvider = React.forwardRef(
 SidebarProvider.displayName = "SidebarProvider";
 
 const Sidebar = React.forwardRef(
-  ({ side = "left", variant = "sidebar", collapsible = "offcanvas", className, children, ...props }, ref) => {
+  ({ side = "left", variant = "sidebar", collapsible = "offcanvas", className, children, mobileInitialFocusRef, ...props }, ref) => {
     const { isMobile, state, openMobile, setOpenMobile, triggerRef, returnFocusRef } = useSidebar();
 
     if (collapsible === "none") {
@@ -156,6 +156,12 @@ const Sidebar = React.forwardRef(
               "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
             }}
             side={side}
+            onOpenAutoFocus={(event) => {
+              const target = mobileInitialFocusRef?.current;
+              if (!target || !event.target.contains(target)) return;
+              target.focus();
+              if (document.activeElement === target) event.preventDefault();
+            }}
             onCloseAutoFocus={(event) => {
               const target = [returnFocusRef.current, triggerRef.current].find((node) =>
                 node?.isConnected && node !== document.body && node !== document.documentElement &&
