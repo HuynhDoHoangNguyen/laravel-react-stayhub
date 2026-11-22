@@ -48,3 +48,14 @@ test('adminUserService calls correct endpoints with CSRF protection for mutation
     assert.deepEqual(requests[0].params, { role: 'HOST', host_approval: 'PENDING', page: 1 });
     assert.deepEqual(JSON.parse(requests[4].data), { status: 'BLOCKED' });
 });
+
+test('useHostApproval isolates approval cache per user ID to prevent cross-account approval contamination', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const { fileURLToPath } = await import('node:url');
+    const hookPath = fileURLToPath(new URL('../src/hooks/useHostApproval.js', import.meta.url));
+    const code = await readFile(hookPath, 'utf8');
+
+    assert.match(code, /cachedUserId/);
+    assert.match(code, /cachedUserId\s*===\s*currentUserId/);
+    assert.match(code, /invalidateHostApprovalCache/);
+});

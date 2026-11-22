@@ -36,6 +36,12 @@ class HostCommissionApiTest extends TestCase
     {
         parent::setUp();
 
+        config([
+            'commission.bank_info.bank_name' => 'Ngân hàng TMCP Ngoại thương Việt Nam (Vietcombank)',
+            'commission.bank_info.account_number' => '1029384756',
+            'commission.bank_info.account_holder' => 'CONG TY CP CONG NGHE STAYHUB',
+        ]);
+
         $this->seed(PartnerAgreementSeeder::class);
         $agreement = PartnerAgreement::query()->where('version', 'v1.0')->firstOrFail();
 
