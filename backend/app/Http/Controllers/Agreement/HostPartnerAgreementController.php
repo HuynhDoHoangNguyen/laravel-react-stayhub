@@ -18,7 +18,42 @@ class HostPartnerAgreementController extends Controller
     ) {}
 
     /**
-     * Lấy phiên bản hợp đồng đối tác đang có hiệu lực.
+     * Lấy phiên bản hợp đồng đối tác đang có hiệu lực (Public — phục vụ màn hình Đăng ký Đối tác).
+     */
+    public function publicCurrent(): JsonResponse
+    {
+        $agreement = $this->service->getCurrentAgreement(null);
+        if ($agreement === null) {
+            return response()->json(['message' => 'Chưa có hợp đồng đối tác nào được kích hoạt.'], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $this->mapper->toPublicAgreementResponse($agreement),
+        ], 200);
+    }
+
+    /**
+     * Đăng ký tài khoản Đối tác (Host) đồng thời chấp thuận hợp đồng hoa hồng 10%.
+     */
+    public function registerHost(Request $request): JsonResponse
+    {
+        foreach (['name', 'email'] as $field) {
+            $value = $request->input($field);
+            if (is_string($value)) {
+                $request->merge([$field => trim($value)]);
+            }
+        }
+
+        $this->service->registerHostWithAgreement($request->all());
+
+        return response()->json([
+            'message' => 'Đăng ký tài khoản Đối tác và chấp thuận hợp đồng thành công. Vui lòng đăng nhập để tiếp tục.',
+        ], 201);
+    }
+
+    /**
+     * Lấy phiên bản hợp đồng đối tác đang có hiệu lực (Dành cho Host đã đăng nhập).
      */
     public function current(Request $request): JsonResponse
     {

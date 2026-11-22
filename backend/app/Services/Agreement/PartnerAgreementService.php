@@ -2,11 +2,19 @@
 
 namespace App\Services\Agreement;
 
+use App\Enums\UserRole;
+use App\Enums\UserStatus;
 use App\Models\HostAgreementAcceptance;
 use App\Repositories\Agreement\PartnerAgreementRepository;
+use App\Repositories\Auth\AuthRepository;
+use App\Services\Auth\EmailUniqueConflict;
+use App\Validators\Agreement\PartnerAgreementValidator;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use SensitiveParameter;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -14,6 +22,8 @@ class PartnerAgreementService
 {
     public function __construct(
         protected readonly PartnerAgreementRepository $repository,
+        protected readonly AuthRepository $authRepository,
+        protected readonly PartnerAgreementValidator $validator,
     ) {}
 
     /**
@@ -111,5 +121,53 @@ class PartnerAgreementService
 
             return $acceptance;
         });
+    }
+
+    /**
+     * Đăng ký tài khoản Đối tác (Host) đồng thời ghi nhận chấp thuận hợp đồng hoa hồng 10% trong cùng transaction.
+     */
+    public function registerHostWithAgreement(#[SensitiveParameter] array $input): void
+    {
+        $email = $this->validator->registrationEmailForLookup($input);
+        $emailExists = $email !== null && $this->authRepository->emailExists($email);
+
+        $validated = $this->validator->validateHostRegistrationPayload($input, $emailExists);
+
+        $agreement = $this->repository->findActivePublishedAgreement();
+        if ($agreement === null) {
+            throw new NotFoundHttpException('Chưa có hợp đồng đối tác nào được kích hoạt.');
+        }
+
+        if (strtolower((string) $agreement->content_sha256) !== strtolower((string) $validated['content_sha256'])) {
+            throw new ConflictHttpException('Nội dung hợp đồng đã được cập nhật phiên bản mới. Vui lòng tải lại và xem nội dung mới nhất.');
+        }
+
+        try {
+            DB::transaction(function () use ($validated, $agreement): void {
+                $user = $this->authRepository->createUser([
+                    'name' => $validated['name'],
+                    'email' => $validated['email'],
+                    'password' => Hash::make($validated['password']),
+                    'role' => UserRole::HOST,
+                    'status' => UserStatus::ACTIVE,
+                    'email_verified_at' => null,
+                ]);
+
+                $this->repository->firstOrCreateAcceptance(
+                    (int) $user->id,
+                    (int) $agreement->id,
+                    (string) $agreement->content_sha256,
+                    'REGISTRATION_CLICKWRAP'
+                );
+
+                DB::afterCommit(fn () => Log::info('Đăng ký tài khoản đối tác (Host) và chấp thuận hợp đồng thành công.', [
+                    'host_id' => $user->id,
+                    'agreement_id' => $agreement->id,
+                    'version' => $agreement->version,
+                ]));
+            });
+        } catch (UniqueConstraintViolationException $exception) {
+            EmailUniqueConflict::rethrow($exception);
+        }
     }
 }

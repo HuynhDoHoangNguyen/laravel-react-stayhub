@@ -167,4 +167,95 @@ class HostPartnerAgreementTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.name', 'Homestay Hoa Ban');
     }
+
+    public function test_guest_can_register_as_host_with_agreement_clickwrap_and_immediately_create_property(): void
+    {
+        $this->seed(PartnerAgreementSeeder::class);
+
+        // 1. Lấy hợp đồng công khai hiện hành
+        $publicRes = $this->getJson('/api/public/partner-agreements/current');
+        $publicRes->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.version', 'v1.0')
+            ->assertJsonPath('data.commission_rate_bps', 1000);
+
+        $sha256 = $publicRes->json('data.content_sha256');
+        $agreementId = $publicRes->json('data.id');
+
+        // 2. Đăng ký Host thiếu accepted => 422
+        $this->postJson('/api/public/host-register', [
+            'name' => 'Host Mới Đăng Ký',
+            'email' => 'newhost@stayhub.test',
+            'password' => 'StrongPass123!',
+            'password_confirmation' => 'StrongPass123!',
+            'accepted' => false,
+            'content_sha256' => $sha256,
+        ])->assertStatus(422);
+
+        // 3. Đăng ký Host hợp lệ kèm clickwrap
+        $regRes = $this->postJson('/api/public/host-register', [
+            'name' => 'Host Mới Đăng Ký',
+            'email' => 'newhost@stayhub.test',
+            'password' => 'StrongPass123!',
+            'password_confirmation' => 'StrongPass123!',
+            'accepted' => true,
+            'content_sha256' => $sha256,
+        ]);
+
+        $regRes->assertStatus(201);
+
+        $newHost = User::where('email', 'newhost@stayhub.test')->firstOrFail();
+        $this->assertSame(UserRole::HOST, $newHost->role);
+
+        $this->assertDatabaseHas('host_agreement_acceptances', [
+            'host_id' => $newHost->id,
+            'partner_agreement_id' => $agreementId,
+            'accepted_content_sha256' => $sha256,
+            'method' => 'REGISTRATION_CLICKWRAP',
+        ]);
+
+        // 4. Đăng ký trùng email (khi vẫn đang là guest) bị từ chối 422
+        $this->postJson('/api/public/host-register', [
+            'name' => 'Host Trùng Email',
+            'email' => 'newhost@stayhub.test',
+            'password' => 'StrongPass123!',
+            'password_confirmation' => 'StrongPass123!',
+            'accepted' => true,
+            'content_sha256' => $sha256,
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors(['email']);
+
+        // 5. Đăng ký với content_sha256 không khớp hợp đồng hiện hành => 409
+        $this->postJson('/api/public/host-register', [
+            'name' => 'Host Sai Hash',
+            'email' => 'anotherhost@stayhub.test',
+            'password' => 'StrongPass123!',
+            'password_confirmation' => 'StrongPass123!',
+            'accepted' => true,
+            'content_sha256' => str_repeat('f', 64),
+        ])->assertStatus(409);
+
+        // 6. Host mới đăng ký có thể tạo Property ngay mà không bị chặn AGREEMENT_REQUIRED
+        $this->actingAs($newHost)->postJson('/api/host/properties', [
+            'name' => 'Homestay Mới Tinh',
+            'type' => PropertyType::HOMESTAY->value,
+            'address' => '99 Trần Phú, Đà Lạt',
+            'description' => 'Mô tả homestay mới',
+            'phone' => '0909998887',
+            'check_in_time' => '14:00',
+            'check_out_time' => '12:00',
+        ])->assertStatus(201)
+            ->assertJsonPath('success', true);
+
+        // 7. User đang đăng nhập không được gọi endpoint đăng ký Host => 409 ALREADY_AUTHENTICATED
+        $this->actingAs($this->customer, 'web')->postJson('/api/public/host-register', [
+            'name' => 'Host Đang Login',
+            'email' => 'loggedhost@stayhub.test',
+            'password' => 'StrongPass123!',
+            'password_confirmation' => 'StrongPass123!',
+            'accepted' => true,
+            'content_sha256' => $sha256,
+        ])->assertStatus(409)
+            ->assertJsonPath('code', 'ALREADY_AUTHENTICATED');
+    }
 }

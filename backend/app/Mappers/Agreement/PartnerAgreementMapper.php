@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Collection;
 class PartnerAgreementMapper
 {
     /**
-     * Chuẩn hóa dữ liệu hợp đồng đối tác cho API response.
+     * Chuẩn hóa dữ liệu hợp đồng đối tác cho API response (dành cho Host đã đăng nhập).
      */
     public function toAgreementResponse(array $agreement): array
     {
@@ -21,6 +21,21 @@ class PartnerAgreementMapper
             'commission_rate_bps' => (int) $agreement['commission_rate_bps'],
             'is_accepted' => (bool) $agreement['is_accepted'],
             'accepted_at' => $agreement['accepted_at'] ?? null,
+        ];
+    }
+
+    /**
+     * Chuẩn hóa dữ liệu hợp đồng đối tác công khai cho màn hình Đăng ký Đối tác.
+     */
+    public function toPublicAgreementResponse(array $agreement): array
+    {
+        return [
+            'id' => (int) $agreement['id'],
+            'version' => (string) $agreement['version'],
+            'title' => (string) $agreement['title'],
+            'terms_body' => (string) $agreement['terms_body'],
+            'content_sha256' => (string) $agreement['content_sha256'],
+            'commission_rate_bps' => (int) $agreement['commission_rate_bps'],
         ];
     }
 
