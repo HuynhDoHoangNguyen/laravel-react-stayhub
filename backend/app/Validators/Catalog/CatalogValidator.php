@@ -2,6 +2,7 @@
 
 namespace App\Validators\Catalog;
 
+use App\DTOs\Catalog\Requests\HostRoomAmenityTarget;
 use App\Enums\UserRole;
 use App\Enums\RoomStatus;
 use App\DTOs\Catalog\Requests\ChangeHostRoomStatusRequest;
@@ -22,6 +23,9 @@ use App\DTOs\Catalog\Requests\HostRoomListQuery;
 use App\DTOs\Catalog\Requests\HostRoomDetailQuery;
 use App\DTOs\Catalog\Requests\UploadHostPropertyImageRequest;
 use App\DTOs\Catalog\Requests\HostPropertyImageRequest;
+use App\DTOs\Catalog\Requests\HostRoomImageQuery;
+use App\DTOs\Catalog\Requests\HostRoomImageRequest;
+use App\DTOs\Catalog\Requests\UploadHostRoomImageRequest;
 use App\Models\User;
 use App\DTOs\Catalog\Requests\PublicPropertyDetailQuery;
 use App\DTOs\Catalog\Requests\PublicRoomDetailQuery;
@@ -35,6 +39,52 @@ use App\Exceptions\AppException;
 
 final class CatalogValidator
 {
+    public function validateHostRoomImageAction(User $actor, string $room, string $image, array $input): ?HostRoomImageRequest
+    {
+        $target = $this->validateHostRoomImageQuery($actor, $room, []);
+        $id = filter_var($image, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        if ($target === null || $id === false || (string) $id !== $image) return null;
+        $this->validateHostRoomImageQuery($actor, $room, $input);
+
+        return new HostRoomImageRequest($target->roomId, $id);
+    }
+
+    public function validateHostRoomImageQuery(User $actor, string $room, array $input): ?HostRoomImageQuery
+    {
+        $this->authorizeHost($actor);
+        $id = (int) $room;
+        if ($id < 1 || (string) $id !== $room) return null;
+        $validator = $this->validation->make($input, []);
+        $validator->after(static function (Validator $validator) use ($input): void {
+            foreach (array_keys($input) as $field) {
+                $validator->errors()->add($field, 'Danh sách ảnh phòng không nhận thêm tham số.');
+            }
+        });
+        $validator->validate();
+
+        return new HostRoomImageQuery($id);
+    }
+
+    public function validateHostRoomImageUpload(User $actor, array $body, array $query = []): UploadHostRoomImageRequest
+    {
+        $this->authorizeHost($actor);
+        $validator = $this->validation->make($body, [
+            'image' => ['bail', 'required', 'file', 'image', 'mimetypes:image/jpeg,image/png,image/webp',
+                'max:5120', 'dimensions:max_width=4096,max_height=4096'],
+        ], ['image.*' => 'Vui lòng chọn một ảnh JPG, PNG hoặc WebP hợp lệ, tối đa 5 MiB và 4096 × 4096 pixel.']);
+        $validator->after(static function (Validator $validator) use ($body, $query): void {
+            foreach (array_diff(array_keys($body), ['image']) as $field) {
+                $validator->errors()->add($field, 'Chỉ được gửi một tệp image.');
+            }
+            foreach (array_keys($query) as $field) {
+                $validator->errors()->add($field, 'Upload ảnh phòng không nhận tham số truy vấn.');
+            }
+        });
+        $data = $validator->validate();
+
+        return new UploadHostRoomImageRequest($data['image']);
+    }
+
     public function __construct(
         private readonly Factory $validation,
         private readonly AttributeValidator $attributes,
@@ -275,6 +325,37 @@ final class CatalogValidator
         $validator->validate();
 
         return new HostRoomDetailQuery($id);
+    }
+
+    public function validateHostRoomAmenityQuery(User $actor, string $room, array $input): ?HostRoomDetailQuery
+    {
+        $target = $this->validateHostRoomDetail($actor, $room, []);
+        if ($target !== null) {
+            $this->validateEmptyHostRoomAmenityInput($input);
+        }
+
+        return $target;
+    }
+
+    public function validateHostRoomAmenityTarget(User $actor, string $room, string $amenity, array $input): ?HostRoomAmenityTarget
+    {
+        $target = $this->validateHostRoomDetail($actor, $room, []);
+        $amenityId = (int) $amenity;
+        if ($target === null || $amenityId < 1 || (string) $amenityId !== $amenity) {
+            return null;
+        }
+        $this->validateEmptyHostRoomAmenityInput($input);
+
+        return new HostRoomAmenityTarget($target->roomId, $amenityId);
+    }
+
+    private function validateEmptyHostRoomAmenityInput(array $input): void
+    {
+        if ($input !== []) {
+            throw ValidationException::withMessages(array_fill_keys(
+                array_keys($input), 'Thao tác tiện nghi phòng không nhận thêm tham số.',
+            ));
+        }
     }
 
     public function validateHostRoomList(User $actor, string $property, array $query): ?HostRoomListQuery

@@ -13,6 +13,11 @@ Thư mục này lưu kết quả khảo sát và báo cáo triển khai của **
 | [UC04-REPORT.md](UC04-REPORT.md) | UC4: danh sách cơ sở public, phân trang server và card dữ liệu thật | Code/tests hoàn thành cùng UC5; còn nghiệm thu browser/MySQL |
 | [UC05-REPORT.md](UC05-REPORT.md) | UC5: chi tiết public, phòng/ảnh/tiện nghi và review integration | Code/tests hoàn thành cùng UC4; còn nghiệm thu browser/MySQL và dependency Review TV3 |
 | [UC07-REPORT.md](UC07-REPORT.md) | UC7: lọc phòng theo giá, sức chứa, loại phòng/tiện nghi và đánh giá cơ sở; search bar, sidebar cuộn riêng, API thật | UC7/frontend/browser đạt; full backend còn 3 lỗi nền tái hiện ở HEAD trước UC7 |
+| [UC18-REPORT.md](UC18-REPORT.md) | UC18-01 audit; UC18-02 cleanup; UI-01 chi tiết, UI-02 danh sách/form Host | Audit/fix và UI checks PASS; owner chấp nhận UI-02 list/form/mobile/keyboard; UI-01 browser và runtime gaps còn mở, chưa chốt toàn UC18 |
+| [UC19-REPORT.md](UC19-REPORT.md) | UC19-01 audit/QA; UI-01; FINAL chốt phạm vi | Nghiệm thu CRUD/UI đã kiểm, technical checks và owner browser PASS; concurrency/collation MariaDB và browser negative cases còn NOT VERIFIED, chưa CLOSED toàn runtime |
+| [UC20-REPORT.md](UC20-REPORT.md) | UC20-01 audit/QA, UI-01 danh sách/form thêm, UI-02 chi tiết/form sửa và đổi trạng thái, FINAL | Nghiệm thu luồng quản lý phòng và UI đã kiểm với Host thật. Kiểm tra kỹ thuật đạt. Thứ tự khóa TV2, collation MariaDB và các ca lỗi runtime còn mở |
+| [UC21-REPORT.md](UC21-REPORT.md) | UC21-01/02, QA và QA-DB-01/02 | Chức năng/owner browser PASS; MariaDB 10.11 smoke, 8 concurrency cases và cleanup PASS; chờ review bàn giao |
+| [UC22-REPORT.md](UC22-REPORT.md) | UC22-01 xem/gán, UC22-02 gỡ và UC22-FINAL | Đã nghiệm thu xem/gán/gỡ/gán lại, kể cả gỡ tiện nghi đã ngưng. Gán/gỡ đồng thời trên MySQL/MariaDB và mất phản hồi với Laravel thật còn mở |
 | [UC51-REPORT.md](UC51-REPORT.md) | UC51: query kiểm tra lịch bảo trì theo khoảng lưu trú, contract bàn giao TV2 | Lõi query và automated tests PASS; chưa tích hợp Availability/Booking TV2 |
 | [UC52-REPORT.md](UC52-REPORT.md) | UC52: validator kiểm tra sức chứa một phòng, contract bàn giao TV2 và unit tests | Lõi validator và automated tests PASS; chưa tích hợp Availability/Booking TV2 |
 
