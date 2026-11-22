@@ -16,6 +16,7 @@ use App\Models\RoomImage;
 use App\Models\Room;
 use App\Models\RoomType;
 use App\Models\Review;
+use App\Services\Catalog\PublicImageUrl;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -53,8 +54,20 @@ class CatalogRepository
 
     public function roomImagePathReferenced(string $path): bool
     {
-        return RoomImage::query()->where('image_path', $path)->exists()
-            || PropertyImage::query()->where('image_path', $path)->exists();
+        $key = PublicImageUrl::publicDiskKey($path);
+        if ($key === null) return false;
+        foreach ([RoomImage::class, PropertyImage::class] as $model) {
+            if ($model::query()->whereIn('image_path', [$key, '/storage/'.$key])->exists()) return true;
+        }
+        foreach ([RoomImage::class, PropertyImage::class] as $model) {
+            // Legacy URLs may contain encoded paths, query strings or a configured public base path.
+            // Read in bounded batches; normalization stays identical for both image tables.
+            foreach ($model::query()->select(['id', 'image_path'])->lazyById(200) as $image) {
+                if (PublicImageUrl::publicDiskKey($image->image_path) === $key) return true;
+            }
+        }
+
+        return false;
     }
 
     public function findPublicRoom(int $id): ?Room

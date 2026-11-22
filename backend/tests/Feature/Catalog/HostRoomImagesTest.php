@@ -6,6 +6,7 @@ use App\DTOs\Catalog\Requests\HostRoomImageQuery;
 use App\DTOs\Catalog\Requests\UploadHostRoomImageRequest;
 use App\Mappers\Catalog\CatalogMapper;
 use App\Models\Property;
+use App\Models\PropertyImage;
 use App\Models\Room;
 use App\Models\RoomImage;
 use App\Models\User;
@@ -112,6 +113,93 @@ class HostRoomImagesTest extends TestCase
         $this->deleteJson($this->endpoint($room->id).'/'.$image->id)->assertOk()->assertJsonPath('data.cleanup_status', 'deleted');
         $this->assertTrue($primary->fresh()->is_primary);
         $disk->assertMissing($path);
+    }
+
+
+    public static function publicPathAliases(): array
+    {
+        $cases = [];
+        foreach ([false, true] as $propertyReference) {
+            foreach (['relative', 'storage', 'disk', 'query', 'encoded'] as $form) {
+                $cases[($propertyReference ? 'property' : 'room').'-'.$form] = [$propertyReference, $form];
+            }
+        }
+        return $cases;
+    }
+
+    #[DataProvider('publicPathAliases')]
+    public function test_delete_keeps_public_path_alias_references(bool $propertyReference, string $form): void
+    {
+        config(['filesystems.disks.public.url' => 'https://assets.stayhub.test:8443/public-media']);
+        Storage::fake('public', ['url' => config('filesystems.disks.public.url')]);
+        $host = $this->actor();
+        $target = $this->room($host);
+        $path = 'rooms/'.$target->id.'/11111111-1111-4111-8111-111111111111.png';
+        Storage::disk('public')->put($path, 'owned fixture');
+        $image = $target->images()->create(['image_path' => $path, 'is_primary' => true]);
+        $alias = match ($form) {
+            'relative' => $path,
+            'storage' => '/storage/'.$path,
+            'disk' => Storage::disk('public')->url($path),
+            'query' => Storage::disk('public')->url($path).'?v=1#preview',
+            'encoded' => 'https://assets.stayhub.test:8443/public-media/'.str_replace('/', '%2F', $path),
+        };
+        $other = $this->room($this->actor());
+        $reference = $propertyReference
+            ? PropertyImage::create(['property_id' => $other->property_id, 'image_path' => $alias, 'is_primary' => true])
+            : RoomImage::create(['room_id' => $other->id, 'image_path' => $alias, 'is_primary' => true]);
+        $original = $reference->fresh()->getAttributes();
+        $this->actingAs($host)->deleteJson($this->endpoint($target->id).'/'.$image->id)->assertOk()
+            ->assertJsonPath('data.deleted_image_id', $image->id)->assertJsonPath('data.cleanup_status', 'shared');
+        $this->assertDatabaseMissing('room_images', ['id' => $image->id]);
+        $this->assertSame($original, $reference->fresh()->getAttributes());
+        Storage::disk('public')->assertExists($path);
+        $this->assertSame('owned fixture', Storage::disk('public')->get($path));
+    }
+
+    public static function unrelatedPublicUrls(): array
+    {
+        return [
+            ['https://external.test/public-media/'],
+            ['https://assets.stayhub.test:8443/elsewhere/'],
+            ['https://assets.stayhub.test:8444/public-media/'],
+        ];
+    }
+
+    #[DataProvider('unrelatedPublicUrls')]
+    public function test_delete_does_not_treat_unrelated_urls_as_shared(string $base): void
+    {
+        config(['filesystems.disks.public.url' => 'https://assets.stayhub.test:8443/public-media']);
+        Storage::fake('public', ['url' => config('filesystems.disks.public.url')]);
+        $host = $this->actor();
+        $target = $this->room($host);
+        $path = 'rooms/'.$target->id.'/11111111-1111-4111-8111-111111111111.png';
+        Storage::disk('public')->put($path, 'owned fixture');
+        $image = $target->images()->create(['image_path' => $path, 'is_primary' => true]);
+        $other = $this->room($this->actor());
+        $reference = RoomImage::create(['room_id' => $other->id, 'image_path' => $base.$path]);
+        $original = $reference->fresh()->getAttributes();
+        $this->actingAs($host)->deleteJson($this->endpoint($target->id).'/'.$image->id)->assertOk()
+            ->assertJsonPath('data.cleanup_status', 'deleted');
+        $this->assertDatabaseMissing('room_images', ['id' => $image->id]);
+        $this->assertSame($original, $reference->fresh()->getAttributes());
+        Storage::disk('public')->assertMissing($path);
+    }
+
+    public function test_reference_lookup_failure_keeps_file_after_row_deletion(): void
+    {
+        $host = $this->actor();
+        $target = $this->room($host);
+        $path = 'rooms/'.$target->id.'/11111111-1111-4111-8111-111111111111.png';
+        Storage::disk('public')->put($path, 'owned fixture');
+        $image = $target->images()->create(['image_path' => $path, 'is_primary' => true]);
+        $repository = \Mockery::mock(CatalogRepository::class)->makePartial();
+        $repository->shouldReceive('roomImagePathReferenced')->once()->andThrow(new RuntimeException('Fixture lookup failure'));
+        $this->app->instance(CatalogRepository::class, $repository);
+        $this->actingAs($host)->deleteJson($this->endpoint($target->id).'/'.$image->id)->assertOk()
+            ->assertJsonPath('data.cleanup_status', 'failed');
+        $this->assertDatabaseMissing('room_images', ['id' => $image->id]);
+        Storage::disk('public')->assertExists($path);
     }
 
     public static function cleanupCases(): array { return [['missing'], ['shared'], ['failed'], ['not_managed']]; }
