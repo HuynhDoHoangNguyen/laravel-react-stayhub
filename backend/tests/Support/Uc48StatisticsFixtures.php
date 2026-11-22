@@ -46,6 +46,29 @@ final class Uc48StatisticsFixtures
         return $invoice;
     }
 
+    public static function commissionAcceptance(Application $app, int $host): int
+    {
+        $db = $app['db']->connection();
+        $stamp = '2026-09-01 00:00:00';
+        $terms = 'Synthetic UC48 terms';
+        $hash = hash('sha256', $terms);
+        $agreement = $db->table('partner_agreements')->insertGetId(['version' => 'UC48-'.bin2hex(random_bytes(8)),
+            'title' => $terms, 'terms_body' => $terms, 'content_sha256' => $hash, 'effective_at' => $stamp, 'status' => 'PUBLISHED']);
+
+        return $db->table('host_agreement_acceptances')->insertGetId(['host_id' => $host, 'partner_agreement_id' => $agreement,
+            'accepted_content_sha256' => $hash, 'accepted_at' => $stamp]);
+    }
+
+    public static function commission(Application $app, array $base, int $acceptance, ?string $settledAt, string $amount, string $status = 'SETTLED'): void
+    {
+        $booking = self::booking($app, $base, '2026-09-01 00:00:00', 'COMPLETED');
+        $invoice = self::invoice($app, $booking, '2026-09-02 00:00:00', '100.25');
+        $app['db']->connection()->table('booking_commissions')->insert(['invoice_id' => $invoice, 'booking_id' => $booking,
+            'host_id' => $base['actors']['host'], 'host_agreement_acceptance_id' => $acceptance,
+            'reference_code' => 'UC48-C-'.bin2hex(random_bytes(8)), 'commission_base' => '100.25',
+            'commission_rate_bps' => 1000, 'commission_amount' => $amount, 'status' => $status, 'settled_at' => $settledAt]);
+    }
+
     public static function contract(Application $app, array $manifest): array
     {
         $base = self::base($app, $manifest);

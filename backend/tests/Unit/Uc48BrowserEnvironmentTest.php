@@ -105,7 +105,7 @@ final class Uc48BrowserEnvironmentTest extends TestCase
     {
         $spec = Uc48BrowserFixtures::specification($scenario, '2026-11-20T05:00:00Z');
         $data = Uc48BrowserFixtures::oracle($spec, '2026-11-20T05:00:00Z');
-        $this->assertSame(['bookings_count' => $bookings, 'revenue_total' => $revenue], $data['summary']);
+        $this->assertSame(['bookings_count' => $bookings, 'revenue_total' => $revenue, 'commission_revenue_total' => '0.00'], $data['summary']);
         $this->assertSame($missing, $data['warnings']['paid_invoices_missing_paid_at_global_count']);
         $this->assertSame('2025-12', $data['period']['from_month']);
         $this->assertSame('2026-11', $data['period']['to_month']);
@@ -120,7 +120,7 @@ final class Uc48BrowserEnvironmentTest extends TestCase
             ['2026-09', '2026-09', 0, '0.75'], ['2026-08', '2026-08', 0, '19999999999.98'],
             ['2026-12', '2026-12', 0, '0.00']] as [$from, $to, $bookings, $revenue]) {
             $data = Uc48BrowserFixtures::oracle($spec, '2026-11-20T05:00:00Z', ['from_month' => $from, 'to_month' => $to]);
-            $this->assertSame(['bookings_count' => $bookings, 'revenue_total' => $revenue], $data['summary']);
+            $this->assertSame(['bookings_count' => $bookings, 'revenue_total' => $revenue, 'commission_revenue_total' => '0.00'], $data['summary']);
             $this->assertSame(1, $data['warnings']['paid_invoices_missing_paid_at_global_count']);
         }
         $data = Uc48BrowserFixtures::oracle($spec, '2026-10-31T17:00:00Z', ['from_month' => '2026-10', 'to_month' => '2026-11']);
