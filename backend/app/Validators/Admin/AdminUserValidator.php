@@ -14,11 +14,11 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 class AdminUserValidator
 {
     /**
-     * Bắt buộc tài khoản thực thi phải có vai trò ADMIN.
+     * Bắt buộc tài khoản thực thi phải là ADMIN đang hoạt động.
      */
     public function authorizeAdmin(?User $actor): void
     {
-        if ($actor === null || ($actor->role?->value !== UserRole::ADMIN->value && $actor->role !== UserRole::ADMIN->value)) {
+        if ($actor === null || $actor->role !== UserRole::ADMIN || $actor->status !== UserStatus::ACTIVE) {
             throw new AuthorizationException('Chỉ Quản trị viên (Admin) mới có quyền truy cập chức năng này.');
         }
     }

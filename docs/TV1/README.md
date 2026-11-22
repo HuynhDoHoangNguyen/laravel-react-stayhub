@@ -20,6 +20,10 @@ Thư mục này lưu kết quả khảo sát và báo cáo triển khai của **
 | [UC22-REPORT.md](UC22-REPORT.md) | UC22-01 xem/gán, UC22-02 gỡ và UC22-FINAL | Đã nghiệm thu xem/gán/gỡ/gán lại, kể cả gỡ tiện nghi đã ngưng. Gán/gỡ đồng thời trên MySQL/MariaDB và mất phản hồi với Laravel thật còn mở |
 | [UC51-REPORT.md](UC51-REPORT.md) | UC51: query kiểm tra lịch bảo trì theo khoảng lưu trú, contract bàn giao TV2 | Lõi query và automated tests PASS; chưa tích hợp Availability/Booking TV2 |
 | [UC52-REPORT.md](UC52-REPORT.md) | UC52: validator kiểm tra sức chứa một phòng, contract bàn giao TV2 và unit tests | Lõi validator và automated tests PASS; chưa tích hợp Availability/Booking TV2 |
+| [UC40-REPORT.md](UC40-REPORT.md) | UC40-01/02: Admin xem danh sách và chi tiết Customer, tìm kiếm/lọc/phân trang, dialog và URL state | Hai task TECHNICAL PASS: backend/Node/lint/build và browser SQLite fixture; chờ developer review, chưa kiểm chứng runtime MySQL |
+| [UC41-REPORT.md](UC41-REPORT.md) | UC41-01/02: Admin xem danh sách/chi tiết Host, đếm cơ sở, URL state và dialog | Hai task TECHNICAL PASS: automated checks và browser SQLite fixture; chờ developer review, chưa kiểm chứng runtime MySQL |
+| [UC42-REPORT.md](UC42-REPORT.md) | UC42-01/02/03: API và giao diện khóa/mở Customer/Host, xác nhận, phục hồi và session | Host UI và session đã kiểm chứng. Chờ developer review. MySQL concurrency chưa kiểm chứng |
+| [MERGE-FIX-REPORT.md](MERGE-FIX-REPORT.md) | MERGE-FIX-01/02: hợp nhất route/contract, duyệt Host độc lập account status và counts thực | MERGE-FIX-02 TECHNICAL PASS: 3.262 backend passed/575 skipped, 545 Node, 28 browser và scope/cleanup PASS; chờ developer review, chưa kiểm MySQL concurrency |
 
 ## Quy ước
 

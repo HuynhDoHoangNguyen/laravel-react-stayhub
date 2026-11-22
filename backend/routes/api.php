@@ -22,6 +22,7 @@ require __DIR__ . '/api/catalog.php';
 require __DIR__ . '/api/agreements.php';
 require __DIR__ . '/api/commissions.php';
 require __DIR__ . '/api/dashboard.php';
+require __DIR__ . '/api/users.php';
 require __DIR__ . '/api/admin_users.php';
 require __DIR__ . '/api/admin-bookings.php';
 require __DIR__ . '/api/chatbot.php';

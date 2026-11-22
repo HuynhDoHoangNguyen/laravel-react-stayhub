@@ -6,6 +6,7 @@ use App\Enums\UserRole;
 use App\Enums\UserStatus;
 use App\Models\User;
 use App\Repositories\Admin\AdminUserRepository;
+use App\Validators\Admin\AdminUserValidator;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -16,6 +17,7 @@ class AdminUserService
 {
     public function __construct(
         protected readonly AdminUserRepository $repository,
+        private readonly AdminUserValidator $validator,
     ) {}
 
     /**
@@ -33,12 +35,14 @@ class AdminUserService
     }
 
     /**
-     * Admin phê duyệt tài khoản Đối tác (Host), mở khóa toàn bộ chức năng kinh doanh của Host.
+     * Phê duyệt đối tác độc lập với trạng thái hoạt động/khóa tài khoản.
      */
     public function approveHost(int $userId, int $adminId): User
     {
         return DB::transaction(function () use ($userId, $adminId): User {
-            $user = $this->repository->findForUpdate($userId);
+            $users = $this->repository->lockApprovalUsers($adminId, $userId);
+            $this->validator->authorizeAdmin($users->get($adminId));
+            $user = $users->get($userId);
             if ($user === null) {
                 throw new NotFoundHttpException('Không tìm thấy tài khoản người dùng.');
             }
@@ -50,23 +54,15 @@ class AdminUserService
                 ]);
             }
 
-            \App\Models\HostAgreementAcceptance::query()
-                ->where('host_id', $user->id)
-                ->where('method', 'REGISTRATION_PENDING')
-                ->update(['method' => 'REGISTRATION_APPROVED']);
-
-            if ($user->status !== UserStatus::ACTIVE) {
-                $user->status = UserStatus::ACTIVE;
+            $changed = $this->repository->approvePendingAcceptances($userId);
+            $approved = $this->repository->findWithAdminFacts($userId)
+                ?? throw new NotFoundHttpException('Không tìm thấy tài khoản người dùng.');
+            if ($changed > 0) {
+                $context = ['admin_id' => $adminId, 'host_id' => $userId];
+                DB::afterCommit(static fn () => Log::info('Admin đã phê duyệt Đối tác (Host).', $context));
             }
 
-            $saved = $this->repository->save($user);
-
-            DB::afterCommit(fn () => Log::info('Admin đã phê duyệt mở khóa tài khoản Đối tác (Host).', [
-                'admin_id' => $adminId,
-                'host_id' => $saved->id,
-            ]));
-
-            return $saved;
+            return $approved;
         });
     }
 
