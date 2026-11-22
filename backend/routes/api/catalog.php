@@ -6,8 +6,20 @@ use App\Http\Controllers\Catalog\HostPropertyController;
 use App\Http\Controllers\Catalog\HostPropertyImageController;
 use App\Http\Controllers\Catalog\HostRoomTypeController;
 use App\Http\Controllers\Catalog\HostRoomController;
+use App\Http\Controllers\Catalog\HostRoomAmenityController;
 use App\Http\Middleware\EnsureHostIsApproved;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Catalog\HostRoomImageController;
+
+Route::patch('/host/rooms/{room}/images/{image}/primary', [HostRoomImageController::class, 'primary'])
+    ->middleware(['auth:sanctum', 'account.active', EnsureHostIsApproved::class]);
+Route::delete('/host/rooms/{room}/images/{image}', [HostRoomImageController::class, 'destroy'])
+    ->middleware(['auth:sanctum', 'account.active', EnsureHostIsApproved::class]);
+
+Route::get('/host/rooms/{room}/images', [HostRoomImageController::class, 'index'])
+    ->middleware(['auth:sanctum', 'account.active', EnsureHostIsApproved::class]);
+Route::post('/host/rooms/{room}/images', [HostRoomImageController::class, 'store'])
+    ->middleware(['auth:sanctum', 'account.active', EnsureHostIsApproved::class]);
 
 Route::get('/public/rooms', [PublicRoomController::class, 'index']);
 Route::get('/public/rooms/filter-options', [PublicRoomController::class, 'filterOptions']);
@@ -54,6 +66,13 @@ Route::patch('/host/rooms/{room}/status', [HostRoomController::class, 'changeSta
     ->middleware(['auth:sanctum', 'account.active', EnsureHostIsApproved::class]);
 
 Route::put('/host/rooms/{room}', [HostRoomController::class, 'update'])
+    ->middleware(['auth:sanctum', 'account.active', EnsureHostIsApproved::class]);
+
+Route::get('/host/rooms/{room}/amenities', [HostRoomAmenityController::class, 'index'])
+    ->middleware(['auth:sanctum', 'account.active', EnsureHostIsApproved::class]);
+Route::put('/host/rooms/{room}/amenities/{amenity}', [HostRoomAmenityController::class, 'assign'])
+    ->middleware(['auth:sanctum', 'account.active', EnsureHostIsApproved::class]);
+Route::delete('/host/rooms/{room}/amenities/{amenity}', [HostRoomAmenityController::class, 'destroy'])
     ->middleware(['auth:sanctum', 'account.active', EnsureHostIsApproved::class]);
 
 Route::get('/host/rooms/{room}', [HostRoomController::class, 'show'])

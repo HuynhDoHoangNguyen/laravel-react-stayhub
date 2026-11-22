@@ -17,13 +17,16 @@ test('COM-04 / COM-05: hostCommissionService connects to real endpoints', async 
     assert.match(code, /api\.post\(`\/api\/host\/commissions\/\$\{id\}\/remittances`/);
 });
 
-test('COM-07: CommissionRemittanceDialog displays real bank instructions and idempotency handling', async () => {
+test('COM-07: CommissionRemittanceDialog displays dynamic payment_instructions and missing config fallback without hardcoded bank info', async () => {
     const code = await readFile(dialogPath, 'utf8');
 
-    // Bank instructions
-    assert.match(code, /Vietcombank/);
-    assert.match(code, /1029384756/);
-    assert.match(code, /CONG TY CP CONG NGHE STAYHUB/);
+    // Dynamic bank instructions from API payment_instructions (no hardcoded account)
+    assert.doesNotMatch(code, /1029384756/);
+    assert.match(code, /payment_instructions/);
+    assert.match(code, /instructions\.bank_name/);
+    assert.match(code, /instructions\.account_number/);
+    assert.match(code, /instructions\.account_holder/);
+    assert.match(code, /Chưa có hướng dẫn chuyển khoản/);
     assert.match(code, /reference_code/);
 
     // Form inputs and Idempotency key
