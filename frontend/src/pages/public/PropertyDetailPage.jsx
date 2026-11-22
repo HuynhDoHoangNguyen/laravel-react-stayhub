@@ -1,5 +1,4 @@
 import { Link, useLocation, useParams } from 'react-router-dom';
-import { useState } from 'react';
 import { useCatalogResource } from '../../hooks/useCatalogResource';
 import { propertyService } from '../../services/propertyService';
 import { searchBackLink } from '../../utils/searchNavigation';
@@ -8,8 +7,7 @@ import { PropertyGallery } from '../../components/hotel/PropertyGallery';
 import { PropertyAmenities } from '../../components/hotel/PropertyAmenities';
 import { RoomsList } from '../../components/hotel/RoomsList';
 import { ReviewsSection } from '../../components/hotel/ReviewsSection';
-import { PropertyBookingPanel } from '../../components/hotel/PropertyBookingPanel';
-import { usePropertyAvailability, propertyRoomStatus } from '../../hooks/usePropertyAvailability';
+import { usePropertyAvailability } from '../../hooks/usePropertyAvailability';
 import { readPropertyBooking } from '../../utils/propertyBooking';
 import { DetailAction } from '../../components/hotel/DetailAction';
 import { DetailBreadcrumbs } from '../../components/hotel/DetailBreadcrumbs';
@@ -41,25 +39,18 @@ function PropertyView({ id }) {
 function PropertyStay({ property, source, location }) {
     const context = readPropertyBooking(location.search);
     const availability = usePropertyAvailability(property.id, context, source);
-    const [selectedRoomId, setSelectedRoomId] = useState(() => new URLSearchParams(location.search).get('roomId'));
-    const selectedRoom = context.status === 'valid' && propertyRoomStatus(availability, selectedRoomId) === 'available'
-        ? property.rooms.find(room => String(room.id) === String(selectedRoomId)) : null;
-    const retry = () => { setSelectedRoomId(null); availability.retry(); };
     return (
-            <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
-                <div data-detail-region="gallery" className="min-w-0 lg:col-start-1 lg:row-start-1">
-                    <PropertyGallery photos={property.photos} name={property.name} />
-                </div>
-                <div data-detail-region="booking" className="min-w-0 lg:sticky lg:top-24 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-start">
-                    <PropertyBookingPanel property={property} context={context} availability={availability} selectedRoom={selectedRoom} onRetry={retry} />
-                </div>
-                <div data-detail-region="content" className="min-w-0 space-y-10 lg:col-start-1 lg:row-start-2">
-                    <section><h2 className="font-display text-2xl text-primary">Giới thiệu</h2><p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{property.description || 'Chưa có mô tả cơ sở.'}</p></section>
-                    <PropertyAmenities amenities={property.amenities} />
-                    <RoomsList rooms={property.rooms} selectedRoomId={selectedRoom?.id} onSelect={room => setSelectedRoomId(room.id)}
-                        booking={{ propertyId: property.id, context, availability, search: location.search, state: location.state }} />
-                    <ReviewsSection propertyId={property.id} propertySource={source} />
-                </div>
+        <div className="space-y-10">
+            <div data-detail-region="gallery" className="min-w-0">
+                <PropertyGallery photos={property.photos} name={property.name} />
             </div>
+            <div data-detail-region="content" className="min-w-0 space-y-10">
+                <section><h2 className="font-display text-2xl text-primary">Giới thiệu</h2><p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{property.description || 'Chưa có mô tả cơ sở.'}</p></section>
+                <PropertyAmenities amenities={property.amenities} />
+                <RoomsList rooms={property.rooms}
+                    booking={{ propertyId: property.id, source, context, availability, search: location.search, state: location.state }} />
+                <ReviewsSection propertyId={property.id} propertySource={source} />
+            </div>
+        </div>
     );
 }

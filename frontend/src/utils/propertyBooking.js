@@ -65,6 +65,19 @@ export function checkoutTarget(propertyId, roomId, context) {
         roomId: String(requireApiId(roomId, 'Mã phòng')) }).toString() + '&' + bookingContextQuery(context);
 }
 
+export function directRoomCheckoutTarget(propertyId, roomId, context) {
+    if (!context || context.status === 'invalid') return null;
+    if (context.status === 'valid') return checkoutTarget(propertyId, roomId, context);
+    if (context.checkIn || context.checkOut) return null;
+    const params = new URLSearchParams({
+        propertyId: String(requireApiId(propertyId, 'Mã cơ sở')),
+        roomId: String(requireApiId(roomId, 'Mã phòng')),
+        adults: String(Number.isSafeInteger(context.adults) && context.adults > 0 ? context.adults : 2),
+        children: String(Number.isSafeInteger(context.children) && context.children >= 0 ? context.children : 0),
+    });
+    return '/customer/checkout?' + params.toString();
+}
+
 export function bookingSearchTarget(context) {
     const url = new URLSearchParams();
     if (context.checkIn) url.set('startDate', context.checkIn);
