@@ -67,10 +67,12 @@ final class AdminInvoiceListApiMySqlTest extends Uc45MySqlTestCase
             ->assertJsonPath('meta.total', 12)->assertJsonPath('meta.last_page', 2)->json();
         $this->assertSame(['data', 'links', 'meta'], array_keys($body));
         $this->assertSame(array_slice(array_reverse($this->fixture['invoices']), 0, 10), array_column($body['data'], 'id'));
+        $bookings = $this->app['db']->table('bookings')->whereIn('id', $this->fixture['bookings'])->pluck('booking_code', 'id');
         foreach ($body['data'] as $row) {
-            $this->assertSame(['id', 'invoice_code', 'booking_id', 'customer_name', 'property_name', 'room_name',
+            $this->assertSame(['id', 'invoice_code', 'booking_id', 'booking_code', 'customer_name', 'property_name', 'room_name',
                 'total_amount', 'payment_status', 'paid_at', 'created_at'], array_keys($row));
             $this->assertIsInt($row['booking_id']);
+            $this->assertSame($bookings[$row['booking_id']], $row['booking_code']);
             $this->assertSame('208.50', $row['total_amount']);
             $this->assertSame('2026-11-18T02:00:00.000000Z', $row['created_at']);
         }

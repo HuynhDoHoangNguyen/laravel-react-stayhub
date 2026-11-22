@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { mapAdminCommissionSummaryResponse } from '../src/mappers/commissionMapper.js';
 
 const hostServicePath = fileURLToPath(new URL('../src/services/hostCommissionService.js', import.meta.url));
 const adminServicePath = fileURLToPath(new URL('../src/services/adminCommissionService.js', import.meta.url));
@@ -53,4 +54,29 @@ test('RPT-02: AdminDashboardPage renders settled platform revenue, outstanding r
 
     // Direct link to remittance queue
     assert.match(code, /to="\/admin\/commissions"/);
+});
+
+const commissionSummary = () => ({ success: true, data: {
+    total_assessed: '0.00', total_settled: '0.00', settled_count: 0, total_outstanding: '0.00',
+    total_due: '0.00', due_count: 0, total_under_review: '0.00', under_review_count: 0,
+    total_overdue: '0.00', overdue_count: 0, pending_remittances_count: 0,
+} });
+
+test('admin commission summary preserves valid zero and exact settled amounts', () => {
+    assert.deepEqual(mapAdminCommissionSummaryResponse(commissionSummary()), commissionSummary());
+    const report = commissionSummary();
+    report.data.total_assessed = report.data.total_settled = '9007199254740993.01';
+    report.data.settled_count = 1;
+    assert.deepEqual(mapAdminCommissionSummaryResponse(report), report);
+});
+
+test('admin commission summary rejects missing or invalid totals without substituting zero', () => {
+    for (const amount of [undefined, null, 0, '0', '1.001', '0.00\n', '-1.00']) {
+        const report = commissionSummary();
+        report.data.total_settled = amount;
+        assert.throws(() => mapAdminCommissionSummaryResponse(report), { code: 'INVALID_COMMISSION_SUMMARY_RESPONSE' });
+    }
+    for (const report of [{ success: false, data: commissionSummary().data }, { success: true, data: {} }]) {
+        assert.throws(() => mapAdminCommissionSummaryResponse(report), { code: 'INVALID_COMMISSION_SUMMARY_RESPONSE' });
+    }
 });

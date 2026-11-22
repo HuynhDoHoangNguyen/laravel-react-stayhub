@@ -33,6 +33,7 @@ const FILTER_TABS = [
 export default function AdminUsersPage() {
     const { user: actor, captureProfileAuth, isProfileAuthCurrent } = useAuth();
     const [activeTab, setActiveTab] = useState('ALL');
+    const [focusedTab, setFocusedTab] = useState(null);
     const [statusFilter, setStatusFilter] = useState('ALL');
     const [keywordInput, setKeywordInput] = useState('');
     const [appliedKeyword, setAppliedKeyword] = useState('');
@@ -123,6 +124,23 @@ export default function AdminUsersPage() {
         setActiveTab(tabId);
         setPage(1);
     };
+
+    function handleTabKeyDown(event) {
+        const tabs = Array.from(event.currentTarget.querySelectorAll('[role="tab"]'));
+        const index = tabs.indexOf(event.target);
+        if (index < 0) return;
+
+        let nextIndex;
+        switch (event.key) {
+            case 'ArrowLeft': nextIndex = (index + tabs.length - 1) % tabs.length; break;
+            case 'ArrowRight': nextIndex = (index + 1) % tabs.length; break;
+            case 'Home': nextIndex = 0; break;
+            case 'End': nextIndex = tabs.length - 1; break;
+            default: return;
+        }
+        event.preventDefault();
+        tabs[nextIndex].focus();
+    }
 
     const handleReload = () => {
         setReloadTrigger((prev) => prev + 1);
@@ -316,15 +334,23 @@ export default function AdminUsersPage() {
 
             {/* Filter Tabs & Search Bar */}
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b border-border/70 pb-4">
-                <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Lọc người dùng theo nhóm">
+                <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Lọc người dùng theo nhóm"
+                    onKeyDown={handleTabKeyDown}
+                    onBlur={(event) => {
+                        if (!event.currentTarget.contains(event.relatedTarget)) setFocusedTab(null);
+                    }}>
                     {FILTER_TABS.map((tab) => (
                         <button
                             key={tab.id}
                             type="button"
                             role="tab"
+                            id={`admin-users-tab-${tab.id}`}
                             aria-selected={activeTab === tab.id}
+                            aria-controls="admin-users-results"
+                            tabIndex={(focusedTab ?? activeTab) === tab.id ? 0 : -1}
+                            onFocus={() => setFocusedTab(tab.id)}
                             onClick={() => handleTabChange(tab.id)}
-                            className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition-all inline-flex items-center gap-1.5 ${
+                            className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition-all inline-flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
                                 activeTab === tab.id
                                     ? 'bg-primary text-primary-foreground shadow-xs'
                                     : 'border border-border/70 bg-card text-muted-foreground hover:text-ink'
@@ -374,7 +400,9 @@ export default function AdminUsersPage() {
             </div>
 
             {/* Users Table */}
-            <div className="rounded-2xl border border-border/70 bg-card shadow-xs overflow-hidden">
+            <div id="admin-users-results" role="tabpanel" aria-labelledby={`admin-users-tab-${activeTab}`}
+                aria-busy={isLoading} tabIndex={0}
+                className="rounded-2xl border border-border/70 bg-card shadow-xs overflow-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
                 {isLoading ? (
                     <div className="flex items-center justify-center py-16">
                         <Loader2 className="h-6 w-6 animate-spin text-primary mr-2" />

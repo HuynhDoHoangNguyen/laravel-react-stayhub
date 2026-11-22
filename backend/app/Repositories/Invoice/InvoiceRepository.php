@@ -45,7 +45,7 @@ final class InvoiceRepository
 
     public function paginateForAdmin(AdminInvoiceFilterRequest $filters): LengthAwarePaginator
     {
-        $query = Invoice::query();
+        $query = Invoice::query()->leftJoin('bookings', 'bookings.id', '=', 'invoices.booking_id');
         if ($filters->hostId !== null) {
             $query->whereHas('booking.room.property', fn (Builder $property) => $property->where('host_id', $filters->hostId));
         }
@@ -53,21 +53,22 @@ final class InvoiceRepository
             $query->whereHas('booking.room', fn (Builder $room) => $room->where('property_id', $filters->propertyId));
         }
         if ($filters->status !== null) {
-            $query->where('payment_status', $filters->status);
+            $query->where('invoices.payment_status', $filters->status);
         }
         if ($filters->search !== null) {
             // Use ! as an explicit escape character; behavior does not depend on SQL backslash mode.
             $search = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $filters->search).'%';
             $query->where(function (Builder $group) use ($search): void {
-                $group->whereRaw("invoice_code LIKE ? ESCAPE '!'", [$search])
-                    ->orWhereRaw("customer_name LIKE ? ESCAPE '!'", [$search])
-                    ->orWhereRaw("property_name LIKE ? ESCAPE '!'", [$search]);
+                $group->whereRaw("invoices.invoice_code LIKE ? ESCAPE '!'", [$search])
+                    ->orWhereRaw("invoices.customer_name LIKE ? ESCAPE '!'", [$search])
+                    ->orWhereRaw("invoices.property_name LIKE ? ESCAPE '!'", [$search]);
             });
         }
-        return $query->orderByDesc('created_at')->orderByDesc('id')
+        return $query->orderByDesc('invoices.created_at')->orderByDesc('invoices.id')
             ->paginate($filters->perPage, [
-                'id', 'invoice_code', 'booking_id', 'customer_name', 'property_name', 'room_name',
-                'total_amount', 'payment_status', 'paid_at', 'created_at',
+                'invoices.id', 'invoices.invoice_code', 'invoices.booking_id', 'bookings.booking_code',
+                'invoices.customer_name', 'invoices.property_name', 'invoices.room_name',
+                'invoices.total_amount', 'invoices.payment_status', 'invoices.paid_at', 'invoices.created_at',
             ], 'page', $filters->page)->appends($filters->toQuery());
     }
 

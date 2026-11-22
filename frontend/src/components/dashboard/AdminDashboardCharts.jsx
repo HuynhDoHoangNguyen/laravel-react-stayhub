@@ -41,25 +41,27 @@ function BookingChart({ statuses }) {
   </section>;
 }
 
-function RevenueChart({ revenue }) {
+function RevenueChart({ monthly, settledCommissionsHref }) {
   const [selectedMonth, setSelectedMonth] = useState(null);
-  const matchingIndex = revenue.findIndex((row) => row.month === selectedMonth);
-  const selectedIndex = matchingIndex < 0 ? revenue.length - 1 : matchingIndex;
-  const rows = revenue.map((row) => ({ key: row.month, label: monthLabel(row.month), value: row.total_amount, display: formatDashboardRevenue(row.total_amount) }));
+  const matchingIndex = monthly.findIndex((row) => row.month === selectedMonth);
+  const selectedIndex = matchingIndex < 0 ? monthly.length - 1 : matchingIndex;
+  const rows = monthly.map(({ month, commission_revenue_total: amount }) => ({
+    key: month, label: monthLabel(month), value: amount, display: formatDashboardRevenue(amount),
+  }));
   // Money remains decimal strings; only bounded presentation ratios become coordinates.
   const heights = dashboardBarWidths(rows.map((row) => row.value));
-  const points = heights.map((height, index) => ({ x: 16 + index * 568 / (rows.length - 1), y: 178 - height * 1.5 }));
+  const points = heights.map((height, index) => ({ x: rows.length === 1 ? 300 : 16 + index * 568 / (rows.length - 1), y: 178 - height * 1.5 }));
   const line = points.map((point) => `${point.x},${point.y}`).join(' ');
   const selected = rows[selectedIndex];
-  return <section className="admin-dashboard__chart-card">
+  return <section className="admin-dashboard__chart-card" aria-labelledby="dashboard-revenue-chart-title">
     <header className="admin-dashboard__chart-heading">
       <span className="admin-dashboard__chart-icon admin-dashboard__chart-icon--revenue"><ChartNoAxesCombined size={21} aria-hidden="true" /></span>
-      <div><h2>Doanh thu 12 tháng gần nhất</h2><p>{monthLabel(revenue[0].month)} – {monthLabel(revenue.at(-1).month)} · Giờ Việt Nam</p></div>
+      <div><h2 id="dashboard-revenue-chart-title">Doanh thu nền tảng 12 tháng gần nhất</h2><p>{rows[0].label} – {rows.at(-1).label} · Giờ Việt Nam</p></div>
     </header>
-    <p className="admin-dashboard__chart-description">Tháng hiện tại tính đến thời điểm báo cáo. KPI doanh thu là toàn thời gian.</p>
-    <div className="admin-dashboard__revenue-value"><span>Tháng {selected.label}</span><strong>{selected.display}</strong></div>
-    {heights.every((height) => height === 0) && <p className="admin-dashboard__chart-empty">Chưa có doanh thu trong 12 tháng này.</p>}
-    <svg className="admin-dashboard__line-chart" viewBox="0 0 600 200" role="img" aria-label="Biểu đồ đường doanh thu theo tháng; chọn tháng hoặc mở số liệu bên dưới để xem giá trị chính xác.">
+    <p className="admin-dashboard__chart-description">Hoa hồng đã đối soát theo tháng. Tháng hiện tại tính đến thời điểm báo cáo.</p>
+    <div className="admin-dashboard__revenue-value" aria-live="polite"><span>Tháng {selected.label}</span><strong>{selected.display}</strong></div>
+    {heights.every((height) => height === 0) && <p className="admin-dashboard__chart-empty">Chưa có doanh thu nền tảng trong kỳ này.</p>}
+    <svg className="admin-dashboard__line-chart" viewBox="0 0 600 200" role="img" aria-label="Biểu đồ đường hoa hồng đã đối soát theo tháng. Chọn tháng hoặc mở số liệu bên dưới để xem giá trị.">
       <g aria-hidden="true">
         {[28, 78, 128, 178].map((y) => <line className="admin-dashboard__gridline" key={y} x1="16" x2="584" y1={y} y2={y} />)}
         <polygon className="admin-dashboard__line-area" points={`16,178 ${line} 584,178`} />
@@ -73,11 +75,23 @@ function RevenueChart({ revenue }) {
     <div className="admin-dashboard__months" role="group" aria-label="Chọn tháng xem doanh thu">
       {rows.map((row) => <button key={row.key} type="button" aria-pressed={row.key === selected.key} aria-label={`Tháng ${row.label}: ${row.display}`} onClick={() => setSelectedMonth(row.key)}>{row.key.slice(5)}</button>)}
     </div>
-    <div className="admin-dashboard__chart-footer"><span>Chọn tháng để xem doanh thu</span><Link to="/admin/invoices" className="admin-dashboard__link">Xem hóa đơn <ArrowUpRight size={15} aria-hidden="true" /></Link></div>
-    <DataTable rows={rows} valueLabel="Doanh thu" caption="Doanh thu theo tháng, đơn vị VND" />
+    <div className="admin-dashboard__chart-footer">
+      <Link to={settledCommissionsHref} className="admin-dashboard__link">
+        Xem tất cả hoa hồng đã thu <ArrowUpRight size={15} aria-hidden="true" />
+      </Link>
+    </div>
+    <DataTable rows={rows} valueLabel="Hoa hồng đã đối soát" caption="Doanh thu nền tảng theo tháng, đơn vị VND" />
   </section>;
 }
 
-export default function AdminDashboardCharts({ statuses, revenue }) {
-  return <div className="admin-dashboard__charts"><BookingChart statuses={statuses} /><RevenueChart revenue={revenue} /></div>;
+export default function AdminDashboardCharts({ statuses, monthly, settledCommissionsHref, revenueFallback }) {
+  return <div className="admin-dashboard__charts">
+    {statuses && <BookingChart statuses={statuses} />}
+    {monthly ? <RevenueChart monthly={monthly} settledCommissionsHref={settledCommissionsHref} /> : (
+      <section className="admin-dashboard__chart-card" aria-labelledby="dashboard-revenue-chart-title">
+        <h2 id="dashboard-revenue-chart-title" className="font-semibold">Doanh thu nền tảng 12 tháng gần nhất</h2>
+        <div className="mt-3">{revenueFallback}</div>
+      </section>
+    )}
+  </div>;
 }

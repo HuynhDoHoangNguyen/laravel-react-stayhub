@@ -111,11 +111,12 @@ test('Host options reject bad envelopes, IDs, names, duplicate rows and paginati
   for (const body of cases) assert.throws(() => mapAdminInvoiceHostOptionsResponse(body), (error) => error.kind === 'contract');
 });
 
-test('Admin maps exactly ten fields with decimal/date/null snapshots and cloned pagination', () => {
-  const source = invoice();
+test('Admin maps booking code with decimal/date/null snapshots and cloned pagination', () => {
+  const source = { ...invoice(), booking_code: 'BK-11' };
   const body = freeze(list([{ ...source, items: [{ private: true }] }]));
   const output = mapAdminInvoiceListResponse(body);
-  assert.equal(Object.keys(output.data[0]).length, 10);
+  assert.equal(Object.keys(output.data[0]).length, 11);
+  assert.equal(output.data[0].booking_code, 'BK-11');
   for (const field of ['customer_email', 'customer_phone', 'items', 'subtotal', 'discount_amount', 'extra_fee']) {
     assert.equal(field in output.data[0], false);
   }
@@ -125,6 +126,8 @@ test('Admin maps exactly ten fields with decimal/date/null snapshots and cloned 
   assert.notEqual(output.links, body.links);
   const minimal = Object.fromEntries(Object.keys(output.data[0]).map((field) => [field, source[field]]));
   assert.deepEqual(mapAdminInvoiceListResponse(list([minimal])).data[0], minimal);
+  assert.equal(mapAdminInvoiceListResponse(list([{ ...minimal, booking_code: null }])).data[0].booking_code, null);
+  assert.equal(Object.hasOwn(mapAdminInvoiceListResponse(list([invoice()])).data[0], 'booking_code'), false);
   assert.deepEqual(mapAdminInvoiceListResponse(list([])).data, []);
   for (const payment_status of ['UNPAID', 'PAID', 'REFUNDED']) {
     assert.equal(mapAdminInvoiceListResponse(list([{ ...minimal, payment_status, paid_at: null, created_at: null }])).data[0].payment_status, payment_status);
@@ -132,7 +135,7 @@ test('Admin maps exactly ten fields with decimal/date/null snapshots and cloned 
 });
 
 test('Admin rejects malformed success instead of disguising it as empty data', () => {
-  const changes = [{ id: '7' }, { booking_id: 0 }, { customer_name: null }, { total_amount: 123 },
+  const changes = [{ id: '7' }, { booking_id: 0 }, { booking_code: 11 }, { booking_code: ' ' }, { customer_name: null }, { total_amount: 123 },
     { total_amount: '1.2' }, { total_amount: '1e2' }, { payment_status: 'FUTURE' },
     { paid_at: undefined }, { created_at: 'invalid' }];
   const cases = [null, {}, { ...list(), data: null }, { ...list(), meta: {} },

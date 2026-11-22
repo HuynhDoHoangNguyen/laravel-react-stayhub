@@ -137,8 +137,148 @@ class AdminCommissionApiTest extends TestCase
             ->assertJsonPath('data.0.status', 'SUBMITTED');
     }
 
+    private function addCommission(string $code, array $attributes): BookingCommission
+    {
+        $booking = $this->commission->booking->replicate();
+        $booking->booking_code = 'BK-'.$code;
+        $booking->save();
+        $invoice = $this->commission->invoice->replicate();
+        $invoice->fill(['invoice_code' => 'INV-'.$code, 'booking_id' => $booking->id])->save();
+        $commission = $this->commission->replicate();
+        $commission->forceFill([...$attributes, 'reference_code' => $code, 'invoice_id' => $invoice->id, 'booking_id' => $booking->id])->save();
+
+        return $commission;
+    }
+
+    public function test_admin_commission_date_filter_validates_after_authorization(): void
+    {
+        $base = '/api/admin/commissions';
+        $this->getJson($base.'?date_field=invalid')->assertUnauthorized();
+        $this->actingAs($this->host)->getJson($base.'?from_date=invalid')->assertForbidden();
+        $this->actingAs($this->admin);
+        foreach ([
+            ['date_field=unknown', 'date_field'],
+            ['from_date%5B%5D=2026-11-22', 'from_date'],
+            ['from_date=2026-02-29', 'from_date'],
+            ['to_date=2026-11-1', 'to_date'],
+            ['from_date=2026-11-23&to_date=2026-11-22', 'to_date'],
+        ] as [$query, $field]) {
+            $this->getJson($base.'?'.$query)->assertUnprocessable()->assertJsonValidationErrors($field);
+        }
+    }
+
+    public function test_admin_queue_date_filter_validates_after_authorization(): void
+    {
+        $base = '/api/admin/commission-remittances';
+        $this->getJson($base.'?from_date=invalid')->assertUnauthorized();
+        $this->actingAs($this->host)->getJson($base.'?from_date=invalid')->assertForbidden();
+        $this->actingAs($this->admin);
+        foreach ([
+            ['from_date%5B%5D=2026-11-22', 'from_date'],
+            ['from_date=2026-02-29', 'from_date'],
+            ['to_date=2026-11-1', 'to_date'],
+            ['from_date=2026-11-23&to_date=2026-11-22', 'to_date'],
+        ] as [$query, $field]) {
+            $this->getJson($base.'?'.$query)->assertUnprocessable()->assertJsonValidationErrors($field);
+        }
+    }
+
+    public function test_admin_queue_filters_submission_day_status_and_paginates_in_stable_order(): void
+    {
+        $this->remittance->update(['submitted_at' => '2026-11-21 17:00:00']);
+        $addRemittance = function (string $code, string $submittedAt, RemittanceStatus $status = RemittanceStatus::SUBMITTED) {
+            $commission = $this->addCommission('SHF-'.$code, []);
+            $remittance = $this->remittance->replicate();
+            $remittance->fill([
+                'booking_commission_id' => $commission->id,
+                'idempotency_key' => $code,
+                'submitted_at' => $submittedAt,
+                'status' => $status,
+            ])->save();
+
+            return $remittance;
+        };
+        $before = $addRemittance('QUEUE-BEFORE', '2026-11-21 16:59:59');
+        $tie = $addRemittance('QUEUE-TIE', '2026-11-21 17:00:00');
+        $end = $addRemittance('QUEUE-END', '2026-11-22 16:59:59', RemittanceStatus::VERIFIED);
+        $after = $addRemittance('QUEUE-AFTER', '2026-11-22 17:00:00');
+
+        $this->actingAs($this->admin);
+        $base = '/api/admin/commission-remittances?';
+        $day = 'from_date=2026-11-22&to_date=2026-11-22';
+        $this->getJson($base.$day.'&per_page=1')->assertOk()
+            ->assertJsonPath('meta.total', 2)->assertJsonPath('meta.last_page', 2)
+            ->assertJsonPath('data.0.id', $tie->id);
+        $this->getJson($base.$day.'&per_page=1&page=2')->assertOk()
+            ->assertJsonPath('data.0.id', $this->remittance->id);
+        $this->getJson($base.$day.'&status=ALL')->assertOk()
+            ->assertJsonPath('meta.total', 3)->assertJsonPath('data.0.id', $end->id);
+        $this->getJson($base.$day.'&status=VERIFIED')->assertOk()
+            ->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.id', $end->id);
+        $this->getJson($base.'to_date=2026-11-21')->assertOk()
+            ->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.id', $before->id);
+        $this->getJson($base.'from_date=2026-11-23')->assertOk()
+            ->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.id', $after->id);
+    }
+
+    public function test_admin_filters_creation_and_settlement_by_vietnam_calendar_day(): void
+    {
+        $this->commission->forceFill(['created_at' => '2026-11-21 16:59:59'])->save();
+        $inside = $this->addCommission('SHF-INSIDE', [
+            'status' => CommissionStatus::SETTLED, 'created_at' => '2026-11-21 17:00:00', 'settled_at' => '2026-11-22 16:59:59',
+        ]);
+        $outside = $this->addCommission('SHF-NEXT', [
+            'status' => CommissionStatus::SETTLED, 'created_at' => '2026-11-22 17:00:00', 'settled_at' => '2026-11-22 17:00:00',
+        ]);
+        $this->actingAs($this->admin);
+        $base = '/api/admin/commissions?';
+        $day = '&from_date=2026-11-22&to_date=2026-11-22';
+        $this->getJson($base.'date_field=created_at'.$day)->assertOk()
+            ->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.id', $inside->id);
+        $this->getJson($base.'date_field=settled_at'.$day)->assertOk()
+            ->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.id', $inside->id);
+        $this->getJson($base.'date_field=settled_at&from_date=2026-11-23')->assertOk()
+            ->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.id', $outside->id);
+        $this->getJson($base.'date_field=settled_at&to_date=2026-11-22')->assertOk()
+            ->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.id', $inside->id);
+
+        $db = $this->commission->getConnection();
+        if ($db->getDriverName() === 'mysql') {
+            $originalZone = $db->selectOne('SELECT @@session.time_zone AS zone')->zone;
+            try {
+                $db->statement('SET SESSION time_zone = ?', ['-05:00']);
+                foreach (['created_at', 'settled_at'] as $field) {
+                    $this->getJson($base.'date_field='.$field.$day)->assertOk()
+                        ->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.id', $inside->id);
+                }
+            } finally {
+                $db->statement('SET SESSION time_zone = ?', [$originalZone]);
+            }
+        }
+    }
+
+    public function test_admin_overdue_date_filter_excludes_pending_remittances_and_paginates_matched_rows(): void
+    {
+        $this->travelTo(Carbon::parse('2026-11-25 00:00:00', 'UTC'));
+        $this->commission->update(['due_at' => '2026-11-22 02:00:00']);
+        $older = $this->addCommission('SHF-DUE-OLDER', ['due_at' => '2026-11-21 16:59:59']);
+        $first = $this->addCommission('SHF-DUE-START', ['due_at' => '2026-11-21 17:00:00']);
+        $second = $this->addCommission('SHF-DUE-END', ['due_at' => '2026-11-22 16:59:59']);
+        $base = '/api/admin/commissions?status=OVERDUE&date_field=due_at&from_date=2026-11-22&to_date=2026-11-22&per_page=1';
+        $this->actingAs($this->admin)->getJson($base)->assertOk()
+            ->assertJsonPath('meta.total', 2)->assertJsonPath('meta.last_page', 2)->assertJsonPath('data.0.id', $second->id);
+        $this->getJson($base.'&page=2')->assertOk()
+            ->assertJsonPath('meta.current_page', 2)->assertJsonPath('data.0.id', $first->id);
+        $this->getJson('/api/admin/commissions?status=OVERDUE&date_field=due_at&to_date=2026-11-21')
+            ->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.id', $older->id);
+        $this->getJson('/api/admin/commissions?status=UNDER_REVIEW&date_field=due_at&from_date=2026-11-22&to_date=2026-11-22')
+            ->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.id', $this->commission->id);
+        $this->travelBack();
+    }
+
     public function test_admin_can_verify_remittance_atomically_settling_commission(): void
     {
+        $this->remittance->update(['submitted_at' => '2026-11-21 17:00:00']);
         $payload = [
             'verified_bank_reference' => 'VCB-20261121-0001',
             'review_note' => 'Khớp tiền trên sao kê Vietcombank',
@@ -165,6 +305,10 @@ class AdminCommissionApiTest extends TestCase
 
         $this->assertSame(CommissionStatus::SETTLED, $this->commission->status);
         $this->assertNotNull($this->commission->settled_at);
+
+        $day = '/api/admin/commission-remittances?from_date=2026-11-22&to_date=2026-11-22';
+        $this->getJson($day.'&status=SUBMITTED')->assertOk()->assertJsonPath('meta.total', 0);
+        $this->getJson($day.'&status=VERIFIED')->assertOk()->assertJsonPath('data.0.id', $this->remittance->id);
     }
 
     public function test_admin_cannot_reuse_existing_verified_bank_reference(): void
@@ -251,6 +395,7 @@ class AdminCommissionApiTest extends TestCase
 
     public function test_admin_can_reject_remittance_with_required_reason(): void
     {
+        $this->remittance->update(['submitted_at' => '2026-11-22 16:59:59']);
         $payload = [
             'reason' => 'Không tìm thấy giao dịch chuyển tiền trên sao kê ngân hàng.',
         ];
@@ -272,6 +417,10 @@ class AdminCommissionApiTest extends TestCase
         $this->assertSame(RemittanceStatus::REJECTED, $this->remittance->status);
         $this->assertSame($payload['reason'], $this->remittance->review_note);
         $this->assertSame(CommissionStatus::DUE, $this->commission->status);
+
+        $day = '/api/admin/commission-remittances?from_date=2026-11-22&to_date=2026-11-22';
+        $this->getJson($day.'&status=SUBMITTED')->assertOk()->assertJsonPath('meta.total', 0);
+        $this->getJson($day.'&status=REJECTED')->assertOk()->assertJsonPath('data.0.id', $this->remittance->id);
     }
 
     public function test_admin_cannot_reject_without_reason(): void
