@@ -63,3 +63,140 @@ test('invalid IDs fail before transport and HTTP or cancellation errors preserve
         await assert.rejects(service.list(7), (error) => error === failure);
     }
 });
+
+test('create uses the scoped POST, whitelists the payload, and maps the confirmed schedule', async () => {
+    const { signal } = new AbortController();
+    const { start_date, end_date } = maintenance;
+    const service = createHostRoomMaintenanceService({
+        post: async (url, body, options) => {
+            assert.equal(url, '/api/host/rooms/7/maintenances');
+            assert.deepEqual(body, { start_date, end_date, reason: 'Vệ sinh máy lạnh' });
+            assert.deepEqual(options, { signal, timeout: 10000 });
+            return { status: 201, data: { data: { ...maintenance, reason: body.reason, room_id: 7 } } };
+        },
+    });
+    assert.deepEqual(await service.create('7', { start_date, end_date, reason: ' Vệ sinh máy lạnh ', status: 'COMPLETED' }, { signal }),
+        { ...maintenance, reason: 'Vệ sinh máy lạnh' });
+});
+
+test('create sends an empty reason as null and rejects missing or mismatched confirmation', async () => {
+    for (const input of [
+        { status: 200, data: { data: maintenance } },
+        { status: 201, data: {} },
+        { status: 201, data: { data: { ...maintenance, status: 'COMPLETED' } } },
+        { status: 201, data: { data: { ...maintenance, end_date: '2026-12-05' } } },
+    ]) {
+        const service = createHostRoomMaintenanceService({
+            post: async (_url, body) => {
+                assert.equal(body.reason, null);
+                return input;
+            },
+        });
+        await assert.rejects(service.create(7, { ...maintenance, reason: ' ' }), /lịch bảo trì/i);
+    }
+});
+
+test('create preserves API conflicts, field validation and cancellation for the form', async () => {
+    const draft = { start_date: maintenance.start_date, end_date: maintenance.end_date };
+    await assert.rejects(createHostRoomMaintenanceService(unusedClient).create('07', draft), (error) => error.isLocalValidation);
+    for (const failure of [
+        Object.assign(new Error('Conflict'), { response: { status: 409, data: { code: 'CATALOG_ROOM_BOOKING_CONFLICT' } } }),
+        Object.assign(new Error('Invalid'), { response: { status: 422, data: { errors: { end_date: ['Ngày không hợp lệ.'] } } } }),
+        new CanceledError(),
+    ]) {
+        const service = createHostRoomMaintenanceService({ post: async () => { throw failure; } });
+        await assert.rejects(service.create(7, draft), (error) => error === failure);
+    }
+});
+
+test('update puts only editable fields for the selected schedule and accepts its matching confirmation', async () => {
+    const { signal } = new AbortController();
+    const { start_date, end_date } = maintenance;
+    const service = createHostRoomMaintenanceService({
+        put: async (url, body, options) => {
+            assert.equal(url, '/api/host/maintenances/2');
+            assert.deepEqual(body, { start_date, end_date, reason: null });
+            assert.deepEqual(options, { signal, timeout: 10000 });
+            return { status: 200, data: { data: maintenance } };
+        },
+    });
+    assert.deepEqual(await service.update('2', { ...maintenance, room_id: 7, reason: '' }, { signal }), maintenance);
+    await assert.rejects(service.update('07', maintenance), (error) => error.isLocalValidation);
+});
+
+test('update rejects a mismatched schedule and preserves the status conflict response', async () => {
+    const mismatched = createHostRoomMaintenanceService({
+        put: async () => ({ status: 200, data: { data: { ...maintenance, id: 3 } } }),
+    });
+    await assert.rejects(mismatched.update(2, maintenance), /không khớp/);
+
+    const failure = Object.assign(new Error('Conflict'), {
+        response: { status: 409, data: { code: 'CATALOG_ROOM_MAINTENANCE_STATUS_CONFLICT' } },
+    });
+    const service = createHostRoomMaintenanceService({ put: async () => { throw failure; } });
+    await assert.rejects(service.update(2, maintenance), (error) => error === failure);
+});
+
+test('cancel sends a scoped DELETE without a payload and confirms the same cancelled schedule', async () => {
+    const { signal } = new AbortController();
+    const cancelled = { ...maintenance, status: 'CANCELLED' };
+    const service = createHostRoomMaintenanceService({
+        delete: async (url, options) => {
+            assert.equal(url, '/api/host/maintenances/2');
+            assert.deepEqual(options, { signal, timeout: 10000 });
+            return { status: 200, data: { data: cancelled } };
+        },
+    });
+    assert.deepEqual(await service.cancel('2', { signal }), cancelled);
+    await assert.rejects(service.cancel('02'), (error) => error.isLocalValidation);
+});
+
+test('cancel requires a matching cancelled schedule and preserves transport and conflict errors', async () => {
+    for (const [result, error] of [
+        [{ status: 204 }, /không nhận được xác nhận/i],
+        [{ status: 200, data: { data: maintenance } }, /không khớp/],
+        [{ status: 200, data: { data: { ...maintenance, id: 3, status: 'CANCELLED' } } }, /không khớp/],
+    ]) {
+        const service = createHostRoomMaintenanceService({ delete: async () => result });
+        await assert.rejects(service.cancel(2), error);
+    }
+
+    for (const failure of [
+        new CanceledError(),
+        Object.assign(new Error('Conflict'), {
+            response: { status: 409, data: { code: 'CATALOG_ROOM_MAINTENANCE_STATUS_CONFLICT' } },
+        }),
+    ]) {
+        const service = createHostRoomMaintenanceService({ delete: async () => { throw failure; } });
+        await assert.rejects(service.cancel(2), (error) => error === failure);
+    }
+});
+
+test('complete patches the status endpoint and verifies the selected schedule and destination', async () => {
+    const { signal } = new AbortController();
+    const completed = { ...maintenance, status: 'COMPLETED' };
+    const service = createHostRoomMaintenanceService({
+        patch: async (url, body, options) => {
+            assert.equal(url, '/api/host/maintenances/2/status');
+            assert.deepEqual(body, { status: 'COMPLETED' });
+            assert.deepEqual(options, { signal, timeout: 10000 });
+            return { status: 200, data: { data: completed } };
+        },
+    });
+    assert.deepEqual(await service.complete('2', { signal }), completed);
+    await assert.rejects(service.complete('02'), (error) => error.isLocalValidation);
+    const mismatched = createHostRoomMaintenanceService({ patch: async () => ({ status: 200, data: { data: maintenance } }) });
+    await assert.rejects(mismatched.complete(2), /không khớp/);
+});
+
+test('start patches the status endpoint with IN_PROGRESS', async () => {
+    const started = { ...maintenance, status: 'IN_PROGRESS' };
+    const service = createHostRoomMaintenanceService({
+        patch: async (url, body) => {
+            assert.equal(url, '/api/host/maintenances/2/status');
+            assert.deepEqual(body, { status: 'IN_PROGRESS' });
+            return { status: 200, data: { data: started } };
+        },
+    });
+    assert.deepEqual(await service.start(2), started);
+});

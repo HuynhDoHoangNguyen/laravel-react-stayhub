@@ -209,6 +209,87 @@ final class HostRoomMaintenanceServiceTest extends TestCase
         Log::shouldNotHaveReceived('info');
     }
 
+    #[DataProvider('maintenanceStartCases')]
+    public function test_start_checks_retained_bookings_dates_and_other_maintenance(
+        string $today,
+        ?array $booking,
+        ?array $otherSchedule,
+        ?string $conflict,
+        string $start = '2026-12-12',
+        string $end = '2026-12-14',
+    ): void {
+        $this->travelTo(CarbonImmutable::parse($today.'T12:00:00Z'));
+        [$host, $room] = $this->fixture();
+        $id = $this->maintenance($room, 'SCHEDULED', $start, $end);
+        if ($booking !== null) {
+            $this->booking($room, ...$booking);
+        }
+        if ($otherSchedule !== null) {
+            $this->maintenance($room, ...$otherSchedule);
+        }
+
+        $service = app(HostRoomMaintenanceService::class);
+        if ($conflict !== null) {
+            try {
+                $service->start($host, $id);
+                $this->fail('Expected the current facts to block starting maintenance.');
+            } catch (AppException $error) {
+                $this->assertSame($conflict, $error->errorCode);
+                $this->assertSame(409, $error->status);
+            }
+            $this->assertDatabaseHas('maintenances', ['id' => $id, 'status' => 'SCHEDULED']);
+
+            return;
+        }
+
+        $result = $service->start($host, $id);
+        $this->assertSame('IN_PROGRESS', $result->status);
+        $this->assertDatabaseHas('maintenances', ['id' => $id, 'status' => 'IN_PROGRESS', 'start_date' => $start, 'end_date' => $end]);
+        $this->assertTrue(app(RoomMaintenanceQueryService::class)->hasBlockingMaintenance($room->id, '2026-12-30', '2026-12-31'));
+    }
+
+    public static function maintenanceStartCases(): array
+    {
+        $today = '2026-12-12';
+        $status = 'CATALOG_ROOM_MAINTENANCE_STATUS_CONFLICT';
+        $booking = 'CATALOG_ROOM_BOOKING_CONFLICT';
+        $maintenance = 'CATALOG_ROOM_MAINTENANCE_CONFLICT';
+
+        return [
+            'start boundary' => [$today, null, null, null],
+            'before start' => ['2026-12-11', null, null, $status],
+            'at end' => ['2026-12-14', null, null, $status],
+            'malformed target' => [$today, null, null, $status, $today, $today],
+            'in house despite overdue checkout' => [$today, ['CHECKED_IN', '2026-12-08', '2026-12-10'], null, $booking],
+            'in house despite future booking dates' => [$today, ['CHECKED_IN', '2026-12-20', '2026-12-22'], null, $booking],
+            'future pending beyond maintenance' => [$today, ['PENDING', '2026-12-20', '2026-12-22'], null, $booking],
+            'future confirmed beyond maintenance' => [$today, ['CONFIRMED', '2026-12-20', '2026-12-22'], null, $booking],
+            'confirmed due to check out today' => [$today, ['CONFIRMED', '2026-12-10', $today], null, null],
+            'malformed holding booking' => [$today, ['CONFIRMED', '2026-12-10', '2026-12-09'], null, $booking],
+            'terminal booking' => [$today, ['CANCELLED', '2026-12-13', '2026-12-14'], null, null],
+            'other overdue maintenance' => [$today, null, ['IN_PROGRESS', '2026-12-08', '2026-12-10'], $maintenance],
+            'overlapping scheduled maintenance' => [$today, null, ['SCHEDULED', '2026-12-13', '2026-12-16'], $maintenance],
+            'adjacent scheduled maintenance' => [$today, null, ['SCHEDULED', '2026-12-14', '2026-12-16'], null],
+            'invalid other scheduled maintenance' => [$today, null, ['SCHEDULED', '2026-12-24', '2026-12-24'], $maintenance],
+        ];
+    }
+
+    public function test_start_rechecks_ownership_and_does_not_write_when_repeated_after_the_window(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-12-12T12:00:00Z'));
+        [$host, $room] = $this->fixture();
+        [$otherHost] = $this->fixture();
+        $id = $this->maintenance($room, 'SCHEDULED', '2026-12-12', '2026-12-14');
+        $service = app(HostRoomMaintenanceService::class);
+        $this->assertNull($service->start($otherHost, $id));
+        $this->assertDatabaseHas('maintenances', ['id' => $id, 'status' => 'SCHEDULED']);
+        $first = $service->start($host, $id);
+        $updatedAt = DB::table('maintenances')->where('id', $id)->value('updated_at');
+        $this->travel(3)->days();
+        $this->assertSame($first->jsonSerialize(), $service->start($host, $id)->jsonSerialize());
+        $this->assertDatabaseHas('maintenances', ['id' => $id, 'updated_at' => $updatedAt]);
+    }
+
     private function assertOutcome(User $host, Room $room, ?string $conflict): void
     {
         try {
@@ -253,9 +334,9 @@ final class HostRoomMaintenanceServiceTest extends TestCase
         ]);
     }
 
-    private function maintenance(Room $room, string $status, string $start, string $end): void
+    private function maintenance(Room $room, string $status, string $start, string $end): int
     {
-        DB::table('maintenances')->insert([
+        return DB::table('maintenances')->insertGetId([
             'room_id' => $room->id, 'start_date' => $start, 'end_date' => $end, 'status' => $status,
         ]);
     }

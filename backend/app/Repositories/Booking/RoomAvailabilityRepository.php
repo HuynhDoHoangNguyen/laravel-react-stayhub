@@ -77,22 +77,45 @@ class RoomAvailabilityRepository
 
     public function hasBlockingMaintenanceOverlap(int $roomId, string $checkIn, string $checkOut): bool
     {
-        $query = Maintenance::query()
-            ->where('room_id', $roomId)
-            ->whereNotIn('status', [MaintenanceStatus::CANCELLED->value, MaintenanceStatus::COMPLETED->value])
-            ->where(function (Builder $query) use ($checkIn, $checkOut) {
-                $query->where('status', MaintenanceStatus::IN_PROGRESS->value)
-                    ->orWhere(function (Builder $q) use ($checkIn, $checkOut) {
-                        $q->where('start_date', '<', $checkOut)
-                            ->where('end_date', '>', $checkIn);
-                    });
-            });
+        $query = Maintenance::query()->where('room_id', $roomId);
+        $this->applyMaintenanceBlock($query, $checkIn, $checkOut);
 
         if (DB::transactionLevel() > 0) {
             $query->lockForUpdate();
         }
 
         return $query->first(['id']) !== null;
+    }
+
+    private function applyMaintenanceBlock(Builder $query, string $checkIn, string $checkOut): void
+    {
+        $query->where(function (Builder $query) use ($checkIn, $checkOut): void {
+            $query->where('status', MaintenanceStatus::IN_PROGRESS->value)
+                ->orWhere(function (Builder $scheduled) use ($checkIn, $checkOut): void {
+                    $scheduled->where('status', MaintenanceStatus::SCHEDULED->value)
+                        ->where(function (Builder $range) use ($checkIn, $checkOut): void {
+                            $range->whereRaw('NOT ('.$this->validMaintenancePeriod($range).')')
+                                ->orWhere(function (Builder $overlap) use ($checkIn, $checkOut): void {
+                                    $overlap->whereDate('start_date', '<', $checkOut)
+                                        ->whereDate('end_date', '>', $checkIn);
+                                });
+                        });
+                });
+        });
+    }
+
+    /** SQL equivalent of the UC51 date rule on MySQL/MariaDB and SQLite. */
+    private function validMaintenancePeriod(Builder $query): string
+    {
+        if ($query->getModel()->getConnection()->getDriverName() === 'sqlite') {
+            return "COALESCE(DATE(start_date, '+0 days') = SUBSTR(start_date, 1, 10), 0)"
+                ." AND COALESCE(DATE(end_date, '+0 days') = SUBSTR(end_date, 1, 10), 0)"
+                ." AND DATE(start_date) >= '1000-01-01' AND DATE(start_date) < DATE(end_date)";
+        }
+
+        return "start_date >= '1000-01-01' AND end_date > start_date"
+            .' AND COALESCE(DAYOFMONTH(start_date) BETWEEN 1 AND DAYOFMONTH(LAST_DAY(start_date)), 0)'
+            .' AND COALESCE(DAYOFMONTH(end_date) BETWEEN 1 AND DAYOFMONTH(LAST_DAY(end_date)), 0)';
     }
 
     public function hasHoldingBookingOverlap(int $roomId, string $checkIn, string $checkOut, ?int $ignoreBookingId = null): bool
@@ -116,12 +139,13 @@ class RoomAvailabilityRepository
     /** @return Collection<int, Maintenance> */
     public function blockingMaintenances(Room $room, string $fromDate, string $toDate): Collection
     {
-        return Maintenance::query()
+        $query = Maintenance::query()
             ->where('room_id', $room->id)
             ->whereNotIn('status', [MaintenanceStatus::CANCELLED->value, MaintenanceStatus::COMPLETED->value])
-            ->where('start_date', '<', $toDate)
-            ->where('end_date', '>', $fromDate)
-            ->get(['start_date', 'end_date']);
+            ->whereDate('start_date', '<', $toDate)
+            ->whereDate('end_date', '>', $fromDate);
+
+        return $query->whereRaw($this->validMaintenancePeriod($query))->get(['start_date', 'end_date']);
     }
 
     public function searchAvailableRooms(array $filters, string $sort, int $perPage): LengthAwarePaginator
@@ -259,16 +283,7 @@ class RoomAvailabilityRepository
             ->whereHas('property', function (Builder $query): void {
                 $query->where('status', PropertyStatus::ACTIVE->value);
             })
-            ->whereDoesntHave('maintenances', function (Builder $query) use ($checkIn, $checkOut): void {
-                $query->whereNotIn('status', [MaintenanceStatus::CANCELLED->value, MaintenanceStatus::COMPLETED->value])
-                    ->where(function (Builder $q) use ($checkIn, $checkOut) {
-                        $q->where('status', MaintenanceStatus::IN_PROGRESS->value)
-                            ->orWhere(function (Builder $sub) use ($checkIn, $checkOut) {
-                                $sub->where('start_date', '<', $checkOut)
-                                    ->where('end_date', '>', $checkIn);
-                            });
-                    });
-            })
+            ->whereDoesntHave('maintenances', fn (Builder $query) => $this->applyMaintenanceBlock($query, $checkIn, $checkOut))
             ->whereDoesntHave('bookings', function (Builder $query) use ($checkIn, $checkOut, $ignoreBookingId): void {
                 $query->holdingRoom()->overlapping($checkIn, $checkOut);
                 if ($ignoreBookingId !== null) {

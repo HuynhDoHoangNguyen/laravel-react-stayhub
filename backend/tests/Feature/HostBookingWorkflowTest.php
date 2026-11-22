@@ -111,7 +111,9 @@ class HostBookingWorkflowTest extends TestCase
 
         $this->assertSame(BookingStatus::CONFIRMED, $workflow->confirm($makeBooking(BookingStatus::PENDING->value), $host)->status);
         $this->assertSame(BookingStatus::REJECTED, $workflow->reject($makeBooking(BookingStatus::PENDING->value), $host)->status);
-        $this->assertSame(BookingStatus::CHECKED_IN, $workflow->checkIn($makeBooking(BookingStatus::CONFIRMED->value), $host)->status);
+        $arrival = $makeBooking(BookingStatus::CONFIRMED->value);
+        $this->travelTo($arrival->check_in_date->copy()->setTime(12, 0));
+        $this->assertSame(BookingStatus::CHECKED_IN, $workflow->checkIn($arrival, $host)->status);
         $this->assertSame(BookingStatus::COMPLETED, $workflow->checkOut($makeBooking(BookingStatus::CHECKED_IN->value), $host)->status);
     }
 
@@ -416,6 +418,7 @@ class HostBookingWorkflowTest extends TestCase
             ->assertJsonPath('data.status_label', 'Đã xác nhận');
 
         // 2. CONFIRMED -> CHECKED_IN
+        $this->travelTo($booking->check_in_date->copy()->setTime(12, 0));
         $this->actingAs($host)->postJson("/api/host/bookings/{$booking->id}/check-in")
             ->assertStatus(200)
             ->assertJsonPath('data.status', 'CHECKED_IN')
@@ -426,6 +429,31 @@ class HostBookingWorkflowTest extends TestCase
             ->assertStatus(200)
             ->assertJsonPath('data.status', 'COMPLETED')
             ->assertJsonPath('data.status_label', 'Đã hoàn thành');
+    }
+
+    public function test_check_in_respects_the_stay_window_and_current_maintenance(): void
+    {
+        $host = User::factory()->host()->create();
+        $property = Property::factory()->create(['host_id' => $host->id]);
+        $room = Room::factory()->create(['property_id' => $property->id]);
+        $booking = Booking::factory()->forRoom($room)->confirmed()->create([
+            'check_in_date' => '2026-12-12', 'check_out_date' => '2026-12-14',
+        ]);
+        $this->actingAs($host);
+        $url = "/api/host/bookings/{$booking->id}/check-in";
+        foreach ([11, 14] as $day) {
+            $this->travelTo(now(config('app.timezone'))->setDate(2026, 12, $day)->setTime(12, 0));
+            $this->postJson($url)->assertUnprocessable()->assertJsonPath('errors.reasons.0', 'CHECK_IN_OUTSIDE_STAY');
+            $this->assertDatabaseHas('bookings', ['id' => $booking->id, 'status' => 'CONFIRMED']);
+        }
+        $this->travelTo(now(config('app.timezone'))->setDate(2026, 12, 12)->setTime(12, 0));
+        $maintenance = \Illuminate\Support\Facades\DB::table('maintenances')->insertGetId([
+            'room_id' => $room->id, 'status' => 'IN_PROGRESS', 'start_date' => '2026-12-08', 'end_date' => '2026-12-10',
+        ]);
+        $this->postJson($url)->assertConflict()->assertJsonPath('errors.reasons.0', 'MAINTENANCE_OVERLAP');
+        $this->assertDatabaseHas('bookings', ['id' => $booking->id, 'status' => 'CONFIRMED']);
+        $this->patchJson("/api/host/maintenances/{$maintenance}/status", ['status' => 'COMPLETED'])->assertOk();
+        $this->postJson($url)->assertOk()->assertJsonPath('data.status', 'CHECKED_IN');
     }
 
     public function test_room_freed_after_completed_cancelled_or_rejected(): void
@@ -488,6 +516,9 @@ class HostBookingWorkflowTest extends TestCase
             $this->markTestSkipped("No endpoint mapped for status {$toStatus}");
         }
 
+        if ($toStatus === 'CHECKED_IN' && $shouldSucceed) {
+            $this->travelTo($booking->check_in_date->copy()->setTime(12, 0));
+        }
         $response = $this->actingAs($host)->postJson("/api/host/bookings/{$booking->id}/{$endpoint}");
 
         if ($shouldSucceed) {

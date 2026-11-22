@@ -4,12 +4,14 @@ namespace App\Services\Booking;
 
 use App\Enums\BookingStatus;
 use App\Exceptions\BookingCancellationNotAllowedException;
+use App\Exceptions\BookingDomainException;
 use App\Exceptions\InvalidBookingTransitionException;
 use App\Exceptions\RoomNotAvailableException;
 use App\Models\Booking;
 use App\Models\User;
 use App\Repositories\Booking\BookingRepository;
 use App\Validators\Booking\BookingCancellationValidator;
+use App\Validators\Catalog\RoomMaintenanceValidator;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\DB;
 
@@ -18,7 +20,8 @@ class BookingWorkflowService
     public function __construct(
         protected AvailabilityService $availabilityService,
         protected BookingRepository $bookingRepository,
-        protected BookingCancellationValidator $bookingCancellationValidator
+        protected BookingCancellationValidator $bookingCancellationValidator,
+        private readonly RoomMaintenanceValidator $dateRules,
     ) {}
 
     /**
@@ -114,8 +117,13 @@ class BookingWorkflowService
     public function checkIn(Booking $booking, User $actor): Booking
     {
         return DB::transaction(function () use ($booking, $actor) {
+            $roomId = (int) ($booking->room_id ?: Booking::query()->whereKey($booking->id)->value('room_id'));
+            $room = $this->bookingRepository->lockRoomForUpdate($roomId);
             $currentBooking = $this->bookingRepository->lockForUpdate($booking->id);
             Gate::forUser($actor)->authorize('manageHost', $currentBooking);
+            if ((int) $currentBooking->room_id !== (int) $room->getKey()) {
+                throw new BookingDomainException('Phòng của đặt phòng đã thay đổi. Vui lòng tải lại.', ['reasons' => ['BOOKING_ROOM_CHANGED']], 409);
+            }
 
             $currentStatus = $currentBooking->status instanceof BookingStatus
                 ? $currentBooking->status
@@ -123,6 +131,20 @@ class BookingWorkflowService
 
             if (! $currentStatus->canTransitionTo(BookingStatus::CHECKED_IN)) {
                 throw new InvalidBookingTransitionException($currentStatus, BookingStatus::CHECKED_IN);
+            }
+
+            $today = now(config('app.timezone'))->toDateString();
+            $checkIn = substr((string) $currentBooking->getRawOriginal('check_in_date'), 0, 10);
+            $checkOut = substr((string) $currentBooking->getRawOriginal('check_out_date'), 0, 10);
+            if (!$this->dateRules->isValidDate($checkIn) || !$this->dateRules->isValidDate($checkOut)
+                || $today < $checkIn || $today >= $checkOut) {
+                throw new BookingDomainException(
+                    'Chỉ có thể nhận phòng từ ngày nhận phòng đến trước ngày trả phòng.',
+                    ['reasons' => ['CHECK_IN_OUTSIDE_STAY']],
+                );
+            }
+            if ($this->availabilityService->hasMaintenanceBlock($room, $today, $checkOut)) {
+                throw new RoomNotAvailableException('Phòng đang có lịch bảo trì ảnh hưởng đến thời gian lưu trú.', ['MAINTENANCE_OVERLAP']);
             }
 
             $currentBooking->status = BookingStatus::CHECKED_IN;

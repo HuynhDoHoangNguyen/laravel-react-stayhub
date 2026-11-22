@@ -4,6 +4,7 @@ namespace App\Repositories\Catalog;
 
 use App\DTOs\Catalog\Requests\CreateHostRoomRequest;
 use App\DTOs\Catalog\Requests\CreateHostRoomMaintenanceRequest;
+use App\DTOs\Catalog\Requests\UpdateHostRoomMaintenanceRequest;
 use App\DTOs\Catalog\Requests\UpdateHostRoomRequest;
 use App\DTOs\Catalog\Requests\PublicRoomFilterQuery;
 use App\Enums\PropertyStatus;
@@ -202,10 +203,53 @@ class CatalogRepository
             ->select(['id', 'status', 'check_in_date', 'check_out_date'])->orderBy('id')->toBase()->lockForUpdate()->get();
     }
 
-    public function lockRoomMaintenanceFacts(Room $room): \Illuminate\Support\Collection
+    public function lockRoomMaintenanceFacts(Room $room, ?int $includingId = null): \Illuminate\Support\Collection
     {
-        return $room->maintenances()->whereIn('status', ['SCHEDULED', 'IN_PROGRESS'])
+        return $room->maintenances()->where(function (Builder $query) use ($includingId): void {
+            $query->whereIn('status', ['SCHEDULED', 'IN_PROGRESS']);
+            if ($includingId !== null) {
+                $query->orWhere('maintenances.id', $includingId);
+            }
+        })
             ->select(['id', 'status', 'start_date', 'end_date'])->orderBy('id')->toBase()->lockForUpdate()->get();
+    }
+
+    /** @return array{property_id: int, room_id: int}|null */
+    public function findHostMaintenanceLocation(int $hostId, int $maintenanceId): ?array
+    {
+        $location = Maintenance::query()
+            ->join('rooms', 'rooms.id', '=', 'maintenances.room_id')
+            ->join('properties', 'properties.id', '=', 'rooms.property_id')
+            ->where('maintenances.id', $maintenanceId)->where('properties.host_id', $hostId)
+            ->toBase()->first(['rooms.property_id', 'maintenances.room_id']);
+
+        return $location === null ? null : ['property_id' => (int) $location->property_id, 'room_id' => (int) $location->room_id];
+    }
+
+    public function lockRoomMaintenance(Room $room, int $maintenanceId): ?Maintenance
+    {
+        return $room->maintenances()->whereKey($maintenanceId)->lockForUpdate()->first();
+    }
+
+    public function changeHostRoomMaintenanceStatus(Maintenance $maintenance, MaintenanceStatus $status): void
+    {
+        $maintenance->status = $status;
+        if (!$maintenance->save()) {
+            throw new \RuntimeException('Room maintenance status update failed.');
+        }
+    }
+
+    /** The caller holds the room and maintenance locks. Keep storage dates free of time components. */
+    public function updateHostRoomMaintenance(Maintenance $maintenance, UpdateHostRoomMaintenanceRequest $input): Maintenance
+    {
+        Maintenance::query()->whereKey($maintenance->getKey())->toBase()->update([
+            'start_date' => $input->startDate,
+            'end_date' => $input->endDate,
+            'reason' => $input->reason,
+            'updated_at' => $maintenance->freshTimestampString(),
+        ]);
+
+        return $maintenance->refresh();
     }
 
     /** The caller holds the room lock and has checked the current conflict facts. */

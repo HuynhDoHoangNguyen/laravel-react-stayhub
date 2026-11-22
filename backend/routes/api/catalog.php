@@ -81,6 +81,14 @@ Route::get('/host/rooms/{room}', [HostRoomController::class, 'show'])
 
 Route::get('/host/rooms/{room}/maintenances', [HostRoomMaintenanceController::class, 'index'])
     ->middleware(['auth:sanctum', 'account.active', EnsureHostIsApproved::class]);
+Route::post('/host/rooms/{room}/maintenances', [HostRoomMaintenanceController::class, 'store'])
+    ->middleware(['auth:sanctum', 'account.active', EnsureHostIsApproved::class]);
+Route::put('/host/maintenances/{maintenance}', [HostRoomMaintenanceController::class, 'update'])
+    ->middleware(['auth:sanctum', 'account.active', EnsureHostIsApproved::class]);
+Route::delete('/host/maintenances/{maintenance}', [HostRoomMaintenanceController::class, 'destroy'])
+    ->middleware(['auth:sanctum', 'account.active', EnsureHostIsApproved::class]);
+Route::patch('/host/maintenances/{maintenance}/status', [HostRoomMaintenanceController::class, 'changeStatus'])
+    ->middleware(['auth:sanctum', 'account.active', EnsureHostIsApproved::class]);
 
 Route::post('/host/properties/{property}/room-types', [HostRoomTypeController::class, 'store'])
     ->middleware(['auth:sanctum', 'account.active', EnsureHostIsApproved::class]);

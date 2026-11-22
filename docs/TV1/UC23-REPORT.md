@@ -510,3 +510,342 @@ Commit đề xuất cho test tái hiện C2B. Kết quả xác nhận lỗi trê
 ```text
 test(catalog): reproduce booking confirmation and maintenance deadlock
 ```
+
+## UC23-02C2C — Đối chiếu Availability và check-in sau merge
+
+### 1. Mục tiêu và phạm vi
+
+Ngày 23/11/2026, kiểm nhánh `feature/tv1-uc23-maintenance-management` tại `33637df`. So sánh quy tắc chặn phòng của UC51 với hai API đọc Availability, rồi quan sát check-in muộn qua API Host. Đây là QA Backend và bổ sung regression test. Quyết định nghiệp vụ check-in vẫn thuộc TV2. [Contract UC51](UC51-REPORT.md#4-quy-tắc-giao-khoảng-và-trạng-thái)
+
+### 2. File
+
+Tạo [RoomMaintenanceAvailabilityContractMySqlTest.php](../../backend/tests/Feature/Catalog/RoomMaintenanceAvailabilityContractMySqlTest.php) và cập nhật báo cáo UC23. Test chạy qua hai API thật và query service UC51, dùng phòng đối chứng cùng cơ sở. Probe check-in chạy từ file thử bên ngoài repo.
+
+### 3. Kiểm thử
+
+Chạy nhóm `RoomMaintenanceAvailabilityContractMySqlTest`, `BookingMaintenanceConcurrencyMySqlTest` và `HostRoomMaintenanceConcurrencyMySqlTest` qua `php artisan test` trên MariaDB 10.11.16/InnoDB. Lệnh trả exit 1 với 17 đạt, 2 lỗi và 173 assertions. Riêng C1/C2A/C2B đạt 10/10. C2C đạt 7/9. Hai ca lỗi đều có `uc51_blocks=true`, `available=true`, `reasons=[]` và phòng vẫn xuất hiện trong tìm kiếm.
+
+Hồi quy Laravel tập trung vào Booking workflow, Availability, tìm kiếm, UC51 và Catalog đạt 299 test với 1.046 assertions trên SQLite in-memory, exit 0. Probe API tách riêng đạt 5 assertions kiểm đầu vào và ghi nhận hành vi. Ca check-in sau ngày checkout dự kiến, khi phòng có lịch `IN_PROGRESS`, trả HTTP `200` và lưu `CHECKED_IN`. Probe cũng ghi nhận lịch `IN_PROGRESS` quá hạn trả `MAINTENANCE_OVERLAP` dù `blocked_ranges` rỗng. Instance và schema tạm đã được dọn.
+
+### 4. Contract
+
+`IN_PROGRESS` chặn kể cả ngoài khoảng ngày dự kiến. `SCHEDULED` dùng giao khoảng nửa mở với ngày hợp lệ. Khoảng ngày đảo hoặc trùng ngày là dữ liệu bất thường và UC51 chặn cho tới khi Host xử lý. Lịch đã hoàn tất, đã hủy và lịch của phòng khác không cản phòng đang kiểm. Hai API đối chiếu kết quả theo cờ `available`, mã `MAINTENANCE_OVERLAP` và việc ID phòng xuất hiện trong kết quả tìm kiếm. Cách biểu diễn lịch chặn trong `blocked_ranges` cần TV2 thống nhất.
+
+### 5. Tiêu chí
+
+| ID | Kết quả |
+| --- | --- |
+| C2C-A-01 | Đã đối chiếu đủ ba đường đọc trên cùng fixture. Phòng đối chứng xuất hiện trong kết quả tìm kiếm |
+| C2C-A-02 | Đạt với lịch `IN_PROGRESS` quá hạn. FAIL với lịch `SCHEDULED` đảo ngày và trùng ngày ở cả hai API |
+| C2C-A-03 | C1/C2A/C2B đạt 10/10 trên InnoDB và hồi quy SQLite đạt 299/299 |
+| C2C-CHECKIN | Đã tái hiện HTTP `200` và `CHECKED_IN`. Chờ TV2 xác nhận hành vi đích |
+
+### 6. Phụ thuộc
+
+TV2 cần thống nhất cách nhận diện `SCHEDULED` có khoảng sai ở luồng đọc và trước khi ghi Booking, cùng cách xử lý check-in muộn nếu phòng đang bảo trì. Scope này giữ test theo kỳ vọng UC51 để bản tích hợp tiếp theo có thể chạy lại.
+
+### 7. Skills
+
+- [stayhub-laravel](../../.agents/skills/stayhub-laravel/SKILL.md) dùng service và các API Laravel thật.
+- [stayhub-verification](../../.agents/skills/stayhub-verification/SKILL.md) dùng phòng đối chứng và tách kết quả hợp đồng UC51 khỏi quan sát check-in.
+
+### 8. Bàn giao
+
+Đề xuất review phạm vi thay đổi với TV2 cho hai điểm còn lệch, rồi chạy lại C1–C2C trên code tích hợp trước khi mở POST và form tạo lịch.
+
+## UC23-02D — Tạo lịch bảo trì
+
+### 1. Kết quả
+
+- Backend đã nối `POST /api/host/rooms/{room}/maintenances` vào workflow tạo lịch của UC23-02B và xác nhận tạo mới với HTTP `201`.
+- Frontend có form ngày bắt đầu, ngày kết thúc và lý do tùy chọn tại mục Lịch bảo trì trong chi tiết phòng Host. Khi API xác nhận thành công, form hiển thị khoảng ngày đã tạo và tải lại trang 1 theo thứ tự ngày của danh sách.
+- Đã tích hợp trên nhánh UC23. Phát hành cho Host và nghiệm thu của owner còn mở.
+
+### 2. Phạm vi file
+
+| Thao tác | File |
+| --- | --- |
+| Sửa | `backend/app/Http/Controllers/Catalog/HostRoomMaintenanceController.php` |
+| Sửa | `backend/app/Validators/Catalog/CatalogValidator.php` |
+| Sửa | `backend/routes/api/catalog.php` |
+| Tạo | `backend/tests/Feature/Catalog/HostRoomMaintenanceCreateTest.php` |
+| Sửa | `frontend/src/components/catalog/HostRoomMaintenancePanel.jsx` |
+| Sửa | `frontend/src/api/hostRoomMaintenanceApi.js` |
+| Sửa | `frontend/src/services/hostRoomMaintenanceService.js` |
+| Sửa | `frontend/src/mappers/hostRoomMaintenanceMapper.js` |
+| Sửa | `frontend/tests/hostRoomMaintenanceService.test.js` |
+| Sửa | `docs/TV1/UC23-REPORT.md` |
+
+### 3. Kiểm thử
+
+- `php artisan test --compact --filter='HostRoomMaintenance(Create|List|Service)Test'` đạt 43 ca, 223 assertions trên SQLite in-memory.
+- `php artisan test --compact` trả exit 0 với 3.315 ca đạt, 594 ca skip và 14.702 assertions theo cấu hình test SQLite mặc định.
+- `node --experimental-test-module-mocks --test tests/*.test.js` đạt 558 ca, dùng transport giả lập trong test service.
+- `npm run lint` đạt với 3 cảnh báo Fast Refresh ở thành phần UI dùng chung. `npm run build` đạt với cảnh báo kích thước chunk.
+- `git diff --check` đạt.
+- Browser QA riêng được bỏ qua theo phạm vi đã thống nhất.
+
+### 4. Nghiệp vụ và API
+
+POST chỉ nhận `start_date`, `end_date` và `reason`. Phòng lấy từ URL và trạng thái mới do server đặt là `SCHEDULED`. Quy tắc ngày theo múi giờ ứng dụng và khoảng `[start_date, end_date)` tiếp tục do workflow kiểm tra. Controller trả hai mã `CATALOG_ROOM_BOOKING_CONFLICT` và `CATALOG_ROOM_MAINTENANCE_CONFLICT` cho POST với HTTP `409`. Route dùng cùng lớp bảo vệ phiên, trạng thái tài khoản và phê duyệt Host như GET. Service vẫn kiểm tra ownership trong giao dịch với thứ tự khóa đã kiểm chứng ở 02B/C.
+
+### 5. Tiêu chí nghiệm thu
+
+| ID | Bằng chứng | Trạng thái |
+| --- | --- | --- |
+| 02D-01 | POST trả `201`, ghi một dòng `SCHEDULED`, GET đọc lại cùng DTO | Đạt HTTP |
+| 02D-02 | Sai payload nhận `422`, hai loại xung đột trả đúng mã `409`, khoảng sát biên hợp lệ | Đạt HTTP |
+| 02D-03 | Guest, sai vai trò, bất hoạt, chờ duyệt và khác chủ phòng không tạo được lịch | Đạt HTTP |
+| 02D-04 | POST gửi đúng dữ liệu và bảo toàn lỗi qua service. Component giữ draft khi lỗi, khóa submit khi đang lưu và tải lại trang 1 khi thành công | Đạt Node cho service, đã rà soát component |
+
+### 6. Phụ thuộc
+
+Phát hành cho Host chờ TV2 xử lý hai ca `SCHEDULED` có ngày đảo hoặc trùng mà Availability hiện vẫn coi là phòng trống. Bản này dùng lại giao dịch, schema và luồng Booking/Availability hiện có. Các ca MariaDB opt-in của 02C2C có kết quả riêng ở mục trước.
+
+### 7. Skills
+
+- [stayhub-task-planning](../../.agents/skills/stayhub-task-planning/SKILL.md) xác định phạm vi tạo lịch trên nhánh UC23 và điều kiện phát hành.
+- [stayhub-laravel](../../.agents/skills/stayhub-laravel/SKILL.md) nối route, kiểm tra dữ liệu thô và dùng lại workflow cùng DTO.
+- [stayhub-react](../../.agents/skills/stayhub-react/SKILL.md) nối form qua service, API và mapper, đồng thời xử lý gửi trùng và lỗi.
+- [stayhub-verification](../../.agents/skills/stayhub-verification/SKILL.md) kiểm tra qua route Laravel và service React thật, ghi giới hạn bằng chứng.
+
+### 8. Bàn giao
+
+Đề xuất `UC23-03B` cho sửa lịch `SCHEDULED`, áp dụng lại cùng contract ngày, xung đột và khóa.
+
+## UC23-03B — Sửa lịch bảo trì đã lên lịch
+
+### 1. Kết quả
+
+- Host có quyền sở hữu phòng có thể sửa ngày và lý do của lịch `SCHEDULED` qua `PUT /api/host/maintenances/{maintenance}`. API trả HTTP `200` cùng DTO hiện có.
+- Nút **Sửa lịch** trên thẻ mở form với dữ liệu hiện tại. Form giữ bản nháp khi lỗi ngày hoặc trùng lịch, chặn gửi lặp, tải lại trang đầu sau khi lưu và thoát chế độ sửa khi backend báo trạng thái đã đổi.
+- Đã tích hợp trên nhánh UC23. Nghiệm thu của owner và phát hành cho Host còn mở.
+
+### 2. Phạm vi file
+
+| Thao tác | File |
+| --- | --- |
+| Tạo | `backend/app/DTOs/Catalog/Requests/UpdateHostRoomMaintenanceRequest.php` |
+| Sửa | `backend/app/Http/Controllers/Catalog/HostRoomMaintenanceController.php` |
+| Sửa | `backend/app/Repositories/Catalog/CatalogRepository.php` |
+| Sửa | `backend/app/Services/Catalog/HostRoomMaintenanceService.php` |
+| Sửa | `backend/app/Validators/Catalog/CatalogValidator.php` |
+| Sửa | `backend/app/Validators/Catalog/HostRoomMaintenanceValidator.php` |
+| Sửa | `backend/routes/api/catalog.php` |
+| Tạo | `backend/tests/Feature/Catalog/HostRoomMaintenanceUpdateTest.php` |
+| Sửa | `frontend/src/components/catalog/HostRoomMaintenancePanel.jsx` |
+| Sửa | `frontend/src/api/hostRoomMaintenanceApi.js` |
+| Sửa | `frontend/src/services/hostRoomMaintenanceService.js` |
+| Sửa | `frontend/tests/hostRoomMaintenanceService.test.js` |
+| Sửa | `docs/TV1/UC23-REPORT.md` |
+
+### 3. Kiểm thử
+
+- `php artisan test --compact --filter='HostRoomMaintenance(Create|List|Service|Update)Test|RoomMaintenance(Query|Validator)Test'` đạt 182 ca, 510 assertions trên SQLite in-memory.
+- `php artisan test --compact` trả exit 0 với 3.320 ca đạt, 594 ca skip và 14.765 assertions theo cấu hình test mặc định.
+- `node --experimental-test-module-mocks --test tests/*.test.js` đạt 560 ca. Hai ca mới đi qua service và API client thật với transport giả lập.
+- `npm run lint` đạt với 3 cảnh báo Fast Refresh ở UI dùng chung. `npm run build` đạt với cảnh báo kích thước chunk.
+- Browser QA riêng được bỏ qua theo phạm vi yêu cầu. PUT chưa có kiểm thử cạnh tranh trên InnoDB.
+- `php artisan route:list --path=maintenances -v` xác nhận PUT dùng Sanctum, tài khoản hoạt động và phê duyệt Host. `git diff --check` đạt.
+
+### 4. Nghiệp vụ và API
+
+PUT chỉ nhận ngày và lý do. Phòng, ID và trạng thái lấy từ bản ghi đã khóa. Giao dịch dùng thứ tự `Property → Room → Booking → Maintenance`, đọc trạng thái hiện hành và loại lịch đích khỏi tập kiểm tra xung đột. Giữ quy tắc nửa mở `[start_date, end_date)`, ngày bắt đầu từ hôm nay và hai mã xung đột của UC23-02D. Lịch đã đổi trạng thái trả `409 CATALOG_ROOM_MAINTENANCE_STATUS_CONFLICT`. Với cùng dữ liệu hợp lệ, PUT trả bản ghi hiện tại và giữ nguyên thời điểm cập nhật. Hai lần sửa khác nhau đều hợp lệ sẽ được áp dụng theo thứ tự ghi dưới khóa.
+
+### 5. Tiêu chí nghiệm thu
+
+| ID | Bằng chứng | Trạng thái |
+| --- | --- | --- |
+| 03B-01 | PUT, GET đọc lại và dữ liệu lưu giữ cùng ID, phòng, trạng thái. Gửi lặp giữ nguyên `updated_at` | Đạt HTTP |
+| 03B-02 | Bỏ qua lịch đang sửa, chặn booking hoặc lịch khác, chấp nhận sát biên, trả `422` cho ngày sai và cho phép sửa khoảng lịch cũ sai | Đạt HTTP |
+| 03B-03 | Chặn guest, sai vai trò, tài khoản bất hoạt, Host khác chủ và cả ba trạng thái ngoài `SCHEDULED` | Đạt HTTP |
+| 03B-04 | Service gửi đúng PUT và xử lý phản hồi trùng trạng thái. Nút sửa, form, hủy và tải lại được rà soát qua mã nguồn | Đạt Node cho service, đã rà soát component |
+
+### 6. Phụ thuộc
+
+Điều kiện phát hành liên quan đến hai ca Availability của UC23-02C2C vẫn mở. UC23-03B cho phép Host sửa một bản ghi `SCHEDULED` sai ngày thành khoảng hợp lệ. Hai ca contract trên toàn bộ dữ liệu cũ vẫn cần TV2 xử lý.
+
+### 7. Skills
+
+- [stayhub-task-planning](../../.agents/skills/stayhub-task-planning/SKILL.md) áp dụng phạm vi và contract từ UC23-03A.
+- [stayhub-laravel](../../.agents/skills/stayhub-laravel/SKILL.md) triển khai PUT, DTO, quyền sở hữu, giao dịch và lỗi theo trạng thái.
+- [stayhub-react](../../.agents/skills/stayhub-react/SKILL.md) tái sử dụng form và xử lý cập nhật danh sách sau thao tác.
+- [stayhub-verification](../../.agents/skills/stayhub-verification/SKILL.md) kiểm tra qua HTTP, đối chiếu bản ghi và đo hồi quy frontend.
+
+### 8. Bàn giao
+
+Đề xuất UC23-03D cho hủy lịch `SCHEDULED` khi TV2 còn đang chốt nghiệp vụ bắt đầu bảo trì của UC23-03C.
+
+## UC23-03D — Hủy lịch bảo trì và giữ lịch sử
+
+### 1. Kết quả
+
+- Backend thêm `DELETE /api/host/maintenances/{maintenance}`. Host có thể chuyển lịch của mình từ `SCHEDULED` sang `CANCELLED`. GET vẫn trả bản ghi đó trong lịch sử.
+- Frontend thêm **Hủy lịch**, **Quay lại** và **Xác nhận hủy** ngay trên thẻ. Sau khi hủy, panel tải lại trang danh sách hiện tại và hiển thị **Đã hủy**.
+- Đã tích hợp trên nhánh UC23. Nghiệm thu owner và phát hành cho Host còn mở.
+
+### 2. Phạm vi file
+
+| Thao tác | File |
+| --- | --- |
+| Sửa | `backend/routes/api/catalog.php` |
+| Sửa | `backend/app/Http/Controllers/Catalog/HostRoomMaintenanceController.php` |
+| Sửa | `backend/app/Validators/Catalog/CatalogValidator.php` |
+| Sửa | `backend/app/Services/Catalog/HostRoomMaintenanceService.php` |
+| Sửa | `backend/app/Repositories/Catalog/CatalogRepository.php` |
+| Tạo | `backend/tests/Feature/Catalog/HostRoomMaintenanceCancelTest.php` |
+| Sửa | `frontend/src/components/catalog/HostRoomMaintenancePanel.jsx` |
+| Sửa | `frontend/src/api/hostRoomMaintenanceApi.js` |
+| Sửa | `frontend/src/services/hostRoomMaintenanceService.js` |
+| Sửa | `frontend/tests/hostRoomMaintenanceService.test.js` |
+| Sửa | `docs/TV1/UC23-REPORT.md` |
+
+### 3. Kiểm thử
+
+- `php artisan test --compact --filter='HostRoomMaintenance(Cancel|Create|List|Service|Update)Test|RoomMaintenance(Query|Validator)Test'` đạt 186 ca và 555 assertions trên SQLite in-memory.
+- `php artisan test --compact` trả exit 0 với 3.324 ca đạt, 594 ca skip và 14.819 assertions theo cấu hình test mặc định.
+- `node --experimental-test-module-mocks --test tests/*.test.js` đạt 562 ca. Hai ca mới dùng service và API client thật với transport giả lập.
+- `npm run lint` đạt với 3 cảnh báo Fast Refresh ở UI dùng chung. `npm run build` đạt với cảnh báo kích thước chunk.
+- `php artisan route:list --path=api/host/maintenances -v` xác nhận route DELETE dùng Sanctum, tài khoản hoạt động và phê duyệt Host. `git diff --check` đạt.
+- Browser QA riêng được bỏ qua theo phạm vi yêu cầu. DELETE chưa có kiểm thử cạnh tranh trên InnoDB.
+
+### 4. Nghiệp vụ và API
+
+Service khóa `Property → Room → Maintenance` và đọc lại trạng thái sau khi khóa. API trả `200` với DTO của cùng bản ghi cho thao tác hủy thành công và cho lần gửi lại. Lần gửi lại giữ nguyên `updated_at`. Lịch `IN_PROGRESS` và `COMPLETED` trả `409 CATALOG_ROOM_MAINTENANCE_STATUS_CONFLICT`. Lịch `SCHEDULED` quá hạn hoặc có ngày cũ sai vẫn có thể hủy. UC51 bỏ qua lịch sau khi chuyển sang `CANCELLED` và tiếp tục xét các lịch khác.
+
+### 5. Tiêu chí nghiệm thu
+
+| ID | Bằng chứng | Trạng thái |
+| --- | --- | --- |
+| 03D-01 | DELETE trả `200`, GET giữ cùng ID và tổng số lịch, gửi lại giữ `updated_at` | Đạt HTTP |
+| 03D-02 | Guest, sai vai trò, bất hoạt, chờ duyệt, khác chủ và trạng thái ngoài phạm vi bị chặn. Payload hoặc query thừa trả `422` | Đạt HTTP |
+| 03D-03 | UC51 hết chặn khoảng thuộc riêng lịch đã hủy và vẫn chặn khoảng có lịch khác | Đạt kiểm thử dịch vụ thật |
+| 03D-04 | API client gửi DELETE không body và kiểm ID cùng trạng thái đích. Đã rà soát thao tác quay lại, khóa submit, focus và tải lại trang hiện tại trong component | Đạt Node cho service, đã rà soát component |
+
+### 6. Phụ thuộc
+
+Điều kiện phát hành UC23 liên quan đến hai ca Availability của UC23-02C2C vẫn mở. Việc chuyển lịch sang `IN_PROGRESS` và hoàn tất thuộc UC23-03C.
+
+### 7. Skills
+
+- [stayhub-task-planning](../../.agents/skills/stayhub-task-planning/SKILL.md) giữ phạm vi theo Mini Plan đã duyệt.
+- [stayhub-laravel](../../.agents/skills/stayhub-laravel/SKILL.md) áp dụng lớp bảo vệ Host, giao dịch cập nhật trạng thái và response hiện có.
+- [stayhub-react](../../.agents/skills/stayhub-react/SKILL.md) tích hợp xác nhận hủy, focus và tải lại danh sách.
+- [stayhub-verification](../../.agents/skills/stayhub-verification/SKILL.md) kiểm bằng API, dữ liệu lưu, UC51 và service frontend.
+
+### 8. Bàn giao
+
+Đề xuất UC23-03C cho bắt đầu và hoàn tất bảo trì sau khi thống nhất với TV2 quy tắc Booking còn giữ phòng và check-in.
+
+## UC23-03C — Hoàn tất và chuẩn bị bắt đầu bảo trì
+
+### 1. Kết quả
+
+- **03C1:** PATCH `/api/host/maintenances/{maintenance}/status` nhận `COMPLETED`. Host của phòng có thể hoàn tất lịch `IN_PROGRESS` kể cả quá hạn. Lịch vẫn xuất hiện trong lịch sử.
+- **03C1:** Panel có nút **Hoàn tất bảo trì**, dùng chung phần xác nhận, khóa chống gửi trùng và tải lại trang hiện tại với thao tác hủy.
+- **03C2:** Service Catalog đã có giao dịch và quy tắc bắt đầu. Các ca SQLite gọi trực tiếp service thật. Nút và contract HTTP cho `IN_PROGRESS` mở sau khi tích hợp check-in TV2.
+
+### 2. Phạm vi file
+
+| Thao tác | File |
+| --- | --- |
+| Sửa | `backend/routes/api/catalog.php`, `backend/app/Http/Controllers/Catalog/HostRoomMaintenanceController.php` |
+| Sửa | `backend/app/Validators/Catalog/CatalogValidator.php`, `backend/app/Validators/Catalog/HostRoomMaintenanceValidator.php` |
+| Sửa | `backend/app/Repositories/Catalog/CatalogRepository.php`, `backend/app/Services/Catalog/HostRoomMaintenanceService.php` |
+| Tạo | `backend/tests/Feature/Catalog/HostRoomMaintenanceCompleteTest.php` |
+| Sửa | `backend/tests/Feature/Catalog/HostRoomMaintenanceServiceTest.php` |
+| Sửa | `frontend/src/components/catalog/HostRoomMaintenancePanel.jsx`, `frontend/src/api/hostRoomMaintenanceApi.js`, `frontend/src/services/hostRoomMaintenanceService.js`, `frontend/tests/hostRoomMaintenanceService.test.js` |
+| Sửa | `docs/TV1/UC23-REPORT.md` |
+
+### 3. Kiểm thử
+
+- `php artisan test --compact --filter='HostRoomMaintenance(Cancel|Complete|Create|List|Service|Update)Test|RoomMaintenance(Query|Validator)Test'` đạt 204 ca, 644 assertions trên SQLite in-memory.
+- `php artisan test --compact` trả exit 0 với 3.342 ca đạt, 594 ca skip và 14.917 assertions theo cấu hình test mặc định.
+- `node --experimental-test-module-mocks --test tests/*.test.js` đạt 563 ca. Ca PATCH xác nhận đúng ID, đích `COMPLETED` và payload.
+- `npm run lint` đạt với 3 cảnh báo Fast Refresh. `npm run build` đạt với cảnh báo kích thước chunk. `git diff --check` đạt.
+- Browser QA riêng được bỏ qua theo phạm vi đã thống nhất. Kiểm thử cạnh tranh bắt đầu bảo trì với check-in trên InnoDB chờ bản TV2.
+
+### 4. Nghiệp vụ
+
+Hoàn tất và hủy dùng cùng cơ chế khóa `Property → Room → Maintenance`, kiểm trạng thái dưới khóa và giữ `updated_at` khi gọi lại cho trạng thái đích hiện tại. Bắt đầu trong service khóa `Property → Room → Booking → Maintenance`. Ngày ứng dụng nằm trong `[start_date, end_date)`. Mọi `CHECKED_IN`, booking còn giữ phòng sai ngày và `PENDING`/`CONFIRMED` có ngày trả phòng sau hôm nay đều chặn. Lịch khác áp dụng UC51 và loại lịch đích khỏi tập so sánh.
+
+### 5. Tiêu chí nghiệm thu
+
+| ID | Bằng chứng | Trạng thái |
+| --- | --- | --- |
+| 03C1-01 | Hoàn tất lịch quá hạn qua PATCH, GET đọc cùng ID, gửi lại giữ `updated_at` | Đạt HTTP |
+| 03C1-02 | UC51 hết chặn theo lịch đã hoàn tất và vẫn chặn theo lịch khác | Đạt kiểm thử UC51 |
+| 03C2-01 | Service kiểm cửa sổ ngày, quyền sở hữu, gửi lặp, booking và lịch khác | Đạt SQLite ở tầng service |
+| 03C2-02 | Bắt đầu và check-in nhất quán với hai thứ tự lấy khóa trên InnoDB | Chờ bản check-in TV2 |
+
+### 6. Phụ thuộc
+
+Đối chiếu trực tiếp GitHub cho thấy `dev` ở `9618a17` và `feature/member-2-booking` ở `064e560`. Code check-in trong nhánh tích hợp hiện tại vẫn khóa Booking trước khi ghi. Xác nhận nghiệp vụ đã được thông báo, phần code TV2 và kiểm thử cạnh tranh vẫn cần tích hợp. Hai ca C2C đối với Availability và lịch `SCHEDULED` sai khoảng ngày vẫn là điều kiện phát hành riêng.
+
+### 7. Skills
+
+- [stayhub-task-planning](../../.agents/skills/stayhub-task-planning/SKILL.md) tách phần triển khai độc lập khỏi phần chờ phối hợp TV2.
+- [stayhub-laravel](../../.agents/skills/stayhub-laravel/SKILL.md) áp dụng middleware, tài nguyên có chủ và khóa giao dịch.
+- [stayhub-react](../../.agents/skills/stayhub-react/SKILL.md) dùng lại xác nhận và kiểm tra response đích.
+- [stayhub-verification](../../.agents/skills/stayhub-verification/SKILL.md) tách bằng chứng HTTP, service, Node và điều kiện InnoDB.
+
+### 8. Bàn giao
+
+Khi có commit check-in của TV2, đối chiếu thứ tự khóa và mã lỗi, chạy kiểm thử tranh chấp rồi nối `IN_PROGRESS` vào PATCH và panel Host.
+
+## UC23-FINAL — Tích hợp bắt đầu bảo trì, Booking và Availability
+
+### 1. Kết quả
+
+- Host có thể xem, tạo, sửa, hủy, bắt đầu và hoàn tất lịch. PATCH hỗ trợ cả `IN_PROGRESS` và `COMPLETED`. Panel dùng mẫu xác nhận cùng trạng thái chờ và tải lại danh sách sau thao tác.
+- Check-in áp dụng cửa sổ `[check_in_date, check_out_date)` theo múi giờ ứng dụng, khóa Room trước Booking và đọc lịch bảo trì hiện hành trước khi ghi.
+- Kiểm tra một phòng, tìm phòng có ngày và bước kiểm trước ghi Booking dùng cùng điều kiện bảo trì. Bản ghi `SCHEDULED` sai ngày chặn phòng theo UC51. Bằng chứng tích hợp thu trên MariaDB cô lập.
+- Trạng thái triển khai kỹ thuật trên nhánh UC23. Nghiệm thu owner và review PR liên nhóm còn mở.
+
+### 2. Phạm vi file
+
+| Tầng | File sửa trong lượt này |
+| --- | --- |
+| Backend Catalog | `backend/app/Http/Controllers/Catalog/HostRoomMaintenanceController.php`, `backend/app/Services/Catalog/HostRoomMaintenanceService.php`, `backend/app/Validators/Catalog/CatalogValidator.php` |
+| Backend Booking | `backend/app/Services/Booking/BookingWorkflowService.php`, `backend/app/Services/Booking/AvailabilityService.php`, `backend/app/Repositories/Booking/RoomAvailabilityRepository.php` |
+| Frontend | `frontend/src/api/hostRoomMaintenanceApi.js`, `frontend/src/services/hostRoomMaintenanceService.js`, `frontend/src/components/catalog/HostRoomMaintenancePanel.jsx`, `frontend/tests/hostRoomMaintenanceService.test.js` |
+| Kiểm thử ứng dụng | `backend/tests/Feature/HostBookingWorkflowTest.php`, `backend/tests/Feature/BookingQueryCharacterizationTest.php`, `backend/tests/Feature/Catalog/HostRoomMaintenanceCompleteTest.php` |
+| Kiểm thử InnoDB | `backend/tests/Feature/Catalog/BookingMaintenanceConcurrencyMySqlTest.php`, `backend/tests/Feature/Catalog/RoomMaintenanceAvailabilityContractMySqlTest.php`, `backend/tests/Support/HostRoomMaintenanceRaceWorker.php` |
+| Báo cáo | `docs/TV1/UC23-REPORT.md` |
+
+### 3. Kiểm thử
+
+- MariaDB 10.11.16/InnoDB. Chạy nhóm `BookingMaintenanceConcurrencyMySqlTest|HostRoomMaintenanceConcurrencyMySqlTest|RoomMaintenanceAvailabilityContractMySqlTest` qua Artisan/PHPUnit. Exit 0, **23 ca và 229 assertions**, gồm 11 ca contract Availability và hai ca tranh chấp check-in ↔ bắt đầu. Instance và dữ liệu fixture đã được dọn.
+- Laravel nhóm Booking, Availability và Catalog liên quan đạt **279 ca, 983 assertions**. `php artisan test --compact` đạt **3.344 ca, 14.936 assertions, 598 skip** theo cấu hình mặc định.
+- `node --experimental-test-module-mocks --test tests/*.test.js` đạt **564 ca**. `npm run build` đạt với cảnh báo kích thước chunk.
+- `npm run lint` đạt với 3 cảnh báo Fast Refresh ở UI dùng chung. `git diff --check` đạt.
+- Browser QA riêng được bỏ qua theo phạm vi đã thống nhất.
+
+### 4. Nghiệp vụ và contract
+
+Check-in ngoài cửa sổ trả `422 CHECK_IN_OUTSIDE_STAY` qua `errors.reasons`. Phòng bị lịch bảo trì chặn phần lưu trú còn lại trả `409 MAINTENANCE_OVERLAP`. Hai endpoint Availability giữ cấu trúc response. `blocked_ranges` chỉ chứa khoảng có ngày hợp lệ. Quy tắc chặn toàn khoảng của lịch đang thực hiện hoặc lịch đã lên sai ngày được biểu thị bằng `available=false` và `MAINTENANCE_OVERLAP`.
+
+### 5. Tiêu chí nghiệm thu
+
+| ID | Bằng chứng | Trạng thái |
+| --- | --- | --- |
+| 03C1 / 03C2 | PATCH bắt đầu và hoàn tất thành công, trạng thái đã hoàn tất cản lần bắt đầu tiếp theo | Đạt HTTP/SQLite, API client đạt Node |
+| 03C-I-01 | Check-in bị chặn trước ngày đến, từ ngày trả hoặc khi bảo trì còn chặn. Sau khi hoàn tất lịch, check-in hợp lệ thành công | Đạt HTTP/SQLite |
+| 03C-I-02 | Hai thứ tự lấy khóa đều chờ trên Room. Kết quả lưu loại trừ `CHECKED_IN` đồng thời `IN_PROGRESS` trong hai fixture | Đạt InnoDB |
+| C2C-A-02 | Lịch đảo ngày, trùng ngày, ngày lịch sai và zero-date bị chặn ở check phòng, tìm phòng và POST Booking | Đạt InnoDB |
+
+### 6. Phụ thuộc và giới hạn
+
+Review TV2 cần đối chiếu chính sách check-in và truy vấn Availability vì hai điểm này nằm cùng PR UC23. Bộ InnoDB xác minh MariaDB trên máy phát triển. UI qua trình duyệt và nghiệm thu owner cần bằng chứng riêng nếu owner yêu cầu ở bước nhận bàn giao.
+
+### 7. Skills
+
+- [stayhub-task-planning](../../.agents/skills/stayhub-task-planning/SKILL.md) giữ phạm vi ở tích hợp UC23 với check-in và Availability.
+- [stayhub-laravel](../../.agents/skills/stayhub-laravel/SKILL.md) nối trạng thái Catalog và giữ khóa, quyền cùng lỗi Booking.
+- [stayhub-react](../../.agents/skills/stayhub-react/SKILL.md) nối PATCH vào thao tác và hiển thị thông báo xung đột.
+- [stayhub-database](../../.agents/skills/stayhub-database/SKILL.md) dùng instance và schema MariaDB tạm, xác nhận target trước khi chạy rồi dọn fixture.
+- [stayhub-verification](../../.agents/skills/stayhub-verification/SKILL.md) đối chiếu endpoint, dữ liệu lưu, khóa và giới hạn bằng chứng.
+
+### 8. Bàn giao
+
+Đề xuất review PR UC23 cùng TV2. Các thay đổi vẫn ở working tree để owner quyết định commit và PR.

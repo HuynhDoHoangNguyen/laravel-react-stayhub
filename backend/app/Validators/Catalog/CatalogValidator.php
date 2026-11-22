@@ -11,6 +11,8 @@ use App\DTOs\Catalog\Requests\ChangeHostPropertyStatusRequest;
 use App\DTOs\Catalog\Requests\CreateHostPropertyRequest;
 use App\DTOs\Catalog\Requests\CreateHostRoomTypeRequest;
 use App\DTOs\Catalog\Requests\CreateHostRoomRequest;
+use App\DTOs\Catalog\Requests\CreateHostRoomMaintenanceRequest;
+use App\DTOs\Catalog\Requests\UpdateHostRoomMaintenanceRequest;
 use App\DTOs\Catalog\Requests\UpdateHostRoomRequest;
 use Brick\Math\BigDecimal;
 use Closure;
@@ -352,6 +354,99 @@ final class CatalogValidator
         $data = $validator->validate();
 
         return new HostRoomMaintenanceListQuery($target->roomId, (int) ($data['page'] ?? 1));
+    }
+
+    public function validateHostRoomMaintenanceCreate(User $actor, string $room, array $body, array $query): ?CreateHostRoomMaintenanceRequest
+    {
+        $target = $this->validateHostRoomDetail($actor, $room, []);
+        if ($target === null) {
+            return null;
+        }
+
+        $data = $this->validateMaintenancePayload($body, $query);
+
+        return new CreateHostRoomMaintenanceRequest($target->roomId, $data['start_date'], $data['end_date'], $data['reason'] ?? null);
+    }
+
+    public function validateHostRoomMaintenanceUpdate(User $actor, string $maintenance, array $body, array $query): ?UpdateHostRoomMaintenanceRequest
+    {
+        $id = $this->validateHostMaintenanceId($actor, $maintenance);
+        if ($id === null) {
+            return null;
+        }
+
+        $data = $this->validateMaintenancePayload($body, $query);
+
+        return new UpdateHostRoomMaintenanceRequest($id, $data['start_date'], $data['end_date'], $data['reason'] ?? null);
+    }
+
+    public function validateHostRoomMaintenanceCancel(User $actor, string $maintenance, array $body, array $query): ?int
+    {
+        $id = $this->validateHostMaintenanceId($actor, $maintenance);
+        if ($id === null) {
+            return null;
+        }
+
+        $validator = $this->validation->make([], []);
+        $validator->after(static function (Validator $validator) use ($body, $query): void {
+            foreach (array_keys($body + $query) as $field) {
+                $validator->errors()->add($field, 'Hủy lịch bảo trì chỉ nhận mã lịch trên URL.');
+            }
+        });
+        $validator->validate();
+
+        return $id;
+    }
+
+    /** @return array{id: int, status: \App\Enums\MaintenanceStatus}|null */
+    public function validateHostRoomMaintenanceTransition(User $actor, string $maintenance, array $body, array $query): ?array
+    {
+        $id = $this->validateHostMaintenanceId($actor, $maintenance);
+        if ($id === null) {
+            return null;
+        }
+
+        $validator = $this->validation->make($body, [
+            'status' => ['bail', 'required', 'string', 'in:IN_PROGRESS,COMPLETED'],
+        ], ['status.*' => 'Trạng thái đích phải là IN_PROGRESS hoặc COMPLETED.']);
+        $validator->after(static function (Validator $validator) use ($body, $query): void {
+            foreach (array_keys(array_diff_key($body, ['status' => true]) + $query) as $field) {
+                $validator->errors()->add($field, 'Trường này không được phép gửi khi chuyển trạng thái bảo trì.');
+            }
+        });
+        $data = $validator->validate();
+
+        return ['id' => $id, 'status' => \App\Enums\MaintenanceStatus::from($data['status'])];
+    }
+
+    private function validateHostMaintenanceId(User $actor, string $maintenance): ?int
+    {
+        $this->authorizeHost($actor);
+        $id = (int) $maintenance;
+
+        return $id > 0 && (string) $id === $maintenance ? $id : null;
+    }
+
+    private function validateMaintenancePayload(array $body, array $query): array
+    {
+        $validator = $this->validation->make($body, [
+            'start_date' => ['required', 'string'],
+            'end_date' => ['required', 'string'],
+            'reason' => ['nullable', 'string'],
+        ], [
+            'start_date.*' => 'Vui lòng nhập ngày bắt đầu theo định dạng YYYY-MM-DD.',
+            'end_date.*' => 'Vui lòng nhập ngày kết thúc theo định dạng YYYY-MM-DD.',
+            'reason.*' => 'Lý do phải là chuỗi văn bản.',
+        ]);
+        $validator->after(static function (Validator $validator) use ($body, $query): void {
+            foreach (array_keys($query) as $field) {
+                $validator->errors()->add($field, 'Lưu lịch bảo trì không nhận tham số truy vấn.');
+            }
+            foreach (array_diff(array_keys($body), ['start_date', 'end_date', 'reason']) as $field) {
+                $validator->errors()->add($field, 'Trường này không được phép gửi khi lưu lịch bảo trì.');
+            }
+        });
+        return $validator->validate();
     }
 
     public function validateHostRoomAmenityQuery(User $actor, string $room, array $input): ?HostRoomDetailQuery

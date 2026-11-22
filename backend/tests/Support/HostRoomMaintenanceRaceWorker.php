@@ -5,6 +5,7 @@ namespace Tests\Support;
 use App\DTOs\Booking\Requests\StoreBookingRequest;
 use App\DTOs\Catalog\Requests\CreateHostRoomMaintenanceRequest;
 use App\Exceptions\AppException;
+use App\Exceptions\BookingDomainException;
 use App\Exceptions\RoomNotAvailableException;
 use App\Models\Booking;
 use App\Models\User;
@@ -87,9 +88,11 @@ final class HostRoomMaintenanceRaceWorker
         $action = $args[4] ?? 'maintenance';
         $snapshotMode = $args[5] ?? 'snapshot';
         $bookingId = (int) ($args[6] ?? 0);
-        if (! in_array($action, ['booking', 'maintenance', 'confirm'], true)
+        $maintenanceId = (int) ($args[7] ?? 0);
+        if (! in_array($action, ['booking', 'maintenance', 'confirm', 'check-in', 'start'], true)
             || ! in_array($snapshotMode, ['fresh', 'snapshot'], true)
-            || ($action === 'confirm' && $bookingId < 1)) {
+            || (in_array($action, ['confirm', 'check-in'], true) && $bookingId < 1)
+            || ($action === 'start' && $maintenanceId < 1)) {
             throw new RuntimeException('Invalid UC23 race worker mode.');
         }
 
@@ -112,7 +115,7 @@ final class HostRoomMaintenanceRaceWorker
                 'connection_id' => (int) self::identity($db)->connection_id,
             ] + ($primed ? ['count' => $rows->count()] : []));
 
-            $run = self::observe($db, fn () => self::invoke($app, $action, $actor, (int) $roomId, $start, $end, $bookingId));
+            $run = self::observe($db, fn () => self::invoke($app, $action, $actor, (int) $roomId, $start, $end, $bookingId, $maintenanceId));
             $outcome = $run['outcome'];
             self::emit(['phase' => 'trace', 'attempts' => $run['attempts'], 'locks' => $run['locks']]);
             if ($primed && !isset($outcome['db_error'])) {
@@ -137,14 +140,21 @@ final class HostRoomMaintenanceRaceWorker
         string $start,
         string $end,
         int $bookingId = 0,
+        int $maintenanceId = 0,
     ): array
     {
         try {
-            if ($action === 'confirm') {
+            if ($action === 'confirm' || $action === 'check-in') {
                 $pending = Booking::query()->where('room_id', $roomId)->findOrFail($bookingId);
-                $booking = $app->make(BookingWorkflowService::class)->confirm($pending, $actor);
+                $service = $app->make(BookingWorkflowService::class);
+                $booking = $action === 'confirm' ? $service->confirm($pending, $actor) : $service->checkIn($pending, $actor);
 
                 return ['booking_status' => $booking->getRawOriginal('status')];
+            }
+            if ($action === 'start') {
+                $maintenance = $app->make(HostRoomMaintenanceService::class)->start($actor, $maintenanceId);
+
+                return ['maintenance_status' => $maintenance?->status];
             }
             if ($action === 'booking') {
                 $input = new StoreBookingRequest($roomId, $start, $end, guestCount: 2);
@@ -162,7 +172,7 @@ final class HostRoomMaintenanceRaceWorker
             return ['maintenance' => $maintenance->jsonSerialize()];
         } catch (AppException $error) {
             return ['status' => $error->status, 'code' => $error->errorCode];
-        } catch (RoomNotAvailableException $error) {
+        } catch (RoomNotAvailableException|BookingDomainException $error) {
             $response = $error->render();
 
             return ['status' => $response->getStatusCode(), 'reasons' => $response->getData(true)['errors']['reasons']];

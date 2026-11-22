@@ -219,11 +219,66 @@ final class BookingMaintenanceConcurrencyMySqlTest extends TestCase
         }
     }
 
-    private function worker(User $actor, Room $room, string $action, string $snapshotMode, int $bookingId = 0): Process
+    public static function checkInOrders(): array
+    {
+        return ['check-in holds Room first' => [true], 'maintenance start holds Room first' => [false]];
+    }
+
+    #[DataProvider('checkInOrders')]
+    public function test_check_in_and_maintenance_start_serialize_on_room(bool $checkInFirst): void
+    {
+        [$host, $customer, $room] = $this->fixture();
+        $bookingId = $this->db->table('bookings')->insertGetId([
+            'booking_code' => 'RACE-'.bin2hex(random_bytes(8)), 'customer_id' => $customer->id, 'room_id' => $room->id,
+            'check_in_date' => '2026-12-09', 'check_out_date' => $checkInFirst ? '2026-12-12' : '2026-12-10',
+            'guest_count' => 2, 'number_of_nights' => $checkInFirst ? 3 : 1, 'price_per_night' => '100.00',
+            'room_total' => $checkInFirst ? '300.00' : '100.00', 'status' => 'CONFIRMED',
+        ]);
+        $maintenanceId = $this->db->table('maintenances')->insertGetId([
+            'room_id' => $room->id, 'start_date' => '2026-12-10', 'end_date' => '2026-12-11', 'status' => 'SCHEDULED',
+        ]);
+        $holder = $checkInFirst ? 'check-in' : 'start';
+        $waiter = $checkInFirst ? 'start' : 'check-in';
+        $worker = $this->worker($host, $room, $waiter, 'fresh', $bookingId, $maintenanceId);
+        $holderId = (int) HostRoomMaintenanceRaceWorker::identity($this->db)->connection_id;
+        $this->db->beginTransaction();
+
+        try {
+            // Keep the Room lock through the outer transaction even if the holder's action is rejected.
+            $this->db->table('rooms')->where('id', $room->id)->lockForUpdate()->first();
+            $run = HostRoomMaintenanceRaceWorker::observe($this->db, fn () => HostRoomMaintenanceRaceWorker::invoke(
+                $this->app, $holder, $host, $room->id, self::START, self::END, $bookingId, $maintenanceId,
+            ));
+            $this->assertSame($checkInFirst ? ['status' => 409, 'reasons' => ['MAINTENANCE_OVERLAP']]
+                : ['maintenance_status' => 'IN_PROGRESS'], $run['outcome']);
+            $this->assertSame(['rooms', 'bookings'], array_values(array_intersect($run['locks'], ['rooms', 'bookings'])));
+            $this->assertSame('rooms', $this->startAndObserveWait($worker, $holderId));
+            $this->db->commit();
+
+            $this->assertSame(0, $worker->wait(), $worker->getErrorOutput());
+            $outcome = $this->event($worker, 'result');
+            unset($outcome['phase']);
+            $trace = $this->event($worker, 'trace');
+            $this->assertSame(['rooms', 'bookings'], array_values(array_intersect($trace['locks'], ['rooms', 'bookings'])));
+            $this->assertSame(1, $trace['attempts']);
+            $this->assertSame($checkInFirst ? ['status' => 409, 'code' => 'CATALOG_ROOM_BOOKING_CONFLICT']
+                : ['status' => 422, 'reasons' => ['CHECK_IN_OUTSIDE_STAY']], $outcome);
+            $this->assertSame('CONFIRMED', $this->db->table('bookings')->where('id', $bookingId)->value('status'));
+            $this->assertSame($checkInFirst ? 'SCHEDULED' : 'IN_PROGRESS',
+                $this->db->table('maintenances')->where('id', $maintenanceId)->value('status'));
+        } finally {
+            if ($this->db->transactionLevel() > 0) {
+                $this->db->rollBack(0);
+            }
+            $worker->stop();
+        }
+    }
+
+    private function worker(User $actor, Room $room, string $action, string $snapshotMode, int $bookingId = 0, int $maintenanceId = 0): Process
     {
         return new Process([
             PHP_BINARY, dirname(__DIR__, 2).'/Support/HostRoomMaintenanceRaceWorker.php',
-            (string) $actor->id, (string) $room->id, self::START, self::END, $action, $snapshotMode, (string) $bookingId,
+            (string) $actor->id, (string) $room->id, self::START, self::END, $action, $snapshotMode, (string) $bookingId, (string) $maintenanceId,
         ], base_path(), timeout: 35);
     }
 
