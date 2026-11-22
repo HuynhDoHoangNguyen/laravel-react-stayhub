@@ -45,6 +45,7 @@ import AdminDashboardPage from '../pages/admin/AdminDashboardPage';
 import AdminStatisticsPage from '../pages/admin/AdminStatisticsPage';
 import AdminInvoiceListPage from '../pages/admin/AdminInvoiceListPage';
 import AdminCommissionsPage from '../pages/admin/AdminCommissionsPage';
+import AdminUsersPage from '../pages/admin/AdminUsersPage';
 import ProfilePage from '../components/profile/ProfilePage';
 
 function AppRouter() {
@@ -108,6 +109,7 @@ function AppRouter() {
                 <Route path="/admin" element={<AdminLayout />}>
                     <Route index element={<AdminDashboardPage />} />
                     <Route path="statistics" element={<AdminStatisticsPage />} />
+                    <Route path="users" element={<AdminUsersPage />} />
                     <Route path="invoices" element={<AdminInvoiceListPage />} />
                     <Route path="commissions" element={<AdminCommissionsPage />} />
                     <Route path="profile" element={<ProfilePage />} />

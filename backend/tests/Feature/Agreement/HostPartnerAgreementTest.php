@@ -235,8 +235,32 @@ class HostPartnerAgreementTest extends TestCase
             'content_sha256' => str_repeat('f', 64),
         ])->assertStatus(409);
 
-        // 6. Host mới đăng ký có thể tạo Property ngay mà không bị chặn AGREEMENT_REQUIRED
+        // 6. Host mới đăng ký (email_verified_at = null) chỉ xem được trang Hồ sơ cá nhân (/api/profile),
+        // chưa được phép tạo Property khi chưa được Admin phê duyệt => 403 HOST_APPROVAL_PENDING
+        $this->assertNull($newHost->email_verified_at);
+
+        $this->actingAs($newHost)->getJson('/api/profile')
+            ->assertStatus(200);
+
         $this->actingAs($newHost)->postJson('/api/host/properties', [
+            'name' => 'Homestay Mới Tinh',
+            'type' => PropertyType::HOMESTAY->value,
+            'address' => '99 Trần Phú, Đà Lạt',
+            'description' => 'Mô tả homestay mới',
+            'phone' => '0909998887',
+            'check_in_time' => '14:00',
+            'check_out_time' => '12:00',
+        ])->assertStatus(403)
+            ->assertJsonPath('code', 'HOST_APPROVAL_PENDING');
+
+        // 7. Sau khi Admin phê duyệt mở khóa tài khoản Host => Tạo Property ngay mà không bị chặn AGREEMENT_REQUIRED
+        $admin = User::factory()->admin()->create();
+        $this->actingAs($admin)->postJson("/api/admin/users/{$newHost->id}/approve-host")
+            ->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.is_host_approved', true);
+
+        $this->actingAs($newHost->fresh())->postJson('/api/host/properties', [
             'name' => 'Homestay Mới Tinh',
             'type' => PropertyType::HOMESTAY->value,
             'address' => '99 Trần Phú, Đà Lạt',

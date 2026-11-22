@@ -158,7 +158,7 @@ export default function AccountDropdown({ triggerClassName, align = 'end' }) {
                     )}
 
                     {/* HOST Menu */}
-                    {user.role === 'HOST' && (
+                    {user.role === 'HOST' && user.email_verified_at && (
                         <>
                             <Link
                                 to="/host"

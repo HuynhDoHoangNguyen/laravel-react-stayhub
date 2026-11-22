@@ -4,7 +4,7 @@ use App\Http\Controllers\Commission\AdminCommissionController;
 use App\Http\Controllers\Commission\HostCommissionController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['auth:sanctum', 'account.active'])->prefix('host')->group(function () {
+Route::middleware(['auth:sanctum', 'account.active', \App\Http\Middleware\EnsureHostIsApproved::class])->prefix('host')->group(function () {
     Route::get('/dashboard/financial-summary', [HostCommissionController::class, 'financialSummary']);
 
     Route::prefix('commissions')->group(function () {

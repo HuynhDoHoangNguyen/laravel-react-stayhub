@@ -19,12 +19,16 @@ Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
 
     // Host Invoices
     Route::get('/host/invoices', [HostInvoiceController::class, 'index'])
+        ->middleware(\App\Http\Middleware\EnsureHostIsApproved::class)
         ->name('host.invoices.index');
     Route::post('/host/bookings/{booking}/invoice', [HostInvoiceController::class, 'store'])
+        ->middleware(\App\Http\Middleware\EnsureHostIsApproved::class)
         ->name('host.bookings.invoice.store');
     Route::get('/host/invoices/{invoice}', [HostInvoiceController::class, 'show'])
+        ->middleware(\App\Http\Middleware\EnsureHostIsApproved::class)
         ->name('host.invoices.show');
     Route::patch('/host/invoices/{invoice}/payment-status', [HostInvoiceController::class, 'updatePaymentStatus'])
+        ->middleware(\App\Http\Middleware\EnsureHostIsApproved::class)
         ->name('host.invoices.payment-status.update');
 
     // Customer Invoices
