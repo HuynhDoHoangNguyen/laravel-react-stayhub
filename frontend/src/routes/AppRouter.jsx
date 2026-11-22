@@ -43,6 +43,7 @@ import HostReviewsPage from '../pages/host/HostReviewsPage';
 import AdminDashboardPage from '../pages/admin/AdminDashboardPage';
 import AdminStatisticsPage from '../pages/admin/AdminStatisticsPage';
 import AdminInvoiceListPage from '../pages/admin/AdminInvoiceListPage';
+import AdminCustomersPage from '../pages/admin/AdminCustomersPage';
 import ProfilePage from '../components/profile/ProfilePage';
 
 function AppRouter() {
@@ -106,6 +107,7 @@ function AppRouter() {
                     <Route index element={<AdminDashboardPage />} />
                     <Route path="statistics" element={<AdminStatisticsPage />} />
                     <Route path="invoices" element={<AdminInvoiceListPage />} />
+                    <Route path="users" element={<AdminCustomersPage />} />
                     <Route path="profile" element={<ProfilePage />} />
                 </Route>
             </Route>

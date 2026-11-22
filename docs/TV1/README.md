@@ -15,6 +15,7 @@ Thư mục này lưu kết quả khảo sát và báo cáo triển khai của **
 | [UC07-REPORT.md](UC07-REPORT.md) | UC7: lọc phòng theo giá, sức chứa, loại phòng/tiện nghi và đánh giá cơ sở; search bar, sidebar cuộn riêng, API thật | UC7/frontend/browser đạt; full backend còn 3 lỗi nền tái hiện ở HEAD trước UC7 |
 | [UC51-REPORT.md](UC51-REPORT.md) | UC51: query kiểm tra lịch bảo trì theo khoảng lưu trú, contract bàn giao TV2 | Lõi query và automated tests PASS; chưa tích hợp Availability/Booking TV2 |
 | [UC52-REPORT.md](UC52-REPORT.md) | UC52: validator kiểm tra sức chứa một phòng, contract bàn giao TV2 và unit tests | Lõi validator và automated tests PASS; chưa tích hợp Availability/Booking TV2 |
+| [UC40-REPORT.md](UC40-REPORT.md) | UC40-01/02: Admin xem danh sách và chi tiết Customer, tìm kiếm/lọc/phân trang, dialog và URL state | Hai task TECHNICAL PASS: backend/Node/lint/build và browser SQLite fixture; chờ developer review, chưa kiểm chứng runtime MySQL |
 
 ## Quy ước
 
