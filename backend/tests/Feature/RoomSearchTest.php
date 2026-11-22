@@ -215,4 +215,30 @@ class RoomSearchTest extends TestCase
             ->assertJsonPath('data.0.price_per_night', '900000.00');
         $this->assertCount(1, $response->json('data'));
     }
+
+    public function test_search_allows_dateless_location_and_guest_filter_without_synthetic_dates(): void
+    {
+        $dalatProp = Property::factory()->create(['name' => 'Mây Đà Lạt Homestay', 'address' => 'Đà Lạt, Lâm Đồng']);
+        $danangProp = Property::factory()->create(['name' => 'Khách sạn Sông Hàn', 'address' => 'Hải Châu, Đà Nẵng']);
+
+        $dalatRoom = Room::factory()->create([
+            'property_id' => $dalatProp->id,
+            'price_per_night' => 550000,
+            'capacity' => 2,
+        ]);
+        Room::factory()->create([
+            'property_id' => $danangProp->id,
+            'price_per_night' => 650000,
+            'capacity' => 2,
+        ]);
+
+        $response = $this->getJson('/api/public/rooms/search?' . http_build_query([
+            'keyword' => 'Đà Lạt',
+            'guest_count' => 2,
+        ]));
+
+        $response->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.id', $dalatRoom->id);
+    }
 }

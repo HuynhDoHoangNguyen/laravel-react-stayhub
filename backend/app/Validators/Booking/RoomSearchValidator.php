@@ -20,9 +20,21 @@ class RoomSearchValidator
      */
     public function validateSearchRooms(array $input): SearchRoomsQuery
     {
+        $isDatelessSearch = empty($input['check_in_date'])
+            && empty($input['check_out_date'])
+            && (! empty($input['keyword']) || isset($input['guest_count']));
+
+        $checkInRules = $isDatelessSearch
+            ? ['nullable', 'date', 'date_format:Y-m-d', 'after_or_equal:today']
+            : ['required', 'date', 'date_format:Y-m-d', 'after_or_equal:today'];
+
+        $checkOutRules = $isDatelessSearch
+            ? ['nullable', 'date', 'date_format:Y-m-d', 'after:check_in_date']
+            : ['required', 'date', 'date_format:Y-m-d', 'after:check_in_date'];
+
         $validated = $this->validation->make($input, [
-            'check_in_date' => ['required', 'date', 'date_format:Y-m-d', 'after_or_equal:today'],
-            'check_out_date' => ['required', 'date', 'date_format:Y-m-d', 'after:check_in_date'],
+            'check_in_date' => $checkInRules,
+            'check_out_date' => $checkOutRules,
             'guest_count' => ['required', 'integer', 'min:1'],
             'property_id' => ['nullable', 'integer', 'min:1'],
             'keyword' => ['nullable', 'string'],
@@ -119,8 +131,12 @@ class RoomSearchValidator
             : null;
 
         return new SearchRoomsQuery(
-            checkInDate: (string) $validated['check_in_date'],
-            checkOutDate: (string) $validated['check_out_date'],
+            checkInDate: isset($validated['check_in_date']) && $validated['check_in_date'] !== ''
+                ? (string) $validated['check_in_date']
+                : null,
+            checkOutDate: isset($validated['check_out_date']) && $validated['check_out_date'] !== ''
+                ? (string) $validated['check_out_date']
+                : null,
             guestCount: (int) $validated['guest_count'],
             propertyId: isset($validated['property_id']) && $validated['property_id'] !== '' ? (int) $validated['property_id'] : null,
             keyword: isset($validated['keyword']) && $validated['keyword'] !== '' ? (string) $validated['keyword'] : null,

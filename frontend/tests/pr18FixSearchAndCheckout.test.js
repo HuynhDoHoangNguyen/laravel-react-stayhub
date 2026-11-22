@@ -11,8 +11,10 @@ mock.module(new URL('../src/api/axios.js', import.meta.url).href, { defaultExpor
 const {
   isAvailabilitySearch,
   hasPartialDateRange,
+  isDatelessBarSearch,
   parseAvailabilitySearchParams,
   searchAvailableRooms,
+  searchDatelessRooms,
 } = await import('../src/services/roomAvailabilitySearchService.js');
 const { addDaysToIsoDate, isValidCalendarDate } = await import('../src/utils/propertyBooking.js');
 const { nightsBetween } = await import('../src/services/bookingService.js');
@@ -84,6 +86,32 @@ test('PR18-FIX-01 / Finding 1: SearchResultsPage does not route dateless locatio
   // Verify hasPartialDateRange alert is present
   assert.match(code, /hasPartialDateRange/);
   assert.match(code, /Khoảng ngày tìm kiếm chưa hợp lệ/);
+});
+
+test('PR18-FIX-01 / Finding 1b: searchDatelessRooms queries by location and guests without sending synthetic check_in_date or check_out_date', async () => {
+  assert.equal(isDatelessBarSearch('?city=Đà+Lạt&roomsCount=1&adults=2'), true);
+  assert.equal(isDatelessBarSearch('?startDate=2026-12-01&endDate=2026-12-03&city=Đà+Lạt'), false);
+  assert.equal(isDatelessBarSearch('?startDate=2026-12-01&city=Đà+Lạt'), false);
+
+  let capturedParams = null;
+  adapterMock = async (config) => {
+    capturedParams = config.params;
+    return {
+      status: 200,
+      config,
+      data: {
+        success: true,
+        data: [],
+        meta: { current_page: 1, last_page: 1, per_page: 15, total: 0 },
+      },
+    };
+  };
+
+  await searchDatelessRooms('?city=Đà+Lạt&roomsCount=1&adults=2');
+  assert.equal(capturedParams.keyword, 'Đà Lạt');
+  assert.equal(capturedParams.guest_count, 2);
+  assert.equal('check_in_date' in capturedParams, false);
+  assert.equal('check_out_date' in capturedParams, false);
 });
 
 // --------------------------------------------------------------------------

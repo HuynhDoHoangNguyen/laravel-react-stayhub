@@ -106,8 +106,9 @@ class RoomAvailabilityRepository
 
     public function searchAvailableRooms(array $filters, string $sort, int $perPage): LengthAwarePaginator
     {
-        $checkIn = Carbon::parse($filters['check_in_date'])->format('Y-m-d');
-        $checkOut = Carbon::parse($filters['check_out_date'])->format('Y-m-d');
+        $hasDates = ! empty($filters['check_in_date']) && ! empty($filters['check_out_date']);
+        $checkIn = $hasDates ? Carbon::parse($filters['check_in_date'])->format('Y-m-d') : null;
+        $checkOut = $hasDates ? Carbon::parse($filters['check_out_date'])->format('Y-m-d') : null;
         $guestCount = (int) $filters['guest_count'];
         $ignoreBookingId = $filters['ignore_booking_id'] ?? null;
 
@@ -116,18 +117,21 @@ class RoomAvailabilityRepository
             ->where('capacity', '>=', $guestCount)
             ->whereHas('property', function (Builder $query): void {
                 $query->where('status', PropertyStatus::ACTIVE->value);
-            })
-            ->whereDoesntHave('maintenances', function (Builder $query) use ($checkIn, $checkOut): void {
+            });
+
+        if ($hasDates && $checkIn !== null && $checkOut !== null) {
+            $query->whereDoesntHave('maintenances', function (Builder $query) use ($checkIn, $checkOut): void {
                 $query->whereNotIn('status', [MaintenanceStatus::CANCELLED->value, MaintenanceStatus::COMPLETED->value])
                     ->where('start_date', '<', $checkOut)
                     ->where('end_date', '>', $checkIn);
             })
-            ->whereDoesntHave('bookings', function (Builder $query) use ($checkIn, $checkOut, $ignoreBookingId): void {
-                $query->holdingRoom()->overlapping($checkIn, $checkOut);
-                if ($ignoreBookingId !== null) {
-                    $query->where('id', '!=', $ignoreBookingId);
-                }
-            });
+                ->whereDoesntHave('bookings', function (Builder $query) use ($checkIn, $checkOut, $ignoreBookingId): void {
+                    $query->holdingRoom()->overlapping($checkIn, $checkOut);
+                    if ($ignoreBookingId !== null) {
+                        $query->where('id', '!=', $ignoreBookingId);
+                    }
+                });
+        }
 
         if (! empty($filters['property_id'])) {
             $query->where('property_id', $filters['property_id']);

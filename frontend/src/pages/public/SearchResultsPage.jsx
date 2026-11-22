@@ -12,7 +12,14 @@ import { PropertyResultsPanel } from '../../components/search/PropertyResultsPan
 import { readSearchNavigation, changeSearchTab } from '../../utils/searchNavigation';
 import { normalizeApiError } from '../../api/apiError';
 import { roomSearchService, readRoomSearch, updateRoomSearch, createRoomSearchLoader } from '../../services/roomSearchService';
-import { isAvailabilitySearch, hasPartialDateRange, parseAvailabilitySearchParams, searchAvailableRooms } from '../../services/roomAvailabilitySearchService';
+import {
+    isAvailabilitySearch,
+    hasPartialDateRange,
+    isDatelessBarSearch,
+    parseAvailabilitySearchParams,
+    searchAvailableRooms,
+    searchDatelessRooms,
+} from '../../services/roomAvailabilitySearchService';
 
 function useRoomRequest(request) {
     const [loader] = useState(createRoomSearchLoader);
@@ -25,14 +32,18 @@ const getOptions = signal => roomSearchService.filterOptions({ signal });
 // Keyed by URL so history navigation starts with the correct form and no stale results.
 function RoomResults({ search, navigate, view, onViewChange }) {
     const available = isAvailabilitySearch(search);
+    const barSearch = isDatelessBarSearch(search);
     const searchUrl = new URLSearchParams(search);
-    const availability = available ? parseAvailabilitySearchParams(search) : null;
-    const params = available ? { ...availability.params,
+    const availability = (available || barSearch) ? parseAvailabilitySearchParams(search) : null;
+    const params = (available || barSearch) ? { ...availability.params,
         room_type_ids: availability.room_type_ids.map(String),
         amenity_ids: (availability.params.amenity_ids ?? []).map(String),
         min_rating: String(availability.min_rating) } : readRoomSearch(search).params;
     const [request] = useState(() => signal => available
-        ? searchAvailableRooms(search, { signal }) : roomSearchService.list(search, { signal }));
+        ? searchAvailableRooms(search, { signal })
+        : barSearch
+            ? searchDatelessRooms(search, { signal })
+            : roomSearchService.list(search, { signal }));
 
     // Preserve guest count (adults & children) whether dates are preselected or not (PR18-FIX-01 Finding 2)
     const rawAdults = searchUrl.get('adults');
@@ -83,7 +94,9 @@ function RoomResults({ search, navigate, view, onViewChange }) {
             <ResultsHeader meta={meta} sortBy={params.sort ?? 'price_asc'} availability={available} onSortChange={sort => change({ sort })} view={view} onViewChange={onViewChange} />
             <p className="text-[12.5px] leading-relaxed text-muted-foreground">{available
                 ? `Tìm phòng trống từ ${availability.checkIn} đến ${availability.checkOut}, cho ${availability.guests} khách mỗi phòng.`
-                : 'Lọc theo giá mỗi đêm, sức chứa, loại phòng, tiện nghi và đánh giá của cơ sở. Giá tham khảo, chưa kiểm tra phòng trống theo ngày.'}</p>
+                : barSearch && availability?.keyword
+                    ? `Tìm phòng tại "${availability.keyword}" cho ${availability.guests} khách mỗi phòng. Giá tham khảo, bạn sẽ chọn ngày nhận và trả phòng ở bước Đặt phòng.`
+                    : 'Lọc theo giá mỗi đêm, sức chứa, loại phòng, tiện nghi và đánh giá của cơ sở. Giá tham khảo, chưa kiểm tra phòng trống theo ngày.'}</p>
             {results.loading && <p role="status" className="text-sm text-muted-foreground">Đang tải phòng…</p>}
             {results.error && <div role="alert" className="rounded-3xl bg-card ring-1 ring-black/[0.04]">
                 <EmptyState title={failure.status === 422 ? 'Bộ lọc không hợp lệ' : 'Không tải được danh sách phòng'}
@@ -118,7 +131,8 @@ export default function SearchResultsPage() {
     const navigation = readSearchNavigation(search);
     const hasDates = isAvailabilitySearch(navigation.roomSearch);
     const partialDate = hasPartialDateRange(navigation.roomSearch);
-    const unsupported = navigation.tab === 'rooms' && !hasDates
+    const barSearch = isDatelessBarSearch(navigation.roomSearch);
+    const unsupported = navigation.tab === 'rooms' && !hasDates && !barSearch
         ? readRoomSearch(navigation.roomSearch).unsupported : [];
     const switchTab = tab => setSearchParams(changeSearchTab(search, tab));
     return <div className="min-h-screen bg-background">
