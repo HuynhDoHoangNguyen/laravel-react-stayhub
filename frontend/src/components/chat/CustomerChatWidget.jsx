@@ -131,8 +131,24 @@ export default function CustomerChatWidget() {
                 </p>
             )}
             <label htmlFor={inputId} className="text-sm font-medium">Câu hỏi</label>
+            <p id={inputId + '-hint'} className="text-xs text-muted-foreground">
+                Ví dụ: Catalog: Tìm phòng cho 4 người dưới 1 triệu tại &quot;Sunrise&quot;. Để chọn bằng mã, dùng tại #71.
+                <br />
+                Tiện ích: Có hồ bơi không tại #71?
+                <br />
+                Tiện ích: Phòng &quot;Deluxe&quot; có điều hòa không tại #71?
+                <br />
+                Dịch vụ: Giá giặt ủi là bao nhiêu tại #71?
+                <br />
+                Khách sạn Sông Hàn còn phòng cho hai người cuối tuần này không? Dùng đúng tên hoặc hỏi
+                &quot;Còn phòng cho 2 người cuối tuần này tại cơ sở #71 không?&quot;. Cuối tuần này là nhận phòng
+                thứ Bảy, trả phòng thứ Hai theo UTC. Bạn cũng có thể hỏi theo mã phòng #81 và ghi rõ hai ngày.
+                <br />
+                Khi AI tắt, dùng mẫu &quot;Phòng trống: Còn phòng #81 từ DD/MM/YYYY đến DD/MM/YYYY cho 2 người không?&quot;
+            </p>
             <textarea
                 id={inputId}
+                aria-describedby={inputId + '-hint'}
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
                 readOnly={Boolean(pending)}

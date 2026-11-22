@@ -15,7 +15,9 @@ const password = process.env.STAYHUB_UC17_BROWSER_PASSWORD;
 const origin = /^http:\/\/127\.0\.0\.1:[1-9]\d{0,4}$/;
 const guestBrowser = manifest.suite === 'GuestChatBrowser';
 const liveMode = ['ChatLiveDryRun', 'ChatLive'].includes(manifest.suite);
-assert.ok((liveMode || ['ChatBrowser', 'GuestChatBrowser'].includes(manifest.suite)) && [frontend, backend, debug].every((url) => origin.test(url)));
+const contextMode = ['ChatContextLiveDryRun', 'ChatContextLive'].includes(manifest.suite);
+const contextDryRun = manifest.suite === 'ChatContextLiveDryRun';
+assert.ok((liveMode || contextMode || ['ChatBrowser', 'GuestChatBrowser'].includes(manifest.suite)) && [frontend, backend, debug].every((url) => origin.test(url)));
 assert.ok(frontend !== backend && password?.length >= 32);
 
 const chatPath = '/api/customer/chat/messages';
@@ -148,7 +150,7 @@ async function connect() {
         socket.send(JSON.stringify({ id, method, params }));
     });
     await send('Network.enable');
-    if (liveMode) {
+    if (liveMode || contextMode) {
         // Keep QA requests on the runner's two random loopback ports, even if a dev route is misconfigured.
         await send('Network.setBlockedURLs', { urls: ['http://localhost:*/*', 'http://127.0.0.1:8000/*', 'http://127.0.0.1:5173/*'] });
     }
@@ -242,10 +244,10 @@ async function reply(request, expected, code) {
     return data.data;
 }
 
-async function submit(question) {
+async function submit(question, index = 0) {
     await value(input, question);
     await waitFor('enabled submit', () => click('Gửi', `${dialog} button`));
-    return requestAt(question);
+    return requestAt(question, index);
 }
 
 async function retry(question, index) {
@@ -517,11 +519,118 @@ async function liveChecks() {
     });
 }
 
+async function contextLiveChecks() {
+    const cases = [
+        ['name', 'Cơ sở Mây QA còn phòng cho hai người cuối tuần này không?',
+            'Cơ sở Mây QA (#171) có phòng khả dụng tại thời điểm kiểm tra từ 28/11/2026 đến 30/11/2026 cho 2 người:\n• Phòng Gió QA (#181)'],
+        ['code', 'Còn phòng cho 2 người tại cơ sở #171 từ 01/12/2026 đến 03/12/2026 không?',
+            'Chưa tìm thấy phòng công khai khả dụng từ 01/12/2026 đến 03/12/2026 cho 2 người.'],
+        ['room', 'Phòng #181 còn trống cho 2 người từ 28/11/2026 đến 30/11/2026 không?',
+            'Phòng Gió QA khả dụng tại thời điểm kiểm tra, từ 28/11/2026 đến 30/11/2026 cho 2 người.'],
+    ];
+    const digest = (value) => createHash('sha256').update(value).digest('hex');
+    if (contextDryRun) {
+        await inspect('GQL-LOCAL', 'Session, CSRF, Sunday UTC and name ambiguity before provider', async () => {
+            await navigate('/');
+            const before = audit();
+            assert.equal((await api('/sanctum/csrf-cookie')).status, 204);
+            assert.equal((await api(chatPath, 'POST', probe(cases[0][1]))).status, 401);
+            await login('customer-a');
+            assert.equal((await api(chatPath, 'POST', probe(cases[0][1]), false)).status, 419);
+            const sunday = await api(chatPath, 'POST', probe('Cơ sở Mây QA còn phòng cho 2 người cuối tuần này không?'));
+            assert.equal(sunday.status, 422);
+            assert.ok(sunday.data.errors.message[0].includes('đã qua theo UTC'));
+            assert.deepEqual(rows(audit()), rows(before));
+
+            const duplicate = await api(chatPath, 'POST', probe('Cơ sở Trùng QA còn phòng cho hai người cuối tuần này không?'));
+            assert.equal(duplicate.status, 201);
+            const answer = duplicate.data.data.assistant_message.message;
+            assert.ok(answer.includes('Cơ sở Trùng QA (#173)') && answer.includes('Cơ sở Trùng QA (#174)'));
+            assert.deepEqual(audit().gemini, before.gemini);
+            return { anonymous: 401, missing_csrf: 419, sunday: 422, duplicate: 201, provider_calls: 0 };
+        });
+        if (checkpoints.at(-1).status !== 'PASS') return;
+    } else {
+        await login('customer-a');
+    }
+    await openWidget();
+
+    for (const [flow, question, expected] of cases) {
+        await inspect('GQL-' + flow.toUpperCase(), 'Vietnamese availability through Customer Chat', async () => {
+            const before = audit();
+            const index = chatRequests(question).length;
+            const request = await submit(question, index);
+            await waitFor('availability provider result', () => request.finished || request.failed, 23000);
+            const saved = audit();
+            const observed = saved.gemini[flow];
+            assert.equal(observed.attempts, 1, flow + ' provider attempts');
+            if (request.status !== 201 || request.failed) {
+                const body = request.finished ? await send('Network.getResponseBody', { requestId: request.id }) : null;
+                const code = body && JSON.parse(body.base64Encoded ? Buffer.from(body.body, 'base64').toString('utf8') : body.body)?.code;
+                const safeCode = typeof code === 'string' && /^[A-Z_]{1,60}$/.test(code) ? ' ' + code : '';
+                throw new Error('Laravel ' + (request.status ?? 'no response') + safeCode
+                    + '. Gemini ' + (observed.provider?.status ?? 'no response') + '.');
+            }
+            assert.equal(observed.provider?.status, 200);
+            assert.equal(observed.provider?.finish_reason, 'STOP');
+            assert.equal(request.xsrf, true);
+            assert.equal(chatRequests(question).length, index + 1);
+            const data = await reply(request, 201);
+            assert.ok(data.user_message.message === question && data.assistant_message.message === expected, 'API content differs from fixture');
+            await assertVisiblePair(question, expected);
+            assert.equal(saved.turns.length - before.turns.length, 1);
+            assert.equal(saved.messages.length - before.messages.length, 2);
+            assert.equal(data.request_id, request.payload.request_id);
+            assert.deepEqual(saved.turns.find(({ request_id }) => request_id === data.request_id), {
+                request_id: data.request_id, user_id: 31, status: 'SUCCEEDED', attempts: 1,
+                chat_session_id: data.session_id, user_message_id: data.user_message.id, assistant_message_id: data.assistant_message.id,
+            });
+            assert.deepEqual(saved.sessions.find(({ id }) => id === data.session_id), { id: data.session_id, user_id: 31 });
+            for (const [item, sender, message] of [[data.user_message, 'USER', question], [data.assistant_message, 'ASSISTANT', expected]]) {
+                assert.deepEqual(saved.messages.find(({ id }) => id === item.id),
+                    { id: item.id, chat_session_id: data.session_id, sender, body_sha256: digest(message) });
+            }
+
+            const evidence = { provider: observed.provider, laravel_status: 201, text_visible: true, chat_rows_added: 2 };
+            if (flow === 'name') {
+                const replay = await api(chatPath, 'POST', request.payload);
+                assert.equal(replay.status, 200);
+                assert.ok(JSON.stringify(replay.data.data) === JSON.stringify(data), 'Replay differs from saved result');
+                assert.deepEqual(audit(), saved);
+                evidence.replay_status = 200;
+                evidence.replay_provider_calls = 0;
+            }
+            return evidence;
+        });
+        if (checkpoints.at(-1).status !== 'PASS') return;
+    }
+
+    if (contextDryRun) {
+        await inspect('GQL-INVALID', 'Incorrect fake intent is rejected without a saved pair', async () => {
+            const before = audit();
+            const question = 'Cơ sở Mây QA có phòng cho hai người cuối tuần này không?';
+            const payload = probe(question);
+            const response = await api(chatPath, 'POST', payload);
+            assert.equal(response.status, 503);
+            assert.equal(response.data.code, 'CHAT_PROVIDER_UNAVAILABLE');
+            const after = audit();
+            assert.equal(after.gemini['invalid-intent'].attempts, 1);
+            assert.equal(after.turns.find(({ request_id }) => request_id === payload.request_id)?.status, 'FAILED');
+            assert.equal(after.turns.length - before.turns.length, 1);
+            assert.deepEqual(after.messages, before.messages);
+            assert.deepEqual(after.sessions, before.sessions);
+            return { laravel_status: 503, chat_messages_added: 0, provider_mode: 'fake' };
+        });
+    }
+}
+
 try {
     await connect();
     await width(1440);
 
-    if (liveMode) {
+    if (contextMode) {
+        await contextLiveChecks();
+    } else if (liveMode) {
         await liveChecks();
     } else if (guestBrowser) {
         await guestChecks();
@@ -791,6 +900,7 @@ try {
     }
 }
 
-const passed = checkpoints.length === (liveMode ? 2 : guestBrowser ? 5 : 7) && checkpoints.every(({ status }) => status === 'PASS');
+const expectedChecks = contextMode ? (contextDryRun ? 5 : 3) : liveMode ? 2 : guestBrowser ? 5 : 7;
+const passed = checkpoints.length === expectedChecks && checkpoints.every(({ status }) => status === 'PASS');
 process.stdout.write(JSON.stringify({ passed, browser: browserVersion, checkpoints }, null, 2) + '\n');
 process.exitCode = passed ? 0 : 1;

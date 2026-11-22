@@ -113,6 +113,79 @@ final class GeminiChatProviderTest extends TestCase
         }
     }
 
+    public function test_availability_requests_structured_output_using_only_the_approved_prompt(): void
+    {
+        $prompt = 'phong [ROOM] con trong cho [GUESTS] nguoi tu [DATE_A] den [DATE_B] khong?';
+        $intent = ['intent' => 'check_availability', 'room' => 'ROOM', 'check_in' => 'DATE_A', 'check_out' => 'DATE_B', 'guests' => 'GUESTS'];
+        Http::fake([self::URL => Http::response(self::candidate([['text' => json_encode($intent, JSON_THROW_ON_ERROR)]]))]);
+
+        $this->assertSame($intent, $this->provider()->availabilityIntent($prompt));
+        Http::assertSent(static function (Request $request) use ($prompt): bool {
+            $payload = $request->data();
+            self::assertSame(self::URL, $request->url());
+            self::assertSame('POST', $request->method());
+            self::assertSame([['role' => 'user', 'parts' => [['text' => $prompt]]]], $payload['contents']);
+            self::assertSame('application/json', $payload['generationConfig']['responseMimeType']);
+            self::assertSame(['intent', 'room', 'check_in', 'check_out', 'guests'], $payload['generationConfig']['responseSchema']['required']);
+            self::assertStringNotContainsString(self::KEY, $request->body());
+
+            return true;
+        });
+        Http::assertSentCount(1);
+    }
+
+    public function test_property_availability_requests_property_and_weekend_references(): void
+    {
+        $prompt = '[PROPERTY] con phong cho [GUESTS] nguoi [WEEKEND] khong?';
+        $intent = ['intent' => 'check_availability', 'property' => 'PROPERTY', 'check_in' => 'WEEKEND', 'check_out' => 'WEEKEND', 'guests' => 'GUESTS'];
+        Http::fake([self::URL => Http::response(self::candidate([['text' => json_encode($intent, JSON_THROW_ON_ERROR)]]))]);
+
+        $this->assertSame($intent, $this->provider()->availabilityIntent($prompt, byProperty: true));
+        Http::assertSent(static function (Request $request) use ($prompt): bool {
+            $payload = $request->data();
+            self::assertSame([['role' => 'user', 'parts' => [['text' => $prompt]]]], $payload['contents']);
+            self::assertSame('application/json', $payload['generationConfig']['responseMimeType']);
+            self::assertSame(['intent', 'property', 'check_in', 'check_out', 'guests'], $payload['generationConfig']['responseSchema']['required']);
+            self::assertArrayNotHasKey('room', $payload['generationConfig']['responseSchema']['properties']);
+            self::assertStringContainsString('WEEKEND cho cả ngày nhận và ngày trả', $payload['systemInstruction']['parts'][0]['text']);
+
+            return true;
+        });
+        Http::assertSentCount(1);
+    }
+
+    public function test_availability_rejects_malformed_json_without_retrying(): void
+    {
+        Http::fake([self::URL => Http::response(self::candidate([['text' => '{invalid intent']]))]);
+
+        try {
+            $this->provider()->availabilityIntent('phong [ROOM] con trong?');
+            $this->fail('Expected a chat provider exception.');
+        } catch (ChatProviderException $error) {
+            $this->assertSame(ChatProviderException::UNAVAILABLE, $error->errorCode);
+            $this->assertStringNotContainsString('invalid intent', $error->getMessage());
+        }
+        Http::assertSentCount(1);
+    }
+
+    public function test_availability_classifies_a_transport_timeout_without_retrying(): void
+    {
+        $attempts = 0;
+        Http::fake([self::URL => static function (Request $request) use (&$attempts) {
+            $attempts++;
+
+            return Create::rejectionFor(new ConnectException('Timeout fixture', $request->toPsrRequest(), null, ['errno' => 28]));
+        }]);
+
+        try {
+            $this->provider()->availabilityIntent('phong [ROOM] con trong?');
+            $this->fail('Expected a chat provider timeout.');
+        } catch (ChatProviderException $error) {
+            $this->assertSame(ChatProviderException::TIMEOUT, $error->errorCode);
+        }
+        $this->assertSame(1, $attempts);
+    }
+
     #[DataProvider('invalidResponses')]
     public function test_it_rejects_unusable_responses(mixed $payload): void
     {

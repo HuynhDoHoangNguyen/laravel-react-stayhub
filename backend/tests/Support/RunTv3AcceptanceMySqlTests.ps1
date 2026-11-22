@@ -4,7 +4,7 @@ param(
     [switch]$Provision,
     # Negative control: the smoke test fails after writing to its owned transaction.
     [switch]$InjectTestFailure,
-    [ValidateSet('Functional', 'InvoiceCreateRace', 'ReviewRead', 'ReviewCreate', 'ReviewCreateRace', 'ChatData', 'ChatHttp', 'ChatRecovery', 'ChatBrowser', 'GuestChat', 'GuestChatBrowser', 'ChatLiveDryRun', 'ChatLive')]
+    [ValidateSet('Functional', 'InvoiceCreateRace', 'ReviewRead', 'ReviewCreate', 'ReviewCreateRace', 'ChatData', 'ChatHttp', 'ChatRecovery', 'ChatBrowser', 'GuestChat', 'GuestChatBrowser', 'ChatLiveDryRun', 'ChatLive', 'ChatContextLiveDryRun', 'ChatContextLive')]
     [string]$Suite = 'Functional',
     [switch]$AllowLiveGemini,
     [string]$VerifiedDryRun,
@@ -15,8 +15,9 @@ param(
 #Requires -Version 7.0
 if (!$Provision) { throw 'Explicit -Provision is required; no database connection was opened.' }
 if ($Suite -ne 'Functional' -and $InjectTestFailure) { throw 'Smoke failure injection requires the Functional suite.' }
-if (($Suite -eq 'ChatLive' -and (!$AllowLiveGemini -or $VerifiedDryRun -cnotmatch '^[a-f0-9]{32}$')) -or
-    ($Suite -ne 'ChatLive' -and ($AllowLiveGemini -or $VerifiedDryRun))) { throw 'ChatLive requires explicit opt-in and a verified dry-run ID.' }
+$liveNetwork = $Suite -in @('ChatLive', 'ChatContextLive')
+if (($liveNetwork -and (!$AllowLiveGemini -or $VerifiedDryRun -cnotmatch '^[a-f0-9]{32}$')) -or
+    (!$liveNetwork -and ($AllowLiveGemini -or $VerifiedDryRun))) { throw 'Live QA requires explicit opt-in and a verified dry-run ID.' }
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -28,7 +29,9 @@ $testUser = 'tv3ac_' + $runId.Substring(0, 16)
 $testPassword = [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
 $testAppKey = 'base64:' + [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
 $liveGeminiKey = $null
-$browserSuites = @('ChatBrowser', 'GuestChatBrowser', 'ChatLiveDryRun', 'ChatLive')
+$contextQaKey = $env:STAYHUB_UC61_LIVE_GEMINI_API_KEY
+Remove-Item Env:STAYHUB_UC61_LIVE_GEMINI_API_KEY -ErrorAction SilentlyContinue
+$browserSuites = @('ChatBrowser', 'GuestChatBrowser', 'ChatLiveDryRun', 'ChatLive', 'ChatContextLiveDryRun', 'ChatContextLive')
 $evidence = Join-Path $repo ".agent-workspace/tv3/ac-env-01/$runId"
 $null = New-Item -ItemType Directory -Path $evidence
 $lifecycleArtifacts = Join-Path $evidence 'lifecycle'
@@ -189,6 +192,7 @@ function Wait-BrowserHttp([string]$Url) {
 function Invoke-ChatBrowser([hashtable]$Environment) {
     $guestBrowser = $Suite -eq 'GuestChatBrowser'
     $liveMode = $Suite -in @('ChatLiveDryRun', 'ChatLive')
+    $contextMode = $Suite -in @('ChatContextLiveDryRun', 'ChatContextLive')
     $node = (Get-Command node -ErrorAction Stop).Source
     $edge = Join-Path ${env:ProgramFiles(x86)} 'Microsoft/Edge/Application/msedge.exe'
     if (!(Test-Path -LiteralPath $edge -PathType Leaf)) { throw 'Microsoft Edge executable is missing.' }
@@ -205,14 +209,14 @@ function Invoke-ChatBrowser([hashtable]$Environment) {
     $Environment.STAYHUB_UC17_BROWSER_PASSWORD = $testPassword
     $Environment.STAYHUB_UC17_PHP = $php
     $server = 'tests/Support/Uc17BrowserServer.php'
-    if ($Suite -eq 'ChatLiveDryRun') {
+    if ($Suite -in @('ChatLiveDryRun', 'ChatContextLiveDryRun')) {
         $guard = Invoke-Child $php @($server, 'guard-preflight') '' $Environment -WorkingDirectory $backend
         Save-Json 'guard-preflight.json' ($guard.stdout | ConvertFrom-Json)
     }
     $prepared = Invoke-Child $php @($server, 'prepare') '' $Environment -WorkingDirectory $backend
     Save-Json 'fixture-before.json' ($prepared.stdout | ConvertFrom-Json)
     $serverEnvironment = $Environment.Clone()
-    if ($Suite -eq 'ChatLive') {
+    if ($liveNetwork) {
         $claim = Join-Path $repo ".agent-workspace/tv3/ac-env-01/$VerifiedDryRun/live-consumed"
         $ticket = [IO.File]::Open($claim, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
         $ticket.Dispose()
@@ -220,7 +224,7 @@ function Invoke-ChatBrowser([hashtable]$Environment) {
         $serverEnvironment.STAYHUB_UC17_LIVE_AUTHORIZED = '1'
     }
     Start-BrowserService 'laravel' $php @('-S', "127.0.0.1:$backendPort", '-t', 'public', $server) $serverEnvironment $backend
-    if ($Suite -eq 'ChatLive') { $serverEnvironment.GEMINI_API_KEY = '' }
+    if ($liveNetwork) { $serverEnvironment.GEMINI_API_KEY = '' }
     Start-BrowserService 'vite' $node @('node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', [string]$frontendPort, '--strictPort') @{
         VITE_BACKEND_URL = $manifest.backend_url; VITE_ENABLE_BOOKING_MOCKS = 'false'; VITE_ENABLE_PROPERTY_MOCKS = 'false'
         VITE_ENABLE_GUEST_CHAT = ([string]($guestBrowser -or $liveMode)).ToLowerInvariant()
@@ -246,14 +250,20 @@ function Invoke-ChatBrowser([hashtable]$Environment) {
     $audit = Invoke-Child $php @($server, 'audit') '' $Environment -WorkingDirectory $backend
     $finalFixture = $audit.stdout | ConvertFrom-Json
     Save-Json 'fixture-after.json' $finalFixture
-    if ($liveMode) {
+    if ($contextMode) {
+        Save-Json 'gemini-attempts.json' @{ simulated = !$liveNetwork; model = $Environment.GEMINI_MODEL; cases = $finalFixture.gemini }
+        $contextCases = if ($liveNetwork) { @('name', 'code', 'room') } else { @('name', 'code', 'room', 'invalid-intent') }
+        foreach ($case in $contextCases) {
+            if ($finalFixture.gemini.$case.attempts -ne 1) { throw "UC61 expected one provider attempt for $case." }
+        }
+    } elseif ($liveMode) {
         Save-Json 'gemini-attempts.json' @{ simulated = ($Suite -eq 'ChatLiveDryRun'); model = 'gemini-3.5-flash-lite';
             guest = $finalFixture.gemini.guest; customer = $finalFixture.gemini.customer }
         if ($finalFixture.gemini.guest.attempts -ne 1 -or $finalFixture.gemini.customer.attempts -ne 1) { throw 'UC17 expected one Gemini attempt per flow.' }
     }
     if ($browser.exit -ne 0 -or $finalFixture.outbound_attempts -ne 0) { throw 'UC17 browser acceptance failed; see browser and fixture evidence.' }
     $reported = $browser.stdout | ConvertFrom-Json
-    $expectedChecks = if ($liveMode) { 2 } elseif ($guestBrowser) { 5 } else { 7 }
+    $expectedChecks = if ($contextMode) { if ($liveNetwork) { 3 } else { 5 } } elseif ($liveMode) { 2 } elseif ($guestBrowser) { 5 } else { 7 }
     if (!$reported.passed -or @($reported.checkpoints).Count -ne $expectedChecks -or @($reported.checkpoints | Where-Object { $_.status -ne 'PASS' }).Count -gt 0) {
         throw 'UC17 browser evidence is incomplete.'
     }
@@ -266,7 +276,9 @@ try {
     if (!(Test-Path -LiteralPath (Join-Path $backend 'vendor/autoload.php'))) { throw 'Missing Composer dependencies.' }
     $protectedBefore = Protected-Fingerprint
     Save-Json 'protected-before.json' $protectedBefore
-    if ($Suite -eq 'ChatLive') {
+    if ($liveNetwork) {
+        $requiredDrySuite = if ($Suite -eq 'ChatContextLive') { 'ChatContextLiveDryRun' } else { 'ChatLiveDryRun' }
+        $requiredBlocks = if ($Suite -eq 'ChatContextLive') { 7 } else { 5 }
         $dryDirectory = Join-Path $repo ".agent-workspace/tv3/ac-env-01/$VerifiedDryRun"
         $dryManifest = Get-Content -LiteralPath (Join-Path $dryDirectory 'manifest.json') -Raw | ConvertFrom-Json
         $dryResult = Get-Content -LiteralPath (Join-Path $dryDirectory 'result.json') -Raw | ConvertFrom-Json
@@ -277,21 +289,29 @@ try {
         $dryScope = Get-Content -LiteralPath (Join-Path $dryDirectory 'protected-after.json') -Raw | ConvertFrom-Json -AsHashtable
         # An independently changing development cache is reported by the runner. The gate checks the owned target and cleanup separately.
         $onlyDevDrift = $dryResult.cleanup_failure -ceq 'Development fingerprint changed; do not restore or overwrite development data.'
-        if ($dryManifest.suite -ne 'ChatLiveDryRun' -or $dryResult.run_id -cne $VerifiedDryRun -or $dryResult.failure -or
-            (!$dryResult.passed -and !$onlyDevDrift) -or $dryBrowser.passed -ne $true -or
+        if ($dryManifest.suite -ne $requiredDrySuite -or $dryResult.run_id -cne $VerifiedDryRun -or $dryResult.failure -or
+            (!$dryResult.passed -and ($Suite -eq 'ChatContextLive' -or !$onlyDevDrift)) -or $dryBrowser.passed -ne $true -or
             $dryConnection.identity.db -cne "stayhub_tv3_ac_test_$VerifiedDryRun" -or $dryConnection.development_read_denied -ne $true -or
             $dryCleanup.schema_remaining -ne '0' -or $dryCleanup.user_remaining -ne '0' -or
             $dryCleanup.connections_remaining -ne '0' -or $dryCleanup.owned_children_exited -ne $true -or
-            $dryGuard.network_attempts -ne 0 -or @($dryGuard.blocked).Count -ne 5 -or
+            $dryGuard.network_attempts -ne 0 -or @($dryGuard.blocked).Count -ne $requiredBlocks -or
             (($dryScope | ConvertTo-Json -Compress) -cne ($protectedBefore | ConvertTo-Json -Compress))) { throw 'ChatLive requires a successful dry run of the current files.' }
-        $keyProbe = @'
+        if ($Suite -eq 'ChatContextLive') {
+            if ($contextQaKey -cnotmatch '^[!-~]{20,200}$' -or $contextQaKey -eq 'fake-uc17-browser-key') {
+                throw 'UC61 live requires a QA key in STAYHUB_UC61_LIVE_GEMINI_API_KEY.'
+            }
+            $script:liveGeminiKey = $contextQaKey
+            $contextQaKey = $null
+        } else {
+            $keyProbe = @'
 require 'backend/vendor/autoload.php';
 $values = Dotenv\Dotenv::parse(file_get_contents('.env'));
 $key = getenv('STAYHUB_UC17_LIVE_GEMINI_API_KEY') ?: ($values['GEMINI_API_KEY'] ?? '');
 if (!preg_match('/\A[!-~]{20,200}\z/', $key)) {exit(2);}
 echo $key;
 '@
-        $script:liveGeminiKey = (Invoke-Child $php @('-r', $keyProbe)).stdout
+            $script:liveGeminiKey = (Invoke-Child $php @('-r', $keyProbe)).stdout
+        }
     }
     $phpProbe = Invoke-Child $php @('-r', 'if (PHP_VERSION_ID < 80200 || PHP_INT_SIZE !== 8 || !extension_loaded("pdo_mysql")) {exit(1);} echo PHP_VERSION;')
     $ids = (Invoke-Child $docker @('compose', 'ps', '-q', 'mysql')).stdout.Trim()

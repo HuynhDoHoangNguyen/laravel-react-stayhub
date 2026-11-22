@@ -25,6 +25,46 @@ final class GeminiChatProvider implements ChatProvider
 
     public function answer(#[\SensitiveParameter] string $approvedQuestion): string
     {
+        return $this->generate($approvedQuestion, self::INSTRUCTION);
+    }
+
+    public function availabilityIntent(#[\SensitiveParameter] string $approvedQuestion, bool $byProperty = false): array
+    {
+        $place = $byProperty ? 'property' : 'room';
+        $locationInstruction = $byProperty
+            ? 'cơ sở [PROPERTY], số khách và kỳ lưu trú. Với [WEEKEND], dùng WEEKEND cho cả ngày nhận và ngày trả. '
+            : 'mã phòng, ngày nhận, ngày trả và số khách. ';
+        $text = $this->generate(
+            $approvedQuestion,
+            'Phân loại câu hỏi tra phòng trống. Chỉ trả bộ tham chiếu có sẵn trong câu cho '
+            .$locationInstruction.'Ghi tên tham chiếu không kèm dấu ngoặc vuông. '
+            .'Nếu câu không phải tra phòng trống hoặc thiếu tham chiếu, '
+            .'chọn unsupported và dùng null cho tham chiếu chưa xác định.',
+            [
+                'responseMimeType' => 'application/json',
+                'responseSchema' => [
+                    'type' => 'OBJECT',
+                    'properties' => [
+                        'intent' => ['type' => 'STRING', 'enum' => ['check_availability', 'unsupported']],
+                        $place => ['type' => 'STRING', 'nullable' => true],
+                        'check_in' => ['type' => 'STRING', 'nullable' => true],
+                        'check_out' => ['type' => 'STRING', 'nullable' => true],
+                        'guests' => ['type' => 'STRING', 'nullable' => true],
+                    ],
+                    'required' => ['intent', $place, 'check_in', 'check_out', 'guests'],
+                ],
+            ],
+        );
+        $intent = json_decode($text, true, 8);
+        if (! is_array($intent) || array_is_list($intent)) {
+            throw new ChatProviderException(ChatProviderException::UNAVAILABLE);
+        }
+
+        return $intent;
+    }
+
+    private function generate(#[\SensitiveParameter] string $approvedQuestion, string $instruction, array $options = []): string
+    {
         $question = trim($approvedQuestion);
         if ($question === '') {
             throw new InvalidArgumentException('An approved chat question is required.');
@@ -51,11 +91,12 @@ final class GeminiChatProvider implements ChatProvider
                 ->connectTimeout(min(self::CONNECT_TIMEOUT_SECONDS, $timeout))
                 ->timeout($timeout)
                 ->post(self::BASE_URL.$model.':generateContent', [
-                    'systemInstruction' => ['parts' => [['text' => self::INSTRUCTION]]],
+                    'systemInstruction' => ['parts' => [['text' => $instruction]]],
                     'contents' => [['role' => 'user', 'parts' => [['text' => $question]]]],
                     'generationConfig' => [
                         'candidateCount' => 1,
                         'maxOutputTokens' => $maxOutputTokens,
+                        ...$options,
                     ],
                 ]);
         } catch (ConnectionException $error) {

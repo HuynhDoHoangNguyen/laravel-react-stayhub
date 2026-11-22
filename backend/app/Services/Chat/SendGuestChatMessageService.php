@@ -2,8 +2,6 @@
 
 namespace App\Services\Chat;
 
-use App\DTOs\Catalog\Requests\PublicRoomFilterQuery;
-use App\Services\Catalog\PublicRoomQueryService;
 use Illuminate\Cache\RateLimiter;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
@@ -13,7 +11,8 @@ final class SendGuestChatMessageService
     public function __construct(
         private readonly ChatProvider $provider,
         private readonly ChatProviderSlots $slots,
-        private readonly PublicRoomQueryService $rooms,
+        private readonly PublicCatalogChatService $catalog,
+        private readonly PublicFaqQueryService $faq,
     ) {}
 
     public function send(#[\SensitiveParameter] string $session, #[\SensitiveParameter] string $ip, string $requestId, #[\SensitiveParameter] string $question): array
@@ -56,11 +55,16 @@ final class SendGuestChatMessageService
         if (preg_match('/\b(da dat|don dat|booking cua|ma (booking|dat phong|dat cho)|phong cua toi|phong toi dat|lich dat phong)\b/', $text)) {
             return $this->answer('Bạn có thể xem ngày lưu trú và trạng thái trong mục Đơn đặt phòng.', 'bookings');
         }
-        if (preg_match('/@|https?:\/\/|\b(?:\d[ .+\-()]*){7,}|\b(mat khau|otp|token|cccd|so the|email|so dien thoai|dia chi cua toi)\b/', $text)) {
+        if (preg_match('/@|https?:\/\/|\b(?:\d[ .+\-()]*){7,}|\b(mat khau|otp|token|cccd|so the|email|so dien thoai|dia chi cua toi)\b/', $this->catalog->privacyText($text))) {
             return $this->answer('Bạn hãy bỏ thông tin cá nhân hoặc mã bảo mật rồi hỏi lại nhé.');
         }
-        if (preg_match('/\b(tim phong|khach san|homestay|phong cho|phong nghi|cho nghi|[1-9][0-9]?\s*(nguoi|khach)|ngan sach)\b/', $text)) {
-            return $this->recommend($text);
+        $faqReply = $this->faq->reply($question);
+        if ($faqReply !== null) {
+            return $this->answer($faqReply);
+        }
+        $catalogReply = $this->catalog->reply($question, $text);
+        if ($catalogReply !== null) {
+            return ['status' => 'answered', 'data' => $catalogReply];
         }
 
         $topics = [
@@ -107,33 +111,6 @@ final class SendGuestChatMessageService
         } finally {
             $slot->release();
         }
-    }
-
-    private function recommend(#[\SensitiveParameter] string $text): array
-    {
-        preg_match('/\b([1-9][0-9]?)\s*(?:nguoi|khach)\b/', $text, $guests);
-        preg_match('/\b(?:duoi|toi da|ngan sach)\s+([1-9][0-9]{0,6})\s*(trieu|nghin|ngan|k|vnd|dong)\b/', $text, $budget);
-        // The catalog filter currently supports capacity and price. Keep date or location searches on the search page.
-        if (preg_match('/\b(?:tai\s+\w|(?:khach san|homestay|phong|cho nghi)\s+o\s+\w|(?:ngay|dem)\s+\d)/', $text)
-            || ($guests === [] && $budget === [])) {
-            return $this->answer('Bạn có thể cho biết số khách và ngân sách mỗi đêm, hoặc dùng trang tìm kiếm để chọn chỗ nghỉ.', 'search');
-        }
-        $maximum = isset($budget[1]) ? (string) ((int) $budget[1] * match ($budget[2]) {
-            'trieu' => 1_000_000,
-            'nghin', 'ngan', 'k' => 1_000,
-            default => 1,
-        }) : null;
-        $filters = new PublicRoomFilterQuery(maxPrice: $maximum, guestCount: isset($guests[1]) ? (int) $guests[1] : null, perPage: 3);
-        $cards = $this->rooms->listing($filters)->getCollection()->map(static fn ($item): array => [
-            'property_id' => $item->property['id'],
-            'property_name' => $item->property['name'],
-            'room_id' => $item->room->id,
-            'room_name' => $item->room->name,
-        ])->values()->all();
-
-        return $cards === []
-            ? $this->answer('Chưa tìm thấy phòng phù hợp. Bạn có thể đổi tiêu chí trên trang tìm kiếm.', 'search')
-            : $this->answer('Bạn có thể tham khảo các chỗ nghỉ này. Hãy kiểm tra ngày lưu trú trên trang chi tiết.', rooms: $cards);
     }
 
     private function answer(string $message, ?string $action = null, array $rooms = []): array

@@ -2,9 +2,12 @@
 
 namespace App\Services\Booking;
 
+use App\DTOs\Booking\Requests\CheckAvailabilityQuery;
 use App\DTOs\Booking\Requests\SearchRoomsQuery;
+use App\Models\Room;
 use App\Repositories\Booking\RoomAvailabilityRepository;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Validation\ValidationException;
 
 class SearchService
@@ -30,6 +33,12 @@ class SearchService
         }
 
         return $this->repository->searchAvailableRooms($filters, $sort, $perPage);
+    }
+
+    /** @return Collection<int, Room> */
+    public function publicAvailableRooms(int $propertyId, CheckAvailabilityQuery $input): Collection
+    {
+        return $this->repository->publicAvailableRooms($propertyId, $input);
     }
 
     /**
