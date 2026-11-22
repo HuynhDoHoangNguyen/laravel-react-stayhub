@@ -12,6 +12,9 @@ use App\DTOs\Invoice\Requests\AdminInvoiceFilterRequest;
 use App\DTOs\Invoice\Requests\AdminInvoiceQueryInputRequest;
 use App\DTOs\Invoice\Responses\AdminInvoiceListItemResponse;
 use App\DTOs\Invoice\Responses\InvoiceResponse;
+use App\DTOs\Invoice\Responses\HostInvoiceBookingContextResponse;
+use App\DTOs\Invoice\Responses\HostEligibleBookingResponse;
+use App\Enums\BookingStatus;
 use App\DTOs\Invoice\Responses\InvoiceItemResponse;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
@@ -66,6 +69,40 @@ final class InvoiceMapper
     public function toCreateRequest(int $bookingId): CreateInvoiceRequest
     {
         return new CreateInvoiceRequest($bookingId);
+    }
+
+    public function toHostBookingContext(Booking $booking): HostInvoiceBookingContextResponse
+    {
+        $invoice = $this->loadedRelation($booking, 'invoice');
+
+        return new HostInvoiceBookingContextResponse(
+            ...$this->hostBookingSummary($booking),
+            booking_status: $booking->status->value,
+            can_create: $booking->status === BookingStatus::COMPLETED && $invoice === null,
+            invoice: $invoice === null ? null : ['id' => $invoice->id, 'invoice_code' => $invoice->invoice_code],
+        );
+    }
+
+    public function toHostEligibleBooking(Booking $booking): HostEligibleBookingResponse
+    {
+        return new HostEligibleBookingResponse(...$this->hostBookingSummary($booking));
+    }
+
+    private function hostBookingSummary(Booking $booking): array
+    {
+        $customer = $this->loadedRelation($booking, 'customer');
+        $room = $this->loadedRelation($booking, 'room');
+        $property = $this->loadedRelation($room, 'property');
+
+        return [
+            'booking_id' => $booking->id,
+            'booking_code' => $booking->booking_code,
+            'customer_name' => $customer->name,
+            'property_name' => $property->name,
+            'room_name' => $room->name,
+            'check_in_date' => $booking->check_in_date->toDateString(),
+            'check_out_date' => $booking->check_out_date->toDateString(),
+        ];
     }
 
     /** @return list<array{service_id: mixed, service_name: mixed, quantity: string, unit_price: string, amount: string}> */

@@ -2,6 +2,8 @@
 
 namespace App\Validators\Invoice;
 
+use App\Common\Constants;
+use App\DTOs\Invoice\Requests\HostEligibleBookingQuery;
 use App\Enums\BookingStatus;
 use App\Enums\UserRole;
 use App\Models\Booking;
@@ -13,6 +15,7 @@ use App\Models\User;
 use App\Exceptions\Invoice\DuplicateInvoiceException;
 use App\Services\Invoice\InvoiceCalculationService;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Support\Facades\Validator;
 use App\DTOs\Invoice\Requests\InvoiceCreateInputRequest;
 use App\DTOs\Invoice\Requests\InvoiceIdInputRequest;
 use App\DTOs\Invoice\Requests\InvoiceQueryInputRequest;
@@ -66,6 +69,33 @@ class InvoiceValidator
     {
         $this->attributes->validateDomain(new InvoiceCreateInputRequest($bookingId), 'Mã đơn đặt phòng không hợp lệ.');
         return (int) $bookingId;
+    }
+
+    public function validateBookingContextId(mixed $bookingId): int
+    {
+        $this->attributes->validateHttp(new InvoiceCreateInputRequest($bookingId), fieldMap: ['bookingId' => 'booking_id']);
+
+        return (int) $bookingId;
+    }
+
+    public function validateEligibleBookingQuery(array $query): HostEligibleBookingQuery
+    {
+        if (is_string($query['search'] ?? null)) {
+            $query['search'] = trim($query['search']);
+        }
+
+        $data = Validator::make($query, [
+            'search' => ['nullable', 'string', 'max:255'],
+            'page' => ['bail', 'sometimes', 'required', 'integer', 'min:1', 'max:2147483647'],
+            'per_page' => ['bail', 'sometimes', 'required', 'integer', 'min:1', 'max:'.Constants::MAX_PAGE_SIZE],
+        ])->validate();
+        $search = $data['search'] ?? '';
+
+        return new HostEligibleBookingQuery(
+            search: $search === '' ? null : $search,
+            page: (int) ($data['page'] ?? 1),
+            perPage: (int) ($data['per_page'] ?? Constants::DEFAULT_PAGE_SIZE),
+        );
     }
 
     /**

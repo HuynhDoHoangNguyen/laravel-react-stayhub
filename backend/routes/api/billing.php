@@ -21,6 +21,12 @@ Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
     Route::get('/host/invoices', [HostInvoiceController::class, 'index'])
         ->middleware(\App\Http\Middleware\EnsureHostIsApproved::class)
         ->name('host.invoices.index');
+    Route::get('/host/invoices/eligible-bookings', [HostInvoiceController::class, 'eligibleBookings'])
+        ->middleware(['role:HOST', \App\Http\Middleware\EnsureHostIsApproved::class])
+        ->name('host.invoices.eligible-bookings');
+    Route::get('/host/bookings/{booking}/invoice-context', [HostInvoiceController::class, 'bookingContext'])
+        ->middleware(\App\Http\Middleware\EnsureHostIsApproved::class)
+        ->name('host.bookings.invoice.context');
     Route::post('/host/bookings/{booking}/invoice', [HostInvoiceController::class, 'store'])
         ->middleware(\App\Http\Middleware\EnsureHostIsApproved::class)
         ->name('host.bookings.invoice.store');

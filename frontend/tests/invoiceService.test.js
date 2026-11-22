@@ -21,6 +21,45 @@ const row = {
 const page = { data: [row], meta: { current_page: 1, last_page: 1, per_page: 10, total: 1 }, links: { first: '?page=1', last: '?page=1', prev: null, next: null } };
 const detail = { data: { ...row, items: [] } };
 
+test('booking context uses GET, validates its booking identity and preserves AbortSignal', async () => {
+  const data = {
+    booking_id: 11, booking_code: 'BK-11', customer_name: 'Khách', property_name: 'Cơ sở', room_name: 'Phòng',
+    check_in_date: '2026-11-20', check_out_date: '2026-11-22', booking_status: 'CONFIRMED', can_create: false, invoice: null,
+  };
+  const controller = new AbortController();
+  let calls = 0;
+  const { service } = setup(async (config) => {
+    calls++;
+    assert.equal(config.method, 'get');
+    assert.equal(config.url, '/api/host/bookings/11/invoice-context');
+    assert.equal(config.signal, controller.signal);
+    return { status: 200, data: { data }, config, headers: {} };
+  });
+  assert.deepEqual(await service.getHostInvoiceBookingContext('11', { signal: controller.signal }), data);
+  controller.abort();
+  await assert.rejects(service.getHostInvoiceBookingContext(11, { signal: controller.signal }), CanceledError);
+  assert.equal(calls, 1);
+});
+
+test('eligible-booking picker sends only pagination and normalized search on an abortable GET', async () => {
+  const response = { ...page, data: [], meta: { ...page.meta, current_page: 2, per_page: 5, total: 0 } };
+  const controller = new AbortController();
+  const calls = [];
+  const { service } = setup(async (config) => {
+    calls.push(config);
+    return { status: 200, data: response, config, headers: {} };
+  });
+
+  assert.deepEqual(await service.getHostEligibleBookings({ page: 2, perPage: 5, search: '  Khách  ', hostId: 42 }, { signal: controller.signal }), response);
+  assert.equal(calls[0].method, 'get');
+  assert.equal(calls[0].url, '/api/host/invoices/eligible-bookings');
+  assert.equal(calls[0].signal, controller.signal);
+  assert.deepEqual(calls[0].params, { page: 2, per_page: 5, search: 'Khách' });
+  controller.abort();
+  await assert.rejects(service.getHostEligibleBookings({}, { signal: controller.signal }), CanceledError);
+  assert.equal(calls.length, 1);
+});
+
 test('payment PATCH uses the real API/service, fixed body and signal; maps paid detail for factory and public export', async () => {
   const calls = [];
   const paid = { data: { ...row, payment_status: 'PAID', paid_at: '2026-11-17T01:00:00.000000Z', items: [] } };

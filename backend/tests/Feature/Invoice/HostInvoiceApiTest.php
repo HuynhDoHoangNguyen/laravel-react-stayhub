@@ -11,12 +11,14 @@ use App\Enums\UserStatus;
 use App\Models\Booking;
 use App\Models\BookingService;
 use App\Models\Invoice;
+use App\Models\PartnerAgreement;
 use App\Models\Property;
 use App\Models\Room;
 use App\Models\RoomType;
 use App\Models\Service;
 use App\Models\User;
 use Carbon\Carbon;
+use Database\Seeders\PartnerAgreementSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\TestCase;
 
@@ -34,6 +36,150 @@ class HostInvoiceApiTest extends TestCase
     protected Service $breakfastService;
     protected Service $airportService;
     protected Booking $booking;
+
+    public function test_host_can_read_context_before_and_after_invoice_creation(): void
+    {
+        $this->actingAs($this->host);
+        $url = "/api/host/bookings/{$this->booking->id}/invoice-context";
+        $expected = [
+            'booking_id' => $this->booking->id,
+            'booking_code' => 'BK-TEST-001',
+            'customer_name' => 'Trần Thị Thu Thảo',
+            'property_name' => 'StayHub Luxury Đà Nẵng',
+            'room_name' => 'Phòng Suite Hướng Biển 501',
+            'check_in_date' => $this->booking->check_in_date->toDateString(),
+            'check_out_date' => $this->booking->check_out_date->toDateString(),
+            'booking_status' => 'COMPLETED',
+            'can_create' => true,
+            'invoice' => null,
+        ];
+        $this->getJson($url)->assertOk()->assertExactJson(['data' => $expected]);
+        $this->assertDatabaseCount('invoices', 0);
+
+        $invoice = $this->postJson("/api/host/bookings/{$this->booking->id}/invoice")->assertCreated()->json('data');
+        $expected['can_create'] = false;
+        $expected['invoice'] = ['id' => $invoice['id'], 'invoice_code' => $invoice['invoice_code']];
+        $this->getJson($url)->assertOk()->assertExactJson(['data' => $expected]);
+        $this->assertDatabaseCount('invoices', 1);
+    }
+
+    public function test_unfinished_booking_is_readable_without_create_action(): void
+    {
+        $this->booking->update(['status' => BookingStatus::CONFIRMED]);
+        $this->actingAs($this->host)->getJson("/api/host/bookings/{$this->booking->id}/invoice-context")
+            ->assertOk()->assertJsonPath('data.booking_status', 'CONFIRMED')
+            ->assertJsonPath('data.can_create', false)->assertJsonPath('data.invoice', null);
+    }
+
+    public function test_invoice_context_checks_role_then_id_without_disclosing_foreign_booking(): void
+    {
+        $url = "/api/host/bookings/{$this->booking->id}/invoice-context";
+        $invalid = '/api/host/bookings/01/invoice-context';
+        $this->getJson($url)->assertUnauthorized();
+        $this->actingAs($this->customer)->getJson($invalid)->assertForbidden();
+        $this->actingAs($this->admin)->getJson($url)->assertForbidden();
+        $this->actingAs($this->host)->getJson($invalid)->assertUnprocessable()->assertJsonValidationErrors('booking_id');
+
+        $this->actingAs($this->otherHost);
+        $foreign = $this->getJson($url)->assertNotFound()->json();
+        $this->getJson('/api/host/bookings/999999999/invoice-context')->assertNotFound()->assertExactJson($foreign);
+    }
+
+    public function test_blocked_host_cannot_read_invoice_context(): void
+    {
+        $this->host->update(['status' => UserStatus::BLOCKED]);
+        $this->actingAs($this->host)->getJson("/api/host/bookings/{$this->booking->id}/invoice-context")
+            ->assertForbidden()->assertJsonPath('code', 'ACCOUNT_BLOCKED');
+    }
+
+    public function test_host_pending_approval_cannot_read_invoice_context_or_create_invoice(): void
+    {
+        $this->seed(PartnerAgreementSeeder::class);
+        $agreement = PartnerAgreement::query()->sole();
+        $agreement->acceptances()->create([
+            'host_id' => $this->host->id,
+            'accepted_content_sha256' => $agreement->content_sha256,
+            'accepted_at' => now(),
+            'method' => 'REGISTRATION_PENDING',
+        ]);
+
+        $this->actingAs($this->host);
+        $url = "/api/host/bookings/{$this->booking->id}/invoice";
+        $this->getJson($url.'-context')->assertForbidden()->assertJsonPath('code', 'HOST_APPROVAL_PENDING');
+        $this->postJson($url)->assertForbidden()->assertJsonPath('code', 'HOST_APPROVAL_PENDING');
+        $this->getJson('/api/host/invoices/eligible-bookings')->assertForbidden()->assertJsonPath('code', 'HOST_APPROVAL_PENDING');
+        $this->assertDatabaseCount('invoices', 0);
+    }
+
+    public function test_picker_lists_only_completed_owned_bookings_without_an_invoice(): void
+    {
+        $url = '/api/host/invoices/eligible-bookings';
+        $this->booking->update([
+            'check_out_date' => $this->booking->check_in_date->copy()->addDays(2),
+            'number_of_nights' => 2,
+            'price_per_night' => '1100000.00',
+            'room_total' => '2200000.00',
+        ]);
+        $this->booking->bookingServices()->delete();
+        $this->booking->replicate()->fill(['booking_code' => 'BK-UNFINISHED', 'status' => BookingStatus::CONFIRMED])->save();
+        $this->actingAs($this->host);
+        $expected = [[
+            'booking_id' => $this->booking->id,
+            'booking_code' => 'BK-TEST-001',
+            'customer_name' => 'Trần Thị Thu Thảo',
+            'property_name' => 'StayHub Luxury Đà Nẵng',
+            'room_name' => 'Phòng Suite Hướng Biển 501',
+            'check_in_date' => $this->booking->check_in_date->toDateString(),
+            'check_out_date' => $this->booking->check_out_date->toDateString(),
+        ]];
+        $page = $this->getJson($url)->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('meta.per_page', 10);
+        $this->assertSame($expected, $page->json('data'));
+        $this->getJson($url.'?'.http_build_query(['search' => '  Thị Thu  ']))
+            ->assertOk()->assertJsonPath('data.0.booking_id', $this->booking->id);
+
+        $this->actingAs($this->otherHost)->getJson($url.'?search=BK-TEST-001')
+            ->assertOk()->assertJsonPath('data', [])->assertJsonPath('meta.total', 0);
+        $this->actingAs($this->host)->postJson("/api/host/bookings/{$this->booking->id}/invoice")
+            ->assertCreated()->assertJsonPath('data.total_amount', '2200000.00')
+            ->assertJsonPath('data.payment_status', 'UNPAID')->assertJsonCount(1, 'data.items');
+        $this->getJson($url)->assertOk()->assertJsonPath('data', [])->assertJsonPath('meta.total', 0);
+    }
+
+    public function test_picker_filters_before_pagination_with_a_stable_order_and_literal_search(): void
+    {
+        $older = $this->booking->replicate()->fill([
+            'booking_code' => 'BK-SORT-OLDER', 'check_out_date' => $this->booking->check_out_date->subDay(),
+        ]);
+        $older->save();
+        $tied = $this->booking->replicate()->fill(['booking_code' => 'BK-SORT-NEW%_!']);
+        $tied->save();
+        $url = '/api/host/invoices/eligible-bookings';
+        $this->actingAs($this->host);
+
+        $first = $this->getJson($url.'?search=BK-SORT&per_page=1')->assertOk()
+            ->assertJsonPath('meta.total', 2)->assertJsonPath('meta.current_page', 1)
+            ->assertJsonPath('data.0.booking_id', $tied->id);
+        $this->assertStringContainsString('search=BK-SORT', $first->json('links.next'));
+        $this->getJson($url.'?search=BK-SORT&per_page=1&page=2')->assertOk()
+            ->assertJsonPath('meta.current_page', 2)->assertJsonPath('data.0.booking_id', $older->id);
+        $this->getJson($url.'?per_page=1&page=2')->assertOk()
+            ->assertJsonPath('data.0.booking_id', $this->booking->id);
+        $this->getJson($url.'?'.http_build_query(['search' => '%_!']))->assertOk()
+            ->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.booking_id', $tied->id);
+        $this->getJson($url.'?search=NO-MATCH')->assertOk()
+            ->assertJsonPath('meta.total', 0)->assertJsonPath('data', []);
+    }
+
+    public function test_picker_checks_permissions_before_validating_filters(): void
+    {
+        $url = '/api/host/invoices/eligible-bookings';
+        $invalid = $url.'?page=0&per_page=51&search%5B%5D=bad';
+        $this->getJson($url)->assertUnauthorized();
+        $this->actingAs($this->customer)->getJson($invalid)->assertForbidden();
+        $this->actingAs($this->admin)->getJson($url)->assertForbidden();
+        $this->actingAs($this->host)->getJson($invalid)->assertUnprocessable()
+            ->assertJsonValidationErrors(['page', 'per_page', 'search']);
+    }
 
     protected function setUp(): void
     {
