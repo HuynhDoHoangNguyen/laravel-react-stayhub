@@ -29,10 +29,12 @@ return [
     |--------------------------------------------------------------------------
     | Thông tin tài khoản ngân hàng chính thức nhận hoa hồng StayHub
     |--------------------------------------------------------------------------
+    | Đọc từ biến môi trường. Khi chưa được cấu hình, giá trị là null và hệ
+    | thống sẽ tạm ẩn hướng dẫn chuyển khoản để tránh hiển thị tài khoản giả.
     */
     'bank_info' => [
-        'bank_name' => 'Ngân hàng TMCP Ngoại thương Việt Nam (Vietcombank)',
-        'account_number' => '1029384756',
-        'account_holder' => 'CONG TY CP CONG NGHE STAYHUB',
+        'bank_name' => env('STAYHUB_BANK_NAME'),
+        'account_number' => env('STAYHUB_BANK_ACCOUNT_NUMBER'),
+        'account_holder' => env('STAYHUB_BANK_ACCOUNT_HOLDER'),
     ],
 ];

@@ -6,6 +6,7 @@ use App\Enums\UserRole;
 use App\Enums\UserStatus;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use LogicException;
 
 class AdminUserMapper
 {
@@ -16,17 +17,15 @@ class AdminUserMapper
      */
     public function toAdminUserItem(User $user): array
     {
+        foreach (['properties_count', 'bookings_count', 'is_pending_approval'] as $fact) {
+            if (!array_key_exists($fact, $user->getAttributes()) || $user->getAttribute($fact) === null) {
+                throw new LogicException('Admin user projection requires loaded counts and approval facts.');
+            }
+        }
         $role = $user->role instanceof UserRole ? $user->role->value : (string) $user->role;
         $status = $user->status instanceof UserStatus ? $user->status->value : (string) $user->status;
         $isHost = $role === UserRole::HOST->value;
-        $isPending = $isHost && (
-            isset($user->is_pending_approval)
-                ? (bool) $user->is_pending_approval
-                : \App\Models\HostAgreementAcceptance::query()
-                    ->where('host_id', $user->id)
-                    ->where('method', 'REGISTRATION_PENDING')
-                    ->exists()
-        );
+        $isPending = $isHost && (bool) $user->is_pending_approval;
         $isHostApproved = $isHost ? ! $isPending : null;
 
         return [
@@ -41,8 +40,8 @@ class AdminUserMapper
             'email_verified_at' => $user->email_verified_at?->toIso8601String(),
             'host_approval_status' => $isHost ? ($isHostApproved ? 'APPROVED' : 'PENDING') : 'NOT_APPLICABLE',
             'is_host_approved' => $isHostApproved,
-            'properties_count' => (int) ($user->properties_count ?? 0),
-            'bookings_count' => (int) ($user->bookings_count ?? 0),
+            'properties_count' => (int) $user->properties_count,
+            'bookings_count' => (int) $user->bookings_count,
             'created_at' => $user->created_at?->toIso8601String(),
             'updated_at' => $user->updated_at?->toIso8601String(),
         ];

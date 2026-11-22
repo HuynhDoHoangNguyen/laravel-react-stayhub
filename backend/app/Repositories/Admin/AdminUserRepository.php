@@ -5,9 +5,11 @@ namespace App\Repositories\Admin;
 use App\Enums\UserRole;
 use App\Enums\UserStatus;
 use App\Models\User;
+use App\Models\HostAgreementAcceptance;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Collection;
 
 class AdminUserRepository
 {
@@ -19,6 +21,7 @@ class AdminUserRepository
     public function paginateUsers(array $filters): LengthAwarePaginator
     {
         $query = User::query()
+            ->select('users.*')
             ->withCount(['properties', 'bookings']);
 
         if (! empty($filters['keyword'])) {
@@ -58,7 +61,6 @@ class AdminUserRepository
         }
 
         return $query
-            ->select('users.*')
             ->selectRaw("EXISTS (
                 SELECT 1 FROM host_agreement_acceptances
                 WHERE host_agreement_acceptances.host_id = users.id
@@ -74,7 +76,7 @@ class AdminUserRepository
     }
 
     /**
-     * Thống kê tổng quan số lượng người dùng phục vụ các thẻ KPI trên trang /admin/users.
+     * Thống kê số người dùng theo trạng thái tài khoản và trạng thái duyệt độc lập.
      *
      * @return array{total_users: int, pending_hosts: int, approved_hosts: int, total_customers: int, active_users: int, blocked_users: int}
      */
@@ -123,6 +125,41 @@ class AdminUserRepository
             ->find($userId);
     }
 
+    /** @return Collection<int, User> */
+    public function lockApprovalUsers(int $adminId, int $hostId): Collection
+    {
+        $ids = array_unique([$adminId, $hostId]);
+        sort($ids, SORT_NUMERIC);
+        $users = new Collection;
+        // Same primary-key order as AccountStatusRepository to coordinate with UC42.
+        foreach ($ids as $id) {
+            $user = User::query()->select(['id', 'role', 'status'])->lockForUpdate()->find($id);
+            if ($user !== null) $users->put($id, $user);
+        }
+
+        return $users;
+    }
+
+    public function approvePendingAcceptances(int $hostId): int
+    {
+        $ids = HostAgreementAcceptance::query()->where('host_id', $hostId)
+            ->where('method', 'REGISTRATION_PENDING')->orderBy('id')->lockForUpdate()->pluck('id');
+        if ($ids->isEmpty()) return 0;
+
+        return HostAgreementAcceptance::query()->whereIn('id', $ids)
+            ->where('method', 'REGISTRATION_PENDING')->update(['method' => 'REGISTRATION_APPROVED']);
+    }
+
+    public function findWithAdminFacts(int $userId): ?User
+    {
+        return User::query()->select('users.*')->withCount(['properties', 'bookings'])
+            ->selectRaw("EXISTS (
+                SELECT 1 FROM host_agreement_acceptances
+                WHERE host_agreement_acceptances.host_id = users.id
+                  AND host_agreement_acceptances.method = 'REGISTRATION_PENDING'
+            ) AS is_pending_approval")->find($userId);
+    }
+
     /**
      * Lưu thay đổi thông tin người dùng.
      */
@@ -130,6 +167,7 @@ class AdminUserRepository
     {
         $user->save();
 
-        return $user->refresh()->loadCount(['properties', 'bookings']);
+        return $this->findWithAdminFacts((int) $user->id)
+            ?? throw new \LogicException('Saved user is missing.');
     }
 }

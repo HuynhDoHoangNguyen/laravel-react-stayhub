@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
     Users,
     Building2,
@@ -14,7 +14,11 @@ import {
     Lock,
     Unlock,
 } from 'lucide-react';
-import { adminUserService } from '@/services/adminUserService';
+import { adminUserManagementService } from '@/services/adminUserManagementService';
+import { getAdminCustomer } from '@/services/adminUserService';
+import { getAdminHost } from '@/services/adminHostService';
+import { useAuth } from '@/hooks/useAuth';
+import AccountStatusDialog from '@/components/admin/users/AccountStatusDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
@@ -27,6 +31,7 @@ const FILTER_TABS = [
 ];
 
 export default function AdminUsersPage() {
+    const { user: actor, captureProfileAuth, isProfileAuthCurrent } = useAuth();
     const [activeTab, setActiveTab] = useState('ALL');
     const [statusFilter, setStatusFilter] = useState('ALL');
     const [keywordInput, setKeywordInput] = useState('');
@@ -47,10 +52,20 @@ export default function AdminUsersPage() {
     const [successMessage, setSuccessMessage] = useState('');
     const [actingUserId, setActingUserId] = useState(null);
     const [reloadTrigger, setReloadTrigger] = useState(0);
+    const [statusTarget, setStatusTarget] = useState(null);
+    const statusFocusRef = useRef(null);
+    const approvalRef = useRef(false);
+    const aliveRef = useRef(false);
+
+    useEffect(() => {
+        aliveRef.current = true;
+        return () => { aliveRef.current = false; };
+    }, []);
 
     useEffect(() => {
         let isMounted = true;
         const controller = new AbortController();
+        const auth = captureProfileAuth();
 
         const fetchUsers = async () => {
             setIsLoading(true);
@@ -67,17 +82,17 @@ export default function AdminUsersPage() {
                     params.role = activeTab;
                 }
 
-                const res = await adminUserService.listUsers(params, { signal: controller.signal });
-                if (!isMounted) return;
+                const res = await adminUserManagementService.listUsers(params, { signal: controller.signal });
+                if (!isMounted || !isProfileAuthCurrent(auth)) return;
 
                 setUsers(res?.data || []);
                 if (res?.summary) setSummary(res.summary);
                 if (res?.meta) setMeta(res.meta);
             } catch (err) {
-                if (!isMounted || err?.name === 'CanceledError' || err?.name === 'AbortError') return;
+                if (!isMounted || !isProfileAuthCurrent(auth) || err?.name === 'CanceledError' || err?.name === 'AbortError') return;
                 setError(err?.response?.data?.message || err?.message || 'Không thể tải danh sách người dùng.');
             } finally {
-                if (isMounted) setIsLoading(false);
+                if (isMounted && isProfileAuthCurrent(auth)) setIsLoading(false);
             }
         };
 
@@ -87,7 +102,16 @@ export default function AdminUsersPage() {
             isMounted = false;
             controller.abort();
         };
-    }, [activeTab, statusFilter, appliedKeyword, page, reloadTrigger]);
+    }, [activeTab, statusFilter, appliedKeyword, page, reloadTrigger, actor, captureProfileAuth, isProfileAuthCurrent]);
+
+    useEffect(() => {
+        if (!isLoading && statusFocusRef.current) {
+            const { id, trigger } = statusFocusRef.current;
+            statusFocusRef.current = null;
+            (trigger.isConnected ? trigger : document.querySelector(`[data-management-status-id="${id}"]`)
+                ?? document.getElementById('admin-user-management-title'))?.focus();
+        }
+    }, [isLoading, reloadTrigger]);
 
     const handleSearchSubmit = (e) => {
         e.preventDefault();
@@ -105,42 +129,39 @@ export default function AdminUsersPage() {
     };
 
     const handleApproveHost = async (user) => {
-        if (actingUserId) return;
+        if (approvalRef.current || statusTarget) return;
+        const auth = captureProfileAuth();
+        if (!isProfileAuthCurrent(auth)) return;
+        approvalRef.current = true;
         setActingUserId(user.id);
         setError('');
         try {
-            const res = await adminUserService.approveHost(user.id);
-            setSuccessMessage(res?.message || `Đã phê duyệt mở khóa tài khoản Đối tác "${user.name}".`);
-            setTimeout(() => setSuccessMessage(''), 5000);
+            const res = await adminUserManagementService.approveHost(user.id);
+            if (!aliveRef.current || !isProfileAuthCurrent(auth)) return;
+            setSuccessMessage(res?.message || `Đã phê duyệt Đối tác "${user.name}".`);
             handleReload();
         } catch (err) {
+            if (!aliveRef.current || !isProfileAuthCurrent(auth)) return;
             setError(err?.response?.data?.message || 'Không thể phê duyệt tài khoản Đối tác. Vui lòng thử lại.');
         } finally {
-            setActingUserId(null);
+            approvalRef.current = false;
+            if (aliveRef.current && isProfileAuthCurrent(auth)) setActingUserId(null);
         }
     };
 
-    const handleToggleStatus = async (user) => {
-        if (actingUserId) return;
-        const targetStatus = user.status === 'BLOCKED' ? 'ACTIVE' : 'BLOCKED';
-        setActingUserId(user.id);
+    const handleToggleStatus = (user, trigger) => {
+        if (approvalRef.current || statusTarget || !['ACTIVE', 'BLOCKED'].includes(user.status)) return;
         setError('');
-        try {
-            const res = await adminUserService.updateUserStatus(user.id, targetStatus);
-            setSuccessMessage(
-                res?.message ||
-                (targetStatus === 'BLOCKED'
-                    ? `Đã khóa tài khoản "${user.name}".`
-                    : `Đã mở khóa tài khoản "${user.name}".`)
-            );
-            setTimeout(() => setSuccessMessage(''), 5000);
-            handleReload();
-        } catch (err) {
-            const fieldError = err?.response?.data?.errors?.status?.[0];
-            setError(fieldError || err?.response?.data?.message || 'Không thể cập nhật trạng thái tài khoản.');
-        } finally {
-            setActingUserId(null);
-        }
+        setSuccessMessage('');
+        setStatusTarget({ id: user.id, role: user.role, desiredStatus: user.status === 'BLOCKED' ? 'ACTIVE' : 'BLOCKED', trigger });
+    };
+
+    const finishStatus = (result) => {
+        statusFocusRef.current = { id: statusTarget.id, trigger: statusTarget.trigger };
+        setStatusTarget(null);
+        setIsLoading(true);
+        if (result) setSuccessMessage(`Đã cập nhật tài khoản #${result.id}: ${result.status === 'BLOCKED' ? 'Đã khóa' : 'Đang hoạt động'}.`);
+        handleReload();
     };
 
     const formatDateTime = (isoStr) => {
@@ -184,7 +205,7 @@ export default function AdminUsersPage() {
             return (
                 <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-emerald-800 text-[11px] font-semibold">
                     <CheckCircle2 className="mr-1 h-3 w-3" />
-                    Đã duyệt mở khóa
+                    Đã duyệt
                 </Badge>
             );
         }
@@ -204,11 +225,11 @@ export default function AdminUsersPage() {
                     <span className="text-[10.5px] font-semibold uppercase tracking-[0.2em] text-accent">
                         ✦ Ban quản trị StayHub
                     </span>
-                    <h1 className="font-display text-2xl font-bold text-primary mt-1">
+                    <h1 id="admin-user-management-title" tabIndex={-1} className="font-display text-2xl font-bold text-primary mt-1">
                         Quản lý Người dùng & Phê duyệt Đối tác
                     </h1>
                     <p className="text-xs text-muted-foreground mt-1">
-                        Xem danh sách tài khoản toàn hệ thống, phê duyệt mở khóa chức năng kinh doanh cho Đối tác (Host) mới đăng ký và kiểm soát trạng thái hoạt động.
+                        Xem danh sách tài khoản toàn hệ thống và phê duyệt Đối tác (Host). Trạng thái phê duyệt và trạng thái tài khoản được quản lý riêng.
                     </p>
                 </div>
                 <Button
@@ -251,18 +272,18 @@ export default function AdminUsersPage() {
                     </div>
                     <p className="mt-2 font-display text-2xl font-bold text-amber-900">{summary.pending_hosts}</p>
                     <p className="mt-1 text-[11px] text-amber-800/90">
-                        Đã đồng ý hoa hồng 10% · Chờ mở khóa
+                        Đã chấp thuận hợp đồng · Chờ phê duyệt
                     </p>
                 </button>
 
                 <div className="rounded-2xl border border-border/70 bg-card p-5 shadow-xs">
                     <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-muted-foreground">Đối tác đã mở khóa</span>
+                        <span className="text-xs font-medium text-muted-foreground">Đối tác đã duyệt</span>
                         <Building2 className="h-4 w-4 text-emerald-700" />
                     </div>
                     <p className="mt-2 font-display text-2xl font-bold text-emerald-800">{summary.approved_hosts}</p>
                     <p className="mt-1 text-[11px] text-muted-foreground">
-                        Được phép đăng cơ sở & nhận đặt phòng
+                        Quyền kinh doanh còn phụ thuộc trạng thái tài khoản.
                     </p>
                 </div>
 
@@ -431,13 +452,15 @@ export default function AdminUsersPage() {
                                                         </Button>
                                                     )}
 
-                                                    {u.role !== 'ADMIN' && (
+                                                    {u.role !== 'ADMIN' && u.status !== 'INACTIVE' && (
                                                         <Button
                                                             type="button"
                                                             size="sm"
                                                             variant="outline"
-                                                            disabled={isBusy}
-                                                            onClick={() => handleToggleStatus(u)}
+                                                            disabled={Boolean(actingUserId) || Boolean(statusTarget)}
+                                                            data-management-status-id={u.id}
+                                                            aria-label={`${u.status === 'BLOCKED' ? 'Mở khóa' : 'Khóa'} tài khoản #${u.id}`}
+                                                            onClick={(event) => handleToggleStatus(u, event.currentTarget)}
                                                             className={`rounded-xl text-xs font-semibold h-8 px-3 ${
                                                                 u.status === 'BLOCKED'
                                                                     ? 'border-emerald-500/40 text-emerald-800 hover:bg-emerald-50'
@@ -498,6 +521,11 @@ export default function AdminUsersPage() {
                     </div>
                 )}
             </div>
+            {statusTarget && <AccountStatusDialog key={statusTarget.id} accountId={statusTarget.id}
+                desiredStatus={statusTarget.desiredStatus} trigger={statusTarget.trigger}
+                loadAccount={statusTarget.role === 'HOST' ? getAdminHost : getAdminCustomer}
+                accountLabel={statusTarget.role === 'HOST' ? 'Host' : 'khách hàng'}
+                fallbackFocusId="admin-user-management-title" onClose={() => finishStatus()} onSuccess={finishStatus} />}
         </div>
     );
 }

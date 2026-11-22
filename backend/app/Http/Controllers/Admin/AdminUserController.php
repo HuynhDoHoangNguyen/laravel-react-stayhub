@@ -33,7 +33,7 @@ class AdminUserController extends Controller
     }
 
     /**
-     * Admin phê duyệt mở khóa tài khoản Đối tác (Host).
+     * Admin phê duyệt Đối tác, giữ nguyên trạng thái tài khoản.
      */
     public function approveHost(Request $request, int|string $id): JsonResponse
     {
@@ -45,7 +45,7 @@ class AdminUserController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Đã phê duyệt mở khóa tài khoản Đối tác thành công.',
+            'message' => 'Đã phê duyệt Đối tác thành công.',
             'data' => $this->mapper->toAdminUserItem($approvedUser),
         ], 200);
     }
