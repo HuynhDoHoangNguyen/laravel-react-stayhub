@@ -75,7 +75,8 @@ export default function LoginPage() {
             const next = new URLSearchParams(prev);
             if (mode === 'signup') {
                 next.set('mode', 'signup');
-                next.set('role', 'customer');
+                const currentRole = prev.get('role');
+                next.set('role', currentRole === 'host' ? 'host' : 'customer');
             } else {
                 next.delete('mode');
             }
@@ -83,7 +84,7 @@ export default function LoginPage() {
         }, { replace: true });
     };
 
-    const handleRegistered = ({ email: registeredEmail, message }) => {
+    const handleRegistered = ({ email: registeredEmail, message, registeredRole }) => {
         setEmail(registeredEmail);
         setPassword('');
         setAuthError(null);
@@ -92,7 +93,7 @@ export default function LoginPage() {
         setSearchParams((prev) => {
             const next = new URLSearchParams(prev);
             next.delete('mode');
-            next.set('role', 'customer');
+            next.set('role', registeredRole === 'HOST' ? 'host' : 'customer');
             return next;
         }, { replace: true });
     };
@@ -248,11 +249,15 @@ export default function LoginPage() {
                     {/* Form Container */}
                     <div className="mx-auto my-auto w-full max-w-[380px] py-6 text-left">
                         <h1 className="font-display text-3xl font-bold tracking-tight text-primary sm:text-4xl">
-                            {isSignupMode ? 'Đăng ký Khách hàng' : `Đăng nhập ${contextLabel}`}
+                            {isSignupMode
+                                ? (isHostContext ? 'Đăng ký Đối tác' : 'Đăng ký Khách hàng')
+                                : `Đăng nhập ${contextLabel}`}
                         </h1>
                         <p className="mt-1.5 text-xs text-muted-foreground">
                             {isSignupMode
-                                ? 'Trở thành thành viên để tận hưởng trọn vẹn đặc quyền lưu trú tại StayHub.'
+                                ? (isHostContext
+                                    ? 'Đăng ký tài khoản đối tác và chấp thuận hợp đồng hoa hồng 10% để bắt đầu kinh doanh lưu trú.'
+                                    : 'Trở thành thành viên để tận hưởng trọn vẹn đặc quyền lưu trú tại StayHub.')
                                 : isAdminContext ? 'Dành cho quản trị viên hệ thống StayHub.' : (isHostContext
                                     ? 'Dành cho đối tác quản lý cơ sở lưu trú và hóa đơn phòng.'
                                     : 'Dành cho khách hàng đặt phòng và theo dõi kỳ nghỉ.')}
@@ -264,11 +269,34 @@ export default function LoginPage() {
                             </div>
                         )}
                         {isSignupMode && (
-                            <RegisterForm onRegistered={handleRegistered} disabled={authChecking}
-                                onBackToLogin={(registrationEmail) => {
-                                    if (registrationEmail) setEmail(registrationEmail);
-                                    handleModeChange('login');
-                                }} />
+                            <>
+                                <div className="mt-5 grid grid-cols-2 gap-1 rounded-2xl border border-border/70 bg-surface/60 p-1"
+                                    role="group" aria-label="Vai trò đăng ký">
+                                    {LOGIN_ROLES.filter((r) => r.value !== 'ADMIN').map(({ value, label, icon: Icon }) => (
+                                        <button key={value} type="button"
+                                            disabled={authChecking}
+                                            aria-pressed={selectedRole === value}
+                                            onClick={() => handleRoleChange(value)}
+                                            className={`flex min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                                                selectedRole === value
+                                                    ? 'bg-primary text-primary-foreground shadow-xs'
+                                                    : 'text-ink/70 hover:bg-primary/5 hover:text-ink'
+                                            }`}>
+                                            <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                                            <span className="leading-tight">{label}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                                <RegisterForm
+                                    role={isHostContext ? 'HOST' : 'CUSTOMER'}
+                                    onRegistered={handleRegistered}
+                                    disabled={authChecking}
+                                    onBackToLogin={(registrationEmail) => {
+                                        if (registrationEmail) setEmail(registrationEmail);
+                                        handleModeChange('login');
+                                    }}
+                                />
+                            </>
                         )}
 
                         {!isSignupMode && <>

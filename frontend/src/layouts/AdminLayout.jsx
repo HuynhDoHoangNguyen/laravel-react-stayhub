@@ -37,6 +37,7 @@ const ADMIN_NAV = [
   { to: "/admin/properties", label: "Cơ sở lưu trú", icon: HotelIcon },
   { to: "/admin/bookings", label: "Đơn đặt phòng", icon: BookingsIcon },
   { to: "/admin/invoices", label: "Hóa đơn hệ thống", icon: InvoiceIcon },
+  { to: "/admin/commissions", label: "Đối soát hoa hồng", icon: ShieldCheck },
 ];
 
 export default function AdminLayout() {

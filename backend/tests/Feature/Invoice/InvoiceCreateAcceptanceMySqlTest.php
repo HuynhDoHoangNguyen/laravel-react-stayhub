@@ -283,7 +283,8 @@ final class InvoiceCreateAcceptanceMySqlTest extends Tv3AcceptanceMySqlTestCase
             'extra_fee' => '0.00', 'total_amount' => '1.00', 'payment_status' => 'UNPAID']);
         $service = new class(app(\App\Repositories\Invoice\InvoiceRepository::class),
             app(\App\Validators\Invoice\InvoiceValidator::class), app(\App\Services\Invoice\InvoiceCalculationService::class),
-            app(\App\Mappers\Invoice\InvoiceMapper::class), app(\Psr\Log\LoggerInterface::class)) extends InvoiceService {
+            app(\App\Mappers\Invoice\InvoiceMapper::class), app(\Psr\Log\LoggerInterface::class),
+            app(\App\Services\Commission\CommissionChargeService::class)) extends InvoiceService {
             public function generateUniqueInvoiceCode(): string { return 'CONTROLLED-CODE-COLLISION'; }
         };
         $this->app->instance(InvoiceService::class, $service);

@@ -38,7 +38,7 @@ class Member1DataSeeder extends Seeder
         foreach ($users as [$id, $name, $email, $phone, $address, $role, $status]) {
             DB::table('users')->insert(['id' => $id, 'name' => $name, 'email' => $email, 'password' => $password,
                 'phone' => $phone, 'address' => $address, 'avatar' => null, 'role' => $role->value,
-                'status' => $status->value, ...$stamp]);
+                'status' => $status->value, 'email_verified_at' => $now, ...$stamp]);
         }
 
         $properties = [

@@ -17,8 +17,9 @@ use Illuminate\Support\Facades\Route;
 
 // Public routes
 Route::prefix('public')->group(function () {
-    // Search route MUST be declared before /rooms/{room}
+    // Search routes MUST be declared before /rooms/{room}
     Route::get('/rooms/search', [RoomSearchController::class, 'index']);
+    Route::get('/properties-search', [RoomSearchController::class, 'searchProperties']);
     Route::get('/rooms/{room}/availability', [RoomAvailabilityController::class, 'show'])->whereNumber('room');
 
     Route::post('/bookings/preview', [BookingPreviewController::class, 'preview'])->middleware('throttle:60,1');
@@ -34,7 +35,7 @@ Route::prefix('customer')->middleware(['auth:sanctum', 'account.active', 'role:C
 });
 
 // Host routes
-Route::prefix('host')->middleware(['auth:sanctum', 'account.active', 'role:HOST'])->group(function () {
+Route::prefix('host')->middleware(['auth:sanctum', 'account.active', 'role:HOST', \App\Http\Middleware\EnsureHostIsApproved::class])->group(function () {
     // Property Services
     Route::get('/services', [HostServiceController::class, 'index']);
     Route::post('/services', [HostServiceController::class, 'store']);

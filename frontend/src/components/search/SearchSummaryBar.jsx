@@ -85,8 +85,16 @@ export function SearchSummaryBar({
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!checkIn || !checkOut) {
-      toast.error("Vui lòng chọn ngày nhận phòng và trả phòng.");
+    if (checkIn && !checkOut) {
+      toast.error("Vui lòng chọn ngày trả phòng.");
+      return;
+    }
+    if (!checkIn && checkOut) {
+      toast.error("Vui lòng chọn ngày nhận phòng.");
+      return;
+    }
+    if (checkIn && checkOut && checkOut <= checkIn) {
+      toast.error("Ngày trả phòng phải sau ngày nhận phòng ít nhất 1 đêm.");
       return;
     }
     const params = new URLSearchParams(searchParams);

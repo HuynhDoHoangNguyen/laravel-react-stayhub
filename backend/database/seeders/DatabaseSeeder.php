@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
             Member1DataSeeder::class,
             Member2DataSeeder::class,
             Member3DataSeeder::class,
+            PartnerAgreementSeeder::class,
         ]);
     }
 }

@@ -419,7 +419,9 @@ class HostInvoiceApiTest extends TestCase
             app(\App\Repositories\Invoice\InvoiceRepository::class),
             app(\App\Validators\Invoice\InvoiceValidator::class),
             app(\App\Services\Invoice\InvoiceCalculationService::class),
-            app(\App\Mappers\Invoice\InvoiceMapper::class), app(\Psr\Log\LoggerInterface::class),
+            app(\App\Mappers\Invoice\InvoiceMapper::class),
+            app(\Psr\Log\LoggerInterface::class),
+            app(\App\Services\Commission\CommissionChargeService::class),
         ) extends \App\Services\Invoice\InvoiceService {
             public ?\App\DTOs\Invoice\Requests\CreateInvoiceRequest $received = null;
             public ?User $actor = null;

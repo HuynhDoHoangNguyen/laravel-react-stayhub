@@ -1,9 +1,30 @@
 import { requireApiId } from '../api/apiId.js';
 
-function calendarDate(value) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-    const date = new Date(value + 'T00:00:00Z');
+export function isValidCalendarDate(value) {
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const parts = value.split('-').map(Number);
+    if (parts.length !== 3 || parts.some(isNaN)) return false;
+    const [year, month, day] = parts;
+    const date = new Date(Date.UTC(year, month - 1, day));
     return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+export function addDaysToIsoDate(isoDate, days = 1) {
+    if (!isoDate || typeof isoDate !== 'string') return '';
+    const parts = isoDate.split('-').map(Number);
+    if (parts.length !== 3 || parts.some(isNaN)) return '';
+    const [year, month, day] = parts;
+    const utcDate = new Date(Date.UTC(year, month - 1, day));
+    if (Number.isNaN(utcDate.getTime())) return '';
+    utcDate.setUTCDate(utcDate.getUTCDate() + days);
+    const y = utcDate.getUTCFullYear();
+    const m = String(utcDate.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(utcDate.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+function calendarDate(value) {
+    return isValidCalendarDate(value);
 }
 
 // URL context is shared by room details and the future property booking panel.
@@ -42,6 +63,19 @@ export function checkoutTarget(propertyId, roomId, context) {
     if (context.status !== 'valid') return null;
     return '/customer/checkout?' + new URLSearchParams({ propertyId: String(requireApiId(propertyId, 'Mã cơ sở')),
         roomId: String(requireApiId(roomId, 'Mã phòng')) }).toString() + '&' + bookingContextQuery(context);
+}
+
+export function directRoomCheckoutTarget(propertyId, roomId, context) {
+    if (!context || context.status === 'invalid') return null;
+    if (context.status === 'valid') return checkoutTarget(propertyId, roomId, context);
+    if (context.checkIn || context.checkOut) return null;
+    const params = new URLSearchParams({
+        propertyId: String(requireApiId(propertyId, 'Mã cơ sở')),
+        roomId: String(requireApiId(roomId, 'Mã phòng')),
+        adults: String(Number.isSafeInteger(context.adults) && context.adults > 0 ? context.adults : 2),
+        children: String(Number.isSafeInteger(context.children) && context.children >= 0 ? context.children : 0),
+    });
+    return '/customer/checkout?' + params.toString();
 }
 
 export function bookingSearchTarget(context) {

@@ -345,20 +345,22 @@ test('availability cards forward selected room, dates and guests to checkout whi
     assert.ok(!html.includes('Xem cơ sở'));
     assert.ok(!html.includes('Chưa kiểm tra phòng trống'));
     const catalog = await renderSearch('ResultsGrid', { rooms: [room], isLoading: false, searchParams: query });
-    assert.ok(!catalog.includes('/customer/checkout'));
+    assert.ok(catalog.includes('/customer/checkout'));
+    assert.ok(catalog.includes('Đặt phòng'));
     assert.ok(catalog.includes('Chưa kiểm tra phòng trống'));
     const loading = await renderSearch('ResultsGrid', { rooms: [room], isLoading: true, isAvailableDate: true, searchParams: query });
     assert.ok(!loading.includes('/customer/checkout'));
 });
 
-test('catalog room links preserve URL criteria without enabling checkout and property cards still link to properties', async () => {
+test('catalog room links preserve URL criteria and property cards still link to properties', async () => {
     const room = mapRoomSearchPage(page).data[0];
     const query = 'guest_count=3&min_price=0.00&amenity_ids[]=7&page=2';
     const html = await renderSearch('SearchRoomCard', { room }, '/search?' + query);
     const href = html.match(/href="(\/rooms\/3\?[^"]+)"/)[1].replaceAll('&amp;', '&');
     const detail = new URL(href, 'https://example.test');
     for (const [key, value] of new URLSearchParams(query)) assert.equal(detail.searchParams.get(key), value);
-    assert.ok(!html.includes('/customer/checkout'));
+    assert.ok(html.includes('/customer/checkout'));
+    assert.ok(html.includes('Đặt phòng'));
     assert.ok(!html.includes('Xem cơ sở lưu trú'));
     const property = await renderSearch('SearchPropertyCard', { property: { id: 2, name: 'Cơ sở thật', propertyType: 'HOTEL', price: null, averageRating: null, reviewCount: 0, photos: [] } });
     assert.match(property, /href="\/properties\/2"/);

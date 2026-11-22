@@ -25,6 +25,7 @@ Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
 
     // Host Reviews
     Route::get('/host/reviews', [HostReviewController::class, 'index'])
+        ->middleware(\App\Http\Middleware\EnsureHostIsApproved::class)
         ->name('host.reviews.index');
 });
 

@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Api\Public;
 
+use App\Common\ApiResponse as CommonApiResponse;
 use App\Http\Controllers\Controller;
 use App\Mappers\Booking\BookingMapper;
+use App\Mappers\Catalog\CatalogMapper;
 use App\Services\Booking\SearchService;
 use App\Traits\ApiResponse;
 use App\Validators\Booking\RoomSearchValidator;
@@ -17,7 +19,8 @@ class RoomSearchController extends Controller
     public function __construct(
         protected SearchService $searchService,
         protected RoomSearchValidator $validator,
-        protected BookingMapper $bookingMapper
+        protected BookingMapper $bookingMapper,
+        protected CatalogMapper $catalogMapper,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -37,5 +40,14 @@ class RoomSearchController extends Controller
                 'total' => $paginator->total(),
             ],
         ]);
+    }
+
+    public function searchProperties(Request $request): JsonResponse
+    {
+        $filters = $this->validator->validateSearchProperties($request->all());
+        $page = $this->searchService->searchProperties($filters);
+        $page->setCollection($page->getCollection()->map($this->catalogMapper->toPublicListItem(...)));
+
+        return CommonApiResponse::page($page->withQueryString());
     }
 }

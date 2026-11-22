@@ -105,6 +105,7 @@ final class InvoicePaymentRaceWorker
         $app->instance(InvoicePaymentService::class, new InvoicePaymentService(
             $app->make(InvoiceRepository::class), $app->make(InvoicePaymentValidator::class),
             $app->make(InvoiceMapper::class), $logger,
+            $app->make(\App\Services\Commission\CommissionChargeService::class),
         ));
         // Boot model before registering a listener; restore dispatcher even on failure.
         Invoice::query();

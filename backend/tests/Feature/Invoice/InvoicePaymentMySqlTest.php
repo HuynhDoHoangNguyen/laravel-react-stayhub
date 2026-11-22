@@ -29,6 +29,7 @@ final class InvoicePaymentMySqlTest extends InvoicePaymentMySqlTestCase
         $this->app->instance(InvoicePaymentService::class, new InvoicePaymentService(
             $this->app->make(InvoiceRepository::class), $this->app->make(InvoicePaymentValidator::class),
             $this->app->make(InvoiceMapper::class), $logger,
+            $this->app->make(\App\Services\Commission\CommissionChargeService::class),
         ));
         $this->travelTo(\Carbon\CarbonImmutable::parse('2026-11-17T01:10:00Z'));
         $first = $this->actingAs($host)->patchJson($this->endpoint($invoice->id), ['payment_status' => 'PAID'])
