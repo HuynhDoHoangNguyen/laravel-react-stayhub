@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Catalog\PublicPropertyController;
 use App\Http\Controllers\Catalog\AdminPropertyController;
+use App\Http\Controllers\Catalog\AdminAmenityController;
 use App\Http\Controllers\Catalog\PublicRoomController;
 use App\Http\Controllers\Catalog\HostPropertyController;
 use App\Http\Controllers\Catalog\HostPropertyImageController;
@@ -37,6 +38,15 @@ Route::get('/admin/properties', [AdminPropertyController::class, 'index'])
 Route::get('/admin/properties/{property}', [AdminPropertyController::class, 'show'])
     ->middleware(['auth:sanctum', 'account.active', 'role:ADMIN'])
     ->name('admin.properties.show');
+
+Route::prefix('admin/amenities')->name('admin.amenities.')
+    ->middleware(['auth:sanctum', 'account.active', 'role:ADMIN'])
+    ->controller(AdminAmenityController::class)->group(function (): void {
+        Route::get('/', 'index')->name('index');
+        Route::get('/{amenity}', 'show')->name('show');
+        Route::post('/', 'store')->name('store');
+        Route::put('/{amenity}', 'update')->name('update');
+    });
 
 Route::get('/host/properties', [HostPropertyController::class, 'index'])
     ->middleware(['auth:sanctum', 'account.active', EnsureHostIsApproved::class]);

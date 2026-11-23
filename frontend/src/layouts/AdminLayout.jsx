@@ -1,5 +1,5 @@
 import { Link, useLocation, Outlet } from "react-router-dom";
-import { ShieldCheck } from "lucide-react";
+import { ListChecks, ShieldCheck } from "lucide-react";
 import logoMark from "@/assets/logo-mark.png";
 import { Toaster } from "@/components/ui/sonner";
 import { useAuth } from "@/hooks/useAuth";
@@ -37,6 +37,7 @@ const ADMIN_NAV = [
   { to: "/admin/hosts", label: "Host", icon: UsersIcon },
   { to: "/admin/user-management", label: "Người dùng & duyệt Host", icon: UsersIcon },
   { to: "/admin/properties", label: "Cơ sở lưu trú", icon: HotelIcon },
+  { to: "/admin/amenities", label: "Tiện nghi", icon: ListChecks },
   { to: "/admin/bookings", label: "Đơn đặt phòng", icon: BookingsIcon },
   { to: "/admin/invoices", label: "Hóa đơn hệ thống", icon: InvoiceIcon },
   { to: "/admin/commissions", label: "Đối soát hoa hồng", icon: ShieldCheck },

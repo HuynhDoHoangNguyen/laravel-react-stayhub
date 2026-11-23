@@ -69,6 +69,7 @@ class RoomAvailabilityRepository
         }
 
         return Amenity::query()
+            ->where('status', true)
             ->whereIn('id', $amenityIds)
             ->pluck('id')
             ->map(fn ($id): int => (int) $id)
@@ -208,7 +209,7 @@ class RoomAvailabilityRepository
             $amenityIds = array_values(array_unique(array_filter(array_map('intval', $filters['amenity_ids']))));
             if (! empty($amenityIds)) {
                 $query->whereHas('amenities', function (Builder $query) use ($amenityIds): void {
-                    $query->whereIn('amenities.id', $amenityIds);
+                    $query->where('amenities.status', true)->whereIn('amenities.id', $amenityIds);
                 }, '=', count($amenityIds));
             }
         }
@@ -219,7 +220,9 @@ class RoomAvailabilityRepository
             default => $query->orderBy('price_per_night', 'asc'),
         };
 
-        return $query->with(['property', 'roomType', 'amenities', 'images'])->paginate($perPage);
+        return $query->with(['property', 'roomType', 'images',
+            'amenities' => fn ($amenities) => $amenities->where('amenities.status', true),
+        ])->paginate($perPage);
     }
 
     /**
