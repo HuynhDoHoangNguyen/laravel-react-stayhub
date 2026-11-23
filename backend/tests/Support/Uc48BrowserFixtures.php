@@ -93,20 +93,20 @@ final class Uc48BrowserFixtures
             $months[$key]['revenue'] = bcadd($months[$key]['revenue'], $invoice[2], 2);
         }
         $statuses = static fn (array $counts): array => array_map(static fn (string $status): array => ['status' => $status, 'count' => $counts[$status]], self::STATUSES);
-        $summary = ['bookings_count' => 0, 'revenue_total' => '0.00'];
+        $summary = ['bookings_count' => 0, 'revenue_total' => '0.00', 'commission_revenue_total' => '0.00'];
         $allStatuses = array_fill_keys(self::STATUSES, 0);
         $monthly = [];
         foreach ($months as $month => $facts) {
             $summary['bookings_count'] += $facts['count'];
             $summary['revenue_total'] = bcadd($summary['revenue_total'], $facts['revenue'], 2);
             foreach (self::STATUSES as $status) $allStatuses[$status] += $facts['statuses'][$status];
-            $monthly[] = ['month' => $month, 'bookings_count' => $facts['count'], 'revenue_total' => $facts['revenue'], 'booking_status_counts' => $statuses($facts['statuses'])];
+            $monthly[] = ['month' => $month, 'bookings_count' => $facts['count'], 'revenue_total' => $facts['revenue'], 'commission_revenue_total' => '0.00', 'booking_status_counts' => $statuses($facts['statuses'])];
         }
         $iso = static fn (DateTimeImmutable $date): string => $date->setTimezone($utc)->format('Y-m-d\TH:i:s.u\Z');
         return ['period' => ['from_month' => $from, 'to_month' => $to, 'start_at' => $iso($start), 'end_at_exclusive' => $iso($end)],
             'report_timezone' => 'Asia/Ho_Chi_Minh', 'generated_at' => $iso($cutoff), 'summary' => $summary,
             'booking_status_counts' => $statuses($allStatuses), 'monthly' => $monthly,
-            'warnings' => ['paid_invoices_missing_paid_at_global_count' => $missing]];
+            'warnings' => ['paid_invoices_missing_paid_at_global_count' => $missing, 'settled_commissions_missing_settled_at_global_count' => 0]];
     }
 
     public static function create(Application $app, array $manifest, string $password): array

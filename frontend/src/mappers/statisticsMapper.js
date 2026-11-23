@@ -45,25 +45,32 @@ export function mapStatisticsResponse(body) {
   const end = monthIndex(data.period.to_month);
   if (end < start || end - start >= 12 || data.report_timezone !== 'Asia/Ho_Chi_Minh'
       || !count(data.summary.bookings_count) || !isStatisticsDecimal(data.summary.revenue_total)
+      || !isStatisticsDecimal(data.summary.commission_revenue_total)
       || !count(data.warnings.paid_invoices_missing_paid_at_global_count)
+      || !count(data.warnings.settled_commissions_missing_settled_at_global_count)
       || !Array.isArray(data.monthly) || data.monthly.length !== end - start + 1) invalid();
   const period = { from_month: data.period.from_month, to_month: data.period.to_month,
     start_at: timestamp(data.period.start_at), end_at_exclusive: timestamp(data.period.end_at_exclusive) };
   boundary(period.start_at, start);
   boundary(period.end_at_exclusive, end + 1);
-  const summary = { bookings_count: data.summary.bookings_count, revenue_total: data.summary.revenue_total };
+  const summary = { bookings_count: data.summary.bookings_count, revenue_total: data.summary.revenue_total,
+    commission_revenue_total: data.summary.commission_revenue_total };
   const totals = statuses(data.booking_status_counts, summary.bookings_count);
   const monthly = data.monthly.map((row, i) => {
-    if (!object(row) || monthIndex(row.month) !== start + i || !count(row.bookings_count) || !isStatisticsDecimal(row.revenue_total)) invalid();
+    if (!object(row) || monthIndex(row.month) !== start + i || !count(row.bookings_count)
+        || !isStatisticsDecimal(row.revenue_total) || !isStatisticsDecimal(row.commission_revenue_total)) invalid();
     return { month: row.month, bookings_count: row.bookings_count, revenue_total: row.revenue_total,
+      commission_revenue_total: row.commission_revenue_total,
       booking_status_counts: statuses(row.booking_status_counts, row.bookings_count) };
   });
   if (monthly.reduce((sum, row) => sum + BigInt(row.bookings_count), 0n) !== BigInt(summary.bookings_count)
-      || monthly.reduce((sum, row) => sum + cents(row.revenue_total), 0n) !== cents(summary.revenue_total)) invalid();
+      || monthly.reduce((sum, row) => sum + cents(row.revenue_total), 0n) !== cents(summary.revenue_total)
+      || monthly.reduce((sum, row) => sum + cents(row.commission_revenue_total), 0n) !== cents(summary.commission_revenue_total)) invalid();
   totals.forEach((row, i) => {
     if (monthly.reduce((sum, month) => sum + BigInt(month.booking_status_counts[i].count), 0n) !== BigInt(row.count)) invalid();
   });
   return { period, report_timezone: data.report_timezone, generated_at: timestamp(data.generated_at), summary,
     booking_status_counts: totals, monthly,
-    warnings: { paid_invoices_missing_paid_at_global_count: data.warnings.paid_invoices_missing_paid_at_global_count } };
+    warnings: { paid_invoices_missing_paid_at_global_count: data.warnings.paid_invoices_missing_paid_at_global_count,
+      settled_commissions_missing_settled_at_global_count: data.warnings.settled_commissions_missing_settled_at_global_count } };
 }

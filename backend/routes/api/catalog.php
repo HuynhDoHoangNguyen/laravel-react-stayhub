@@ -1,11 +1,13 @@
 <?php
 
-use App\Http\Controllers\Catalog\PublicPropertyController;
 use App\Http\Controllers\Catalog\AdminPropertyController;
+use App\Http\Controllers\Catalog\AdminPropertyVerificationController;
+use App\Http\Controllers\Catalog\PublicPropertyController;
 use App\Http\Controllers\Catalog\AdminAmenityController;
 use App\Http\Controllers\Catalog\PublicRoomController;
 use App\Http\Controllers\Catalog\HostPropertyController;
 use App\Http\Controllers\Catalog\HostPropertyImageController;
+use App\Http\Controllers\Catalog\HostPropertyVerificationController;
 use App\Http\Controllers\Catalog\HostRoomTypeController;
 use App\Http\Controllers\Catalog\HostRoomController;
 use App\Http\Controllers\Catalog\HostRoomMaintenanceController;
@@ -48,6 +50,15 @@ Route::prefix('admin/amenities')->name('admin.amenities.')
         Route::put('/{amenity}', 'update')->name('update');
     });
 
+Route::middleware(['auth:sanctum', 'account.active', 'role:ADMIN'])->group(function (): void {
+    Route::get('/admin/properties/{property}/verification', [AdminPropertyVerificationController::class, 'show'])
+        ->name('admin.properties.verification.show');
+    Route::get('/admin/properties/{property}/verification/document', [AdminPropertyVerificationController::class, 'document'])
+        ->name('admin.properties.verification.document');
+    Route::patch('/admin/properties/{property}/verification', [AdminPropertyVerificationController::class, 'update'])
+        ->name('admin.properties.verification.update');
+});
+
 Route::get('/host/properties', [HostPropertyController::class, 'index'])
     ->middleware(['auth:sanctum', 'account.active', EnsureHostIsApproved::class]);
 
@@ -62,6 +73,13 @@ Route::patch('/host/properties/{property}/status', [HostPropertyController::clas
 
 Route::get('/host/properties/{property}', [HostPropertyController::class, 'show'])
     ->middleware(['auth:sanctum', 'account.active', EnsureHostIsApproved::class]);
+
+Route::middleware(['auth:sanctum', 'account.active', 'role:HOST', EnsureHostIsApproved::class])->group(function (): void {
+    Route::get('/host/properties/{property}/verification', [HostPropertyVerificationController::class, 'show'])
+        ->name('host.properties.verification.show');
+    Route::post('/host/properties/{property}/verification', [HostPropertyVerificationController::class, 'store'])
+        ->name('host.properties.verification.store');
+});
 
 Route::get('/host/properties/{property}/images', [HostPropertyImageController::class, 'index'])
     ->middleware(['auth:sanctum', 'account.active', EnsureHostIsApproved::class]);

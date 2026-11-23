@@ -14,14 +14,14 @@ const statuses = (values) => statisticsStatuses.map((status, index) => ({ status
 const body = () => ({ data: {
   period: { from_month: '2026-10', to_month: '2026-11', start_at: '2026-09-30T17:00:00.000000Z', end_at_exclusive: '2026-11-30T17:00:00.000000Z' },
   generated_at: '2026-11-19T05:00:00.000000Z', report_timezone: 'Asia/Ho_Chi_Minh',
-  summary: { bookings_count: 4, revenue_total: '300.76' }, booking_status_counts: statuses([1, 1, 0, 1, 1, 0]),
-  monthly: [{ month: '2026-10', bookings_count: 2, revenue_total: '100.25', booking_status_counts: statuses([0, 0, 0, 1, 1, 0]) },
-    { month: '2026-11', bookings_count: 2, revenue_total: '200.51', booking_status_counts: statuses([1, 1, 0, 0, 0, 0]) }],
-  warnings: { paid_invoices_missing_paid_at_global_count: 1 },
+  summary: { bookings_count: 4, revenue_total: '300.76', commission_revenue_total: '15.75' }, booking_status_counts: statuses([1, 1, 0, 1, 1, 0]),
+  monthly: [{ month: '2026-10', bookings_count: 2, revenue_total: '100.25', commission_revenue_total: '10.25', booking_status_counts: statuses([0, 0, 0, 1, 1, 0]) },
+    { month: '2026-11', bookings_count: 2, revenue_total: '200.51', commission_revenue_total: '5.50', booking_status_counts: statuses([1, 1, 0, 0, 0, 0]) }],
+  warnings: { paid_invoices_missing_paid_at_global_count: 1, settled_commissions_missing_settled_at_global_count: 2 },
 } });
 function zero() {
   const result = body();
-  for (const row of [result.data.summary, ...result.data.monthly]) { row.bookings_count = 0; row.revenue_total = '0.00'; }
+  for (const row of [result.data.summary, ...result.data.monthly]) { row.bookings_count = 0; row.revenue_total = '0.00'; row.commission_revenue_total = '0.00'; }
   for (const rows of [result.data.booking_status_counts, ...result.data.monthly.map((row) => row.booking_status_counts)]) rows.forEach((row) => { row.count = 0; });
   return result;
 }
@@ -46,7 +46,7 @@ test('full twelve-month period crosses the year boundary without losing empty bu
   const value = zero();
   const months = ['2025-12', '2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11'];
   value.data.period.from_month = '2025-12'; value.data.period.start_at = '2025-11-30T17:00:00.000000Z';
-  value.data.monthly = months.map((month) => ({ month, bookings_count: 0, revenue_total: '0.00', booking_status_counts: statuses([0, 0, 0, 0, 0, 0]) }));
+  value.data.monthly = months.map((month) => ({ month, bookings_count: 0, revenue_total: '0.00', commission_revenue_total: '0.00', booking_status_counts: statuses([0, 0, 0, 0, 0, 0]) }));
   assert.deepEqual(mapStatisticsResponse(value).monthly.map((row) => row.month), months);
 });
 
@@ -65,6 +65,10 @@ test('malformed structure, totals, counts, money, timestamps and periods fail cl
     (b) => { b.data.booking_status_counts[0].count = 3; },
     (b) => { b.data.monthly[0].booking_status_counts[0].count = 1; b.data.monthly[0].booking_status_counts[3].count = 0; },
     (b) => { b.data.monthly[0].revenue_total = '100.26'; },
+    (b) => { b.data.monthly[0].commission_revenue_total = '10.26'; },
+    (b) => { delete b.data.summary.commission_revenue_total; },
+    (b) => { b.data.monthly[1].commission_revenue_total = 5.50; },
+    (b) => { b.data.warnings.settled_commissions_missing_settled_at_global_count = -1; },
     (b) => { b.data.warnings.paid_invoices_missing_paid_at_global_count = null; },
   ];
   for (const value of [null, 300.76, '1e3', '-1.00', '1.001', '01.00', '0.00 ']) mutations.push((b) => { b.data.summary.revenue_total = value; });

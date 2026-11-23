@@ -9,7 +9,8 @@ let adapter;
 const sharedClient = axios.create({ adapter: (config) => adapter(config) });
 mock.module(new URL('../src/api/axios.js', import.meta.url).href, { defaultExport: sharedClient });
 const { getAdminProperties, getAdminProperty, normalizePropertyId, createAdminPropertyService, normalizePropertyQuery, readPropertySearch,
-  propertySearchParams, parseAdminPropertyError } = await import('../src/services/adminPropertyService.js');
+  propertySearchParams, parseAdminPropertyError, getAdminPropertyVerification, reviewAdminPropertyVerification,
+  downloadAdminPropertyVerification } = await import('../src/services/adminPropertyService.js');
 test.after(() => mock.restoreAll());
 
 const body = () => ({
@@ -316,4 +317,55 @@ test('closing a detail request can abort the real transport without losing cance
   controller.abort();
   await assert.rejects(createAdminPropertyApi(axios.create()).getProperty(14, { signal: controller.signal }),
     (error) => parseAdminPropertyError(error).isCancelled);
+});
+
+const verificationUrl = '/api/admin/properties/1/verification';
+const entry = {
+  id: 9, status: 'SUBMITTED', address_snapshot: '12 Bạch Đằng', address_current: '12 Bạch Đằng',
+  submitted_at: '2026-11-23T05:00:00Z', reviewed_at: null, rejection_reason: null,
+};
+
+test('verification reads null or the allowlisted summary and rejects malformed success', async () => {
+  let data = null;
+  adapter = async ({ url, method }) => {
+    assert.equal(url, verificationUrl);
+    assert.equal(method, 'get');
+    return { data: { data } };
+  };
+  assert.equal(await getAdminPropertyVerification(1), null);
+  data = { ...entry, document_path: 'private.pdf' };
+  assert.deepEqual(await getAdminPropertyVerification('1'), entry);
+  data = { ...entry, status: 'INVALIDATED', reviewed_at: '2026-11-23T06:00:00Z' };
+  assert.deepEqual(await getAdminPropertyVerification(1), data);
+  data = { ...entry, status: 'REJECTED', rejection_reason: null };
+  await assert.rejects(getAdminPropertyVerification(1), { kind: 'contract' });
+});
+
+test('review initializes CSRF and sends the trimmed reason with the same signal', async () => {
+  const { signal } = new AbortController();
+  const requests = [];
+  const result = { ...entry, status: 'REJECTED', reviewed_at: '2026-11-23T06:00:00Z', rejection_reason: 'Thiếu địa chỉ.' };
+  adapter = async (config) => {
+    assert.equal(config.signal, signal);
+    requests.push([config.method, config.url]);
+    if (config.method === 'patch') assert.deepEqual(JSON.parse(config.data), { decision: 'REJECT', reason: 'Thiếu địa chỉ.' });
+    return { data: { data: result } };
+  };
+  assert.deepEqual(await reviewAdminPropertyVerification(1, 'REJECT', ' Thiếu địa chỉ. ', { signal }), result);
+  assert.deepEqual(requests, [['get', '/sanctum/csrf-cookie'], ['patch', verificationUrl]]);
+});
+
+test('download requests a blob, generates an attachment name and rejects an unexpected MIME', async () => {
+  let blob = new Blob(['payload'], { type: 'application/pdf' });
+  const { signal } = new AbortController();
+  adapter = async (config) => {
+    assert.equal(config.url, verificationUrl + '/document');
+    assert.equal(config.method, 'get');
+    assert.equal(config.responseType, 'blob');
+    assert.equal(config.signal, signal);
+    return { data: blob };
+  };
+  assert.deepEqual(await downloadAdminPropertyVerification(1, 9, { signal }), { blob, filename: 'ho-so-xac-minh-9.pdf' });
+  blob = new Blob(['{"message":"error"}'], { type: 'application/json' });
+  await assert.rejects(downloadAdminPropertyVerification(1, 9, { signal }), { kind: 'contract' });
 });

@@ -3,16 +3,18 @@
  * Preserves exact decimal strings, timestamps, nullable fields and pagination metadata.
  */
 
+function invalidResponse(code) {
+    throw Object.assign(new Error('Phản hồi từ máy chủ không hợp lệ.'), {
+        isApiError: true,
+        status: 0,
+        kind: 'contract',
+        code,
+        fields: {},
+    });
+}
+
 function requireEnvelopeObject(payload, code = 'INVALID_COMMISSION_RESPONSE') {
-    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-        throw Object.assign(new Error('Phản hồi từ máy chủ không hợp lệ.'), {
-            isApiError: true,
-            status: 0,
-            kind: 'contract',
-            code,
-            fields: {},
-        });
-    }
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) invalidResponse(code);
     return payload;
 }
 
@@ -242,22 +244,15 @@ export function mapHostFinancialSummaryResponse(payload) {
 }
 
 export function mapAdminCommissionSummaryResponse(payload) {
-    const env = requireEnvelopeObject(payload);
-    const d = env.data || {};
-    return {
-        success: Boolean(env.success ?? true),
-        data: {
-            total_assessed: String(d.total_assessed ?? '0.00'),
-            total_settled: String(d.total_settled ?? '0.00'),
-            settled_count: Number(d.settled_count ?? 0),
-            total_outstanding: String(d.total_outstanding ?? '0.00'),
-            total_due: String(d.total_due ?? '0.00'),
-            due_count: Number(d.due_count ?? 0),
-            total_under_review: String(d.total_under_review ?? '0.00'),
-            under_review_count: Number(d.under_review_count ?? 0),
-            total_overdue: String(d.total_overdue ?? '0.00'),
-            overdue_count: Number(d.overdue_count ?? 0),
-            pending_remittances_count: Number(d.pending_remittances_count ?? 0),
-        },
-    };
+    const code = 'INVALID_COMMISSION_SUMMARY_RESPONSE';
+    const env = requireEnvelopeObject(payload, code);
+    const data = requireEnvelopeObject(env.data, code);
+    const amounts = ['total_assessed', 'total_settled', 'total_outstanding', 'total_due', 'total_under_review', 'total_overdue'];
+    const counts = ['settled_count', 'due_count', 'under_review_count', 'overdue_count', 'pending_remittances_count'];
+    if (env.success !== true
+        || amounts.some((key) => typeof data[key] !== 'string' || !/^(0|[1-9]\d*)\.\d{2}(?![\s\S])/.test(data[key]))
+        || counts.some((key) => !Number.isSafeInteger(data[key]) || data[key] < 0)) {
+        invalidResponse(code);
+    }
+    return { success: true, data: Object.fromEntries([...amounts, ...counts].map((key) => [key, data[key]])) };
 }

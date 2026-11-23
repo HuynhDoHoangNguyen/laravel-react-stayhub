@@ -569,6 +569,7 @@ class CatalogRepository
     private function publicProperties(): Builder
     {
         return $this->activeProperties()
+            ->with('approvedVerification:property_id,address_snapshot')
             ->with(['images' => fn ($images) => $images->select(['id', 'property_id', 'image_path', 'is_primary'])
                 ->orderByDesc('is_primary')->orderBy('id')])
             ->withMin(['rooms as starting_price' => self::publicRooms(...)], 'price_per_night')

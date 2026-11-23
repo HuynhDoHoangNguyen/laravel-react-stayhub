@@ -181,6 +181,25 @@ class CommissionRepository
 
         $this->applyCommissionStatusFilter($query, (string) ($filters['status'] ?? 'ALL'));
 
+        $column = match ($filters['date_field'] ?? 'created_at') {
+            'settled_at' => 'settled_at',
+            'due_at' => 'due_at',
+            default => 'created_at',
+        };
+        foreach (['date_start' => '>=', 'date_end_exclusive' => '<'] as $filter => $operator) {
+            $boundary = $filters[$filter] ?? null;
+            if ($boundary === null) {
+                continue;
+            }
+
+            // MySQL TIMESTAMP uses the session zone, while due_at and settled_at store UTC DATETIME values.
+            if ($column === 'created_at' && $query->getConnection()->getDriverName() === 'mysql') {
+                $query->whereRaw("UNIX_TIMESTAMP(created_at) {$operator} CAST(? AS DECIMAL(20,0))", [$boundary->getTimestamp()]);
+            } else {
+                $query->where($column, $operator, $boundary->toDateTimeString());
+            }
+        }
+
         return $query->orderByDesc('id')->paginate($perPage);
     }
 
@@ -204,7 +223,15 @@ class CommissionRepository
             }
         }
 
-        return $query->orderByDesc('submitted_at')->paginate($perPage);
+        if (isset($filters['date_start'])) {
+            $query->where('submitted_at', '>=', $filters['date_start']->toDateTimeString());
+        }
+
+        if (isset($filters['date_end_exclusive'])) {
+            $query->where('submitted_at', '<', $filters['date_end_exclusive']->toDateTimeString());
+        }
+
+        return $query->orderByDesc('submitted_at')->orderByDesc('id')->paginate($perPage);
     }
 
     /**

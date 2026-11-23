@@ -2,7 +2,7 @@ const HOME_BY_ROLE = { CUSTOMER: '/customer', HOST: '/host', ADMIN: '/admin' };
 const PATHS_BY_ROLE = {
     CUSTOMER: /^\/customer(?:\/(?:bookings(?:\/[1-9]\d*)?|checkout|profile|invoices(?:\/[1-9]\d*)?|reviews))?\/?$/,
     HOST: /^\/host(?:\/(?:profile|properties(?:\/(?:create|[1-9]\d*(?:\/edit)?))?|invoices(?:\/(?:create|[1-9]\d*))?|bookings\/[1-9]\d*\/create-invoice|reviews|commissions))?\/?$/,
-    ADMIN: /^\/admin(?:\/(?:profile|users|hosts|user-management|amenities|bookings|commissions|statistics|invoices))?\/?$/,
+    ADMIN: /^\/admin(?:\/(?:profile|users|hosts|user-management|properties|amenities|host-reports|bookings|commissions|statistics|invoices))?\/?$/,
 };
 
 function hasUnsafeCharacters(value) {

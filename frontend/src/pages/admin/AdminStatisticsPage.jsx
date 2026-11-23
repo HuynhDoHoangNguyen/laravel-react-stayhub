@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, ArrowRight, CalendarDays, CalendarCheck, Clock3, RefreshCw, SlidersHorizontal, Wallet } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CalendarDays, CalendarCheck, Clock3, Receipt, RefreshCw, SlidersHorizontal, Wallet } from 'lucide-react';
+import AdminStatisticsCharts from '../../components/admin/AdminStatisticsCharts.jsx';
 import { useAuth } from '../../hooks/useAuth';
 import { useAdminStatistics } from '../../hooks/useAdminStatistics';
 import { formatStatisticsRevenue } from '../../services/statisticsService';
@@ -28,7 +29,7 @@ function Statistics({ auth }) {
   return <section className="admin-statistics" aria-labelledby="statistics-title">
     <header className="admin-statistics__heading">
       <div><p className="admin-statistics__eyebrow">Báo cáo quản trị</p><h1 id="statistics-title">Thống kê hệ thống</h1>
-        <p className="admin-statistics__description">Theo dõi đơn đặt phòng và doanh thu đã xác nhận trong kỳ bạn chọn.</p></div>
+        <p className="admin-statistics__description">Theo dõi đơn đặt phòng, hoa hồng đã đối soát và giá trị hóa đơn trong kỳ.</p></div>
       <button type="button" className="admin-statistics__button" onClick={reload} disabled={loading}>
         <RefreshCw size={16} aria-hidden="true" />Tải lại</button>
     </header>
@@ -67,31 +68,39 @@ function Statistics({ auth }) {
         <dl className="admin-statistics__summary">
           <div className="admin-statistics__metric"><dt><span>Đơn đặt phòng trong kỳ</span><CalendarCheck size={22} aria-hidden="true" /></dt>
             <dd>{numbers.format(result.summary.bookings_count)}<span className="admin-statistics__metric-note">Theo ngày tạo · Gồm mọi trạng thái</span></dd></div>
-          <div className="admin-statistics__metric admin-statistics__metric--revenue"><dt><span>Doanh thu đã xác nhận</span><Wallet size={22} aria-hidden="true" /></dt>
-            <dd>{formatStatisticsRevenue(result.summary.revenue_total)}<span className="admin-statistics__metric-note">Đã thanh toán · Có ngày xác nhận</span></dd></div>
+          <div className="admin-statistics__metric admin-statistics__metric--revenue"><dt><span>Doanh thu nền tảng</span><Wallet size={22} aria-hidden="true" /></dt>
+            <dd>{formatStatisticsRevenue(result.summary.commission_revenue_total)}<span className="admin-statistics__metric-note">Hoa hồng đã đối soát · Theo ngày đối soát</span></dd></div>
+          <div className="admin-statistics__metric"><dt><span>Giá trị hóa đơn đã thanh toán</span><Receipt size={22} aria-hidden="true" /></dt>
+            <dd>{formatStatisticsRevenue(result.summary.revenue_total)}<span className="admin-statistics__metric-note">Theo ngày thanh toán</span></dd></div>
         </dl>
+        <AdminStatisticsCharts monthly={result.monthly} />
         <section className="admin-statistics__status-panel" aria-labelledby="statistics-status-title"><div className="admin-statistics__panel-heading"><h2 id="statistics-status-title">Trạng thái đơn đặt phòng</h2><p>Trạng thái hiện tại của các đơn được tạo trong kỳ</p></div>
           <dl className="admin-statistics__status-grid">{result.booking_status_counts.map((row) => <div key={row.status} className="admin-statistics__status" data-status={row.status}>
             <dt><span className="admin-statistics__status-dot" aria-hidden="true" />{labels[row.status]}</dt><dd>{numbers.format(row.count)}</dd>
           </div>)}</dl>
         </section>
-        {result.summary.bookings_count === 0 && result.summary.revenue_total === '0.00' && <div role="status" className="admin-statistics__empty"><CalendarDays size={24} aria-hidden="true" />
-          <div><h2>Chưa có số liệu trong kỳ này</h2><p>Không có đơn đặt phòng được tạo hoặc doanh thu hợp lệ. Bạn có thể chọn kỳ khác rồi áp dụng.</p></div></div>}
-        <section className="admin-statistics__table-panel" aria-labelledby="statistics-monthly-title">
+        {result.summary.bookings_count === 0 && result.summary.revenue_total === '0.00'
+          && result.summary.commission_revenue_total === '0.00' && <div role="status" className="admin-statistics__empty"><CalendarDays size={24} aria-hidden="true" />
+          <div><h2>Chưa có số liệu trong kỳ này</h2><p>Bạn có thể chọn kỳ khác rồi áp dụng.</p></div></div>}
+        <section className="admin-statistics__table-panel">
           <div className="admin-statistics__panel-heading"><h2 id="statistics-monthly-title">Chi tiết từng tháng</h2><p id="statistics-table-help">Đủ các tháng trong kỳ, kể cả tháng có số liệu bằng 0. Cuộn ngang để xem đủ cột; khi bảng được chọn, dùng phím mũi tên để cuộn.</p></div>
           <div className="admin-statistics__table-scroll" role="region" aria-labelledby="statistics-monthly-title" aria-describedby="statistics-table-help" tabIndex={0}>
-            <table><caption className="admin-statistics__sr-only">Đơn đặt phòng, doanh thu và sáu trạng thái theo tháng, kỳ {result.period.from_month} đến {result.period.to_month}</caption>
-              <thead><tr>{['Tháng', 'Đơn đặt phòng', 'Doanh thu (VND)', ...Object.values(labels)].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
+            <table><caption className="admin-statistics__sr-only">Đơn đặt phòng, doanh thu nền tảng, giá trị hóa đơn và sáu trạng thái theo tháng, kỳ {result.period.from_month} đến {result.period.to_month}</caption>
+              <thead><tr>{['Tháng', 'Đơn đặt phòng', 'Doanh thu nền tảng', 'Giá trị hóa đơn đã thanh toán', ...Object.values(labels)].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
               <tbody>{result.monthly.map((row) => <tr key={row.month}><th scope="row">{row.month}</th>
-                <td>{numbers.format(row.bookings_count)}</td><td className="admin-statistics__table-money">{formatStatisticsRevenue(row.revenue_total)}</td>
+                <td>{numbers.format(row.bookings_count)}</td>
+                <td className="admin-statistics__table-money">{formatStatisticsRevenue(row.commission_revenue_total)}</td>
+                <td className="admin-statistics__table-money">{formatStatisticsRevenue(row.revenue_total)}</td>
                 {row.booking_status_counts.map((status) => <td key={status.status}>{numbers.format(status.count)}</td>)}
               </tr>)}</tbody>
             </table>
           </div>
         </section>
         {result.warnings.paid_invoices_missing_paid_at_global_count > 0 && <div role="status" className="admin-statistics__notice admin-statistics__notice--warning"><AlertTriangle size={20} aria-hidden="true" />
-          <div><h2>Hóa đơn thiếu ngày xác nhận</h2><p>Có <strong>{numbers.format(result.warnings.paid_invoices_missing_paid_at_global_count)}</strong> hóa đơn đã thanh toán thiếu ngày xác nhận: <strong>toàn hệ thống, không phân bổ theo kỳ</strong> và chưa tính vào doanh thu.</p></div></div>}
-        <p className="admin-statistics__footnote">Doanh thu chỉ gồm hóa đơn hiện đã thanh toán có ngày xác nhận; chưa thanh toán và đã hoàn tiền bị loại. Booking và doanh thu được tổng hợp độc lập. Số liệu có thể thay đổi khi trạng thái hiện tại thay đổi.</p>
+          <div><h2>Hóa đơn thiếu ngày thanh toán</h2><p>Có <strong>{numbers.format(result.warnings.paid_invoices_missing_paid_at_global_count)}</strong> hóa đơn đã thanh toán thiếu ngày thanh toán trên toàn hệ thống. Chúng chưa được tính vào giá trị hóa đơn theo kỳ.</p></div></div>}
+        {result.warnings.settled_commissions_missing_settled_at_global_count > 0 && <div role="status" className="admin-statistics__notice admin-statistics__notice--warning"><AlertTriangle size={20} aria-hidden="true" />
+          <div><h2>Hoa hồng thiếu ngày đối soát</h2><p>Có <strong>{numbers.format(result.warnings.settled_commissions_missing_settled_at_global_count)}</strong> khoản đã đối soát thiếu ngày đối soát trên toàn hệ thống. Chúng chưa được tính vào doanh thu theo kỳ.</p></div></div>}
+        <p className="admin-statistics__footnote">Chỉ số sử dụng trạng thái hiện tại của đơn, hóa đơn và hoa hồng tại thời điểm tải báo cáo.</p>
       </>}
     </div>
   </section>;

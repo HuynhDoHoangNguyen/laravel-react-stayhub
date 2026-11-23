@@ -14,6 +14,7 @@ final readonly class AdminInvoiceListItemResponse implements JsonSerializable
         public string $invoice_code,
         #[Map(source: 'booking_id', transform: 'intval')]
         public int $booking_id,
+        public ?string $booking_code,
         #[Map(source: 'customer_name', transform: 'strval')]
         public string $customer_name,
         #[Map(source: 'property_name', transform: 'strval')]
@@ -34,6 +35,7 @@ final readonly class AdminInvoiceListItemResponse implements JsonSerializable
     {
         return [
             'id' => $this->id, 'invoice_code' => $this->invoice_code, 'booking_id' => $this->booking_id,
+            'booking_code' => $this->booking_code,
             'customer_name' => $this->customer_name, 'property_name' => $this->property_name,
             'room_name' => $this->room_name, 'total_amount' => $this->total_amount,
             'payment_status' => $this->payment_status, 'paid_at' => $this->paid_at, 'created_at' => $this->created_at,

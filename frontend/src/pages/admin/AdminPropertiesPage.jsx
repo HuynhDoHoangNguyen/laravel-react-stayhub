@@ -4,6 +4,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { getAdminProperties, parseAdminPropertyError, propertySearchParams, readPropertySearch } from '../../services/adminPropertyService';
 import { propertyStatuses, propertyTypes } from '../../mappers/adminPropertyMapper';
 import AdminPropertyDetailDialog from '../../components/admin/properties/AdminPropertyDetailDialog';
+import AdminPropertyVerificationDialog from '../../components/admin/AdminPropertyVerificationDialog.jsx';
 
 const dateFormat = new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh' });
 const numberFormat = new Intl.NumberFormat('vi-VN');
@@ -152,9 +153,14 @@ function PropertyList({ query, change, reset, user, captureProfileAuth, isProfil
                 <td className="whitespace-nowrap px-4 py-4">{numberFormat.format(property.rooms_count)}</td>
                 <td className="px-4 py-4"><span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${badgeClass[property.status]}`}>{propertyStatuses[property.status]}</span></td>
                 <td className="whitespace-nowrap px-4 py-4">{property.created_at === null ? 'Chưa cập nhật' : dateFormat.format(new Date(property.created_at))}</td>
-                <td className="px-4 py-4"><button type="button" className={`${buttonClass} whitespace-nowrap`}
-                  aria-label={`Xem chi tiết cơ sở #${property.id}`}
-                  onClick={(event) => setSelectedProperty({ id: property.id, trigger: event.currentTarget })}>Xem chi tiết</button></td>
+                <td className="px-4 py-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button type="button" className={`${buttonClass} whitespace-nowrap`}
+                      aria-label={`Xem chi tiết cơ sở #${property.id}`}
+                      onClick={(event) => setSelectedProperty({ id: property.id, trigger: event.currentTarget })}>Xem chi tiết</button>
+                    <AdminPropertyVerificationDialog property={property} />
+                  </div>
+                </td>
               </tr>)}
             </tbody>
           </table>

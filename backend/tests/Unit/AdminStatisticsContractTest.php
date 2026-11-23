@@ -36,9 +36,10 @@ final class AdminStatisticsContractTest extends TestCase
 
     private function facts(int $months = 1): object
     {
-        $facts = ['missing_paid_at' => '0', 'summary_count' => '0', 'summary_revenue' => '0.00'];
+        $facts = ['missing_paid_at' => '0', 'missing_settled_at' => '0', 'summary_count' => '0', 'summary_revenue' => '0.00'];
         foreach (['summary', ...array_map(fn ($i) => 'month_'.$i, range(0, $months - 1))] as $prefix) {
             $facts[$prefix.'_count'] = '0'; $facts[$prefix.'_revenue'] = '0.00';
+            $facts[$prefix.'_commission_revenue'] = '0.00';
             foreach (BookingStatus::cases() as $status) { $facts[$prefix.'_'.strtolower($status->value)] = '0'; }
         }
         return (object) $facts;
@@ -105,7 +106,7 @@ final class AdminStatisticsContractTest extends TestCase
         $period = new AdminStatisticsPeriod(new AdminStatisticsQueryRequest('2026-11', '2026-11'), new DateTimeImmutable('2026-11-19T05:00:00Z'));
         $data = json_decode(json_encode(new AdminStatisticsResponse($period, $facts), JSON_THROW_ON_ERROR), true, flags: JSON_THROW_ON_ERROR);
         $this->assertSame(['period', 'report_timezone', 'generated_at', 'summary', 'booking_status_counts', 'monthly', 'warnings'], array_keys($data));
-        $this->assertSame(['bookings_count' => 9007199254740991, 'revenue_total' => '9007199254740993.01'], $data['summary']);
+        $this->assertSame(['bookings_count' => 9007199254740991, 'revenue_total' => '9007199254740993.01', 'commission_revenue_total' => '0.00'], $data['summary']);
         $this->assertSame(['PENDING', 'CONFIRMED', 'CHECKED_IN', 'COMPLETED', 'CANCELLED', 'REJECTED'], array_column($data['booking_status_counts'], 'status'));
         $this->assertSame('Asia/Ho_Chi_Minh', $data['report_timezone']);
         $this->assertStringNotContainsString('must-not-escape', json_encode($data));
@@ -122,6 +123,9 @@ final class AdminStatisticsContractTest extends TestCase
         }
         $cases['status sum'] = ['summary_pending', '1'];
         $cases['monthly money sum'] = ['month_0_revenue', '0.01'];
+        $cases['monthly commission sum'] = ['month_0_commission_revenue', '0.01'];
+        $cases['invalid settled warning'] = ['missing_settled_at', -1];
+        $cases['invalid commission decimal'] = ['summary_commission_revenue', '1.001'];
         return $cases;
     }
 

@@ -1,7 +1,11 @@
 import { MapPin, Star } from 'lucide-react';
+import PropertyVerificationBadge from '../catalog/PropertyVerificationBadge';
 export function PropertyHeader({ property }) {
     return <header className="space-y-3">
-        <p className="text-xs uppercase tracking-[0.2em] text-accent">{{ HOTEL: 'Khách sạn', HOMESTAY: 'Homestay' }[property.propertyType] || property.propertyType}</p>
+        <div className="flex flex-wrap items-center gap-2">
+            <p className="text-xs uppercase tracking-[0.2em] text-accent">{{ HOTEL: 'Khách sạn', HOMESTAY: 'Homestay' }[property.propertyType] || property.propertyType}</p>
+            <PropertyVerificationBadge verified={property.isVerified} />
+        </div>
         <h1 className="font-display text-3xl text-primary md:text-5xl">{property.name}</h1>
         <p className="flex items-start gap-2 text-sm text-muted-foreground"><MapPin className="h-4 w-4 shrink-0" />{property.address}</p>
         <p className="flex items-center gap-2 text-sm text-ink">{property.reviewCount > 0 && property.averageRating !== null

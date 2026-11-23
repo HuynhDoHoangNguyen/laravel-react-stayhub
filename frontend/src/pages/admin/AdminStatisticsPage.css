@@ -9,7 +9,7 @@
 .admin-statistics .admin-statistics__button { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 2.75rem; padding: .65rem 1rem; border: 1px solid var(--border); border-radius: .75rem; background: var(--card); color: var(--foreground); font-size: .8125rem; font-weight: 600; line-height: 1.5; cursor: pointer; text-decoration: none; }
 .admin-statistics .admin-statistics__button--primary { background: var(--primary); border-color: var(--primary); color: var(--primary-foreground); }
 .admin-statistics .admin-statistics__button:disabled { opacity: .5; cursor: wait; }
-.admin-statistics :is(button, a, input, .admin-statistics__table-scroll):focus-visible { outline: 2px solid var(--ring); outline-offset: 4px; }
+.admin-statistics :is(button, a, input, select, .admin-statistics__table-scroll):focus-visible { outline: 2px solid var(--ring); outline-offset: 4px; }
 .admin-statistics .admin-statistics__filter, .admin-statistics .admin-statistics__status-panel, .admin-statistics .admin-statistics__table-panel { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
 .admin-statistics .admin-statistics__filter { padding: 1.25rem; }
 .admin-statistics .admin-statistics__filter-heading { display: flex; align-items: center; gap: .6rem; color: var(--primary); }
@@ -56,6 +56,26 @@
 .admin-statistics tr > :first-child { position: sticky; left: 0; z-index: 1; text-align: left; border-right: 1px solid var(--border); background: var(--card); }
 .admin-statistics thead tr > :first-child { background: var(--muted); }
 .admin-statistics .admin-statistics__table-money { font-weight: 600; }
+.admin-statistics__charts { display: grid; gap: .75rem; }
+.admin-statistics__chart-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .6rem; }
+.admin-statistics__chart-toolbar label { display: inline-flex; align-items: center; gap: .4rem; font-size: .8125rem; font-weight: 600; }
+.admin-statistics__chart-toolbar select { min-height: 2.5rem; padding: .35rem .65rem; border: 1px solid var(--input); border-radius: .65rem; background: var(--background); color: var(--foreground); font: inherit; font-size: .875rem; }
+.admin-statistics__charts-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+.admin-statistics__chart-card { min-width: 0; padding: clamp(.85rem, 2vw, 1.4rem); border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
+.admin-statistics__chart-heading { display: flex; align-items: flex-start; gap: .7rem; }
+.admin-statistics__chart-icon { display: grid; flex-shrink: 0; width: 2.25rem; height: 2.25rem; place-items: center; border-radius: .65rem; background: var(--muted); color: var(--primary); }
+.admin-statistics .admin-statistics__chart-heading p { margin-top: .15rem; color: var(--muted-foreground); font-size: .75rem; }
+.admin-statistics .admin-statistics__chart-value { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .35rem .75rem; margin: 1rem 0 .65rem; padding: .6rem .75rem; border-radius: .65rem; background: var(--muted); font-size: .8125rem; }
+.admin-statistics__chart-value strong { min-width: 0; color: var(--primary); font-size: 1rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.admin-statistics__chart-limit { display: block; margin-bottom: .3rem; color: var(--muted-foreground); font-size: .6875rem; overflow-wrap: anywhere; }
+.admin-statistics__chart-grid { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: clamp(.12rem, .5vw, .45rem); }
+.admin-statistics__chart-track { position: relative; display: flex; height: 7rem; align-items: flex-end; justify-content: center; border-bottom: 1px solid var(--border); background: repeating-linear-gradient(to top, transparent 0 calc(25% - 1px), var(--border) calc(25% - 1px) 25%); }
+.admin-statistics__chart-track:has([data-selected="true"]) { background-color: var(--muted); }
+.admin-statistics__chart-bar { width: 72%; max-width: 2.25rem; border-radius: .3rem .3rem 0 0; background: color-mix(in srgb, var(--primary) 62%, var(--card)); }
+.admin-statistics__chart-bar[data-selected="true"] { background: var(--primary); }
+.admin-statistics__chart-month { display: block; padding-top: .35rem; text-align: center; color: var(--muted-foreground); font-size: .6875rem; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.admin-statistics__chart-month[data-selected="true"] { color: var(--primary); font-weight: 700; }
+.admin-statistics .admin-statistics__chart-empty { margin-top: .65rem; color: var(--muted-foreground); font-size: .75rem; }
 .admin-statistics .admin-statistics__notice, .admin-statistics .admin-statistics__empty { display: flex; align-items: flex-start; gap: .75rem; padding: 1rem 1.25rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
 .admin-statistics :is(.admin-statistics__notice, .admin-statistics__empty) > svg { flex-shrink: 0; margin-top: .1rem; }
 .admin-statistics :is(.admin-statistics__notice, .admin-statistics__empty) > div { min-width: 0; }
@@ -81,7 +101,11 @@
   .admin-statistics .admin-statistics__filter-controls { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
   .admin-statistics .admin-statistics__actions { grid-column: auto; padding-top: 1.7rem; }
 }
-@media (min-width: 1280px) { .admin-statistics .admin-statistics__status-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1280px) {
+  .admin-statistics__charts-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-statistics .admin-statistics__summary,
+  .admin-statistics .admin-statistics__status-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 @media (hover: hover) {
   .admin-statistics .admin-statistics__button:not(:disabled):hover { border-color: var(--primary); background: var(--muted); }
   .admin-statistics .admin-statistics__button--primary:not(:disabled):hover { color: var(--primary-foreground); background: var(--primary-mid); }

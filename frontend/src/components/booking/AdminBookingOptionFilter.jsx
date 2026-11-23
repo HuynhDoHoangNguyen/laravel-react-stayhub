@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { normalizeApiError } from '../../api/apiError.js';
+import AdminPagination from '../admin/AdminPagination.jsx';
+import { Button } from '../ui/button.jsx';
 import { getAdminBookingOptions } from '../../services/adminBookingService.js';
 
-const inputClass = 'min-w-0 rounded-md border border-border bg-background px-3 py-2';
+const inputClass = 'h-9 w-full min-w-0 rounded-lg border border-input bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 const selectLabel = (option) => `${option.name} — #${option.id}`;
 
 export default function AdminBookingOptionFilter({
@@ -36,25 +38,26 @@ export default function AdminBookingOptionFilter({
   const options = selected && !rows.some(({ id }) => id === selected.id) ? [selected, ...rows] : rows;
   const searchError = error?.fields.search?.join(' ');
   const searchErrorId = `admin-booking-${type}-search-error`;
+  const selectLabelId = `admin-booking-${type}-select-label`;
   const move = (page) => setQuery((previous) => ({ ...previous, page }));
 
-  return <fieldset className="min-w-0 space-y-2 rounded-xl border border-border p-3">
-    <legend className="px-1 font-medium">Lọc theo {label}</legend>
-    <form className="flex flex-wrap items-start gap-2" onSubmit={(event) => {
+  return <fieldset className="min-w-0 space-y-3 rounded-xl border border-border p-3 text-sm">
+    <legend className="px-1 font-semibold">Lọc theo {label}</legend>
+    <form className="space-y-2" onSubmit={(event) => {
       event.preventDefault();
       setQuery({ search: draft.trim(), page: 1 });
     }}>
-      <label className="grid min-w-0 flex-1 gap-1">
+      <label className="grid min-w-0 gap-1 font-medium">
         Tìm tên {label}
         <input className={inputClass} value={draft} onChange={(event) => setDraft(event.target.value)}
           aria-invalid={Boolean(searchError)} aria-describedby={searchError ? searchErrorId : undefined} />
         {searchError && <span id={searchErrorId}>{searchError}</span>}
       </label>
-      <button className={`${inputClass} mt-6`} type="submit">Tìm {label}</button>
+      <Button variant="outline" size="sm" type="submit">Tìm {label}</Button>
     </form>
-    <label className="grid gap-1">
-      Chọn {label}
-      <select className={inputClass} value={selected?.id ?? ''} onChange={(event) => {
+    <label className="grid min-w-0 gap-1 font-medium">
+      <span id={selectLabelId}>Chọn {label}</span>
+      <select aria-labelledby={selectLabelId} className={inputClass} value={selected?.id ?? ''} onChange={(event) => {
         const value = event.target.value;
         if (value === '') onSelect(null);
         else {
@@ -73,17 +76,12 @@ export default function AdminBookingOptionFilter({
         {Object.entries(error.fields).filter(([field]) => field !== 'search')
           .map(([field, messages]) => <p key={field}>{messages.join(' ')}</p>)}
         {![401, 403, 422].includes(error.status)
-          && <button className={inputClass} type="button" onClick={() => move(query.page)}>Thử lại {label}</button>}
+          && <Button variant="outline" size="sm" type="button" onClick={() => move(query.page)}>Thử lại {label}</Button>}
       </div>}
       {result && <>
         {rows.length === 0 && <p role="status">Không có tùy chọn {label} phù hợp.</p>}
-        <nav className="flex flex-wrap items-center gap-2" aria-label={`Phân trang tùy chọn ${label}`}>
-          <button className={inputClass} type="button" disabled={query.page === 1} onClick={() => move(1)}>Trang đầu</button>
-          <button className={inputClass} type="button" disabled={query.page === 1} onClick={() => move(query.page - 1)}>Trang trước</button>
-          <span>Trang {result.meta.current_page} / {result.meta.last_page}</span>
-          <button className={inputClass} type="button" disabled={query.page >= result.meta.last_page}
-            onClick={() => move(query.page + 1)}>Trang sau</button>
-        </nav>
+        <AdminPagination label={`Phân trang tùy chọn ${label}`} currentPage={result.meta.current_page}
+          lastPage={result.meta.last_page} onPageChange={move} />
       </>}
     </div>
   </fieldset>;

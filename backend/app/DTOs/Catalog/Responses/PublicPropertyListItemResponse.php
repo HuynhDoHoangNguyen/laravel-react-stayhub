@@ -31,6 +31,7 @@ final readonly class PublicPropertyListItemResponse implements JsonSerializable
         public ?float $rating,
         #[Map(source: 'review_count')]
         public int $review_count,
+        public bool $is_verified,
     ) {}
 
     public static function typeValue(PropertyType $type): string
@@ -54,6 +55,7 @@ final readonly class PublicPropertyListItemResponse implements JsonSerializable
             'price_unit' => 'night',
             'rating' => $this->rating,
             'review_count' => $this->review_count,
+            'is_verified' => $this->is_verified,
         ];
     }
 }

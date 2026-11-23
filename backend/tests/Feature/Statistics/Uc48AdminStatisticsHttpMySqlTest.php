@@ -93,10 +93,12 @@ final class Uc48AdminStatisticsHttpMySqlTest extends Uc48MySqlTestCase
     public function test_http_oracle_projection_and_readonly_business_data(): void
     {
         $base = Fixtures::contract($this->app, $this->uc48Manifest);
+        $acceptance = Fixtures::commissionAcceptance($this->app, $base['actors']['host']);
+        Fixtures::commission($this->app, $base, $acceptance, '2026-11-01 00:00:00', '70.25');
         $db = $this->app['db']->connection();
         $snapshot = function () use ($db): string {
             $rows = [];
-            foreach (['users', 'properties', 'rooms', 'bookings', 'invoices', 'invoice_items', 'booking_services'] as $table) {
+            foreach (['users', 'properties', 'rooms', 'bookings', 'invoices', 'invoice_items', 'booking_services', 'booking_commissions'] as $table) {
                 $rows[$table] = $db->table($table)->orderBy('id')->get()->all();
             }
             return hash('sha256', json_encode($rows, JSON_THROW_ON_ERROR));
@@ -107,10 +109,11 @@ final class Uc48AdminStatisticsHttpMySqlTest extends Uc48MySqlTestCase
         $data = $response->json('data');
         $this->assertSame(['data'], array_keys($response->json()));
         $this->assertSame(['period', 'report_timezone', 'generated_at', 'summary', 'booking_status_counts', 'monthly', 'warnings'], array_keys($data));
-        $this->assertSame(['bookings_count' => 4, 'revenue_total' => '300.76'], $data['summary']);
+        $this->assertSame(['bookings_count' => 4, 'revenue_total' => '300.76', 'commission_revenue_total' => '70.25'], $data['summary']);
         $this->assertSame(['100.25', '200.51'], array_column($data['monthly'], 'revenue_total'));
+        $this->assertSame(['0.00', '70.25'], array_column($data['monthly'], 'commission_revenue_total'));
         $this->assertSame([1, 1, 0, 1, 1, 0], array_column($data['booking_status_counts'], 'count'));
-        $this->assertSame(['paid_invoices_missing_paid_at_global_count' => 1], $data['warnings']);
+        $this->assertSame(['paid_invoices_missing_paid_at_global_count' => 1, 'settled_commissions_missing_settled_at_global_count' => 0], $data['warnings']);
         $this->assertSame('2026-11-19T05:00:00.000000Z', $data['generated_at']);
         $this->assertStringNotContainsString('example.test', $response->getContent());
         $this->assertSame($before, $snapshot());

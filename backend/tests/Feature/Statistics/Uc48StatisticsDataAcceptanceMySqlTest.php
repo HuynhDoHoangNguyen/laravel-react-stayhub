@@ -28,7 +28,7 @@ final class Uc48StatisticsDataAcceptanceMySqlTest extends Uc48MySqlTestCase
     private function fingerprint(): string
     {
         $rows = [];
-        foreach (['users', 'properties', 'room_types', 'rooms', 'bookings', 'invoices', 'invoice_items', 'services', 'booking_services'] as $table) {
+        foreach (['users', 'properties', 'room_types', 'rooms', 'bookings', 'invoices', 'invoice_items', 'services', 'booking_services', 'booking_commissions'] as $table) {
             $rows[$table] = $this->app['db']->table($table)->orderBy('id')->get()->all();
         }
         return hash('sha256', json_encode($rows, JSON_THROW_ON_ERROR));
@@ -67,7 +67,7 @@ final class Uc48StatisticsDataAcceptanceMySqlTest extends Uc48MySqlTestCase
         $this->assertSame($revenueSum, $data['summary']['revenue_total']);
         $this->assertSame($counts, array_column($data['booking_status_counts'], 'count'));
         // The exact projection above excludes snapshots/PII, not merely selected example values.
-        $this->assertSame(['paid_invoices_missing_paid_at_global_count'], array_keys($data['warnings']));
+        $this->assertSame(['paid_invoices_missing_paid_at_global_count', 'settled_commissions_missing_settled_at_global_count'], array_keys($data['warnings']));
         return $data;
     }
 
@@ -115,7 +115,7 @@ final class Uc48StatisticsDataAcceptanceMySqlTest extends Uc48MySqlTestCase
         $base = $this->multiProperty();
         $data = $this->read($base);
         // Hand-calculated ledger: 10.01 + 40.04 + 70.07 = 120.12.
-        $this->assertSame(['bookings_count' => 6, 'revenue_total' => '120.12'], $data['summary']);
+        $this->assertSame(['bookings_count' => 6, 'revenue_total' => '120.12', 'commission_revenue_total' => '0.00'], $data['summary']);
         $this->assertSame(['2026-10', '2026-11'], array_column($data['monthly'], 'month'));
         $this->assertSame([3, 3], array_column($data['monthly'], 'bookings_count'));
         $this->assertSame(['10.01', '110.11'], array_column($data['monthly'], 'revenue_total'));
@@ -134,7 +134,7 @@ final class Uc48StatisticsDataAcceptanceMySqlTest extends Uc48MySqlTestCase
         $db->table('invoices')->where('id', $base['refundable'])->update(['payment_status' => 'REFUNDED']);
         $db->table('bookings')->where('id', $base['bookings'][0])->update(['status' => 'REJECTED']);
         $after = $this->read($base);
-        $this->assertSame(['bookings_count' => 6, 'revenue_total' => '80.08'], $after['summary']);
+        $this->assertSame(['bookings_count' => 6, 'revenue_total' => '80.08', 'commission_revenue_total' => '0.00'], $after['summary']);
         $this->assertSame(['10.01', '70.07'], array_column($after['monthly'], 'revenue_total'));
         $this->assertSame([0, 1, 1, 1, 1, 2], array_column($after['booking_status_counts'], 'count'));
         $this->assertSame(1, $after['warnings']['paid_invoices_missing_paid_at_global_count']);
@@ -154,7 +154,7 @@ final class Uc48StatisticsDataAcceptanceMySqlTest extends Uc48MySqlTestCase
             }
         }
         $data = $this->read($base);
-        $this->assertSame(['bookings_count' => 0, 'revenue_total' => '19999999999.98'], $data['summary']);
+        $this->assertSame(['bookings_count' => 0, 'revenue_total' => '19999999999.98', 'commission_revenue_total' => '0.00'], $data['summary']);
         $this->assertSame(['19999999999.98', '0.00'], array_column($data['monthly'], 'revenue_total'));
         $this->assertSame([0, 0, 0, 0, 0, 0], array_column($data['booking_status_counts'], 'count'));
     }
@@ -167,12 +167,12 @@ final class Uc48StatisticsDataAcceptanceMySqlTest extends Uc48MySqlTestCase
         $outside = Fixtures::booking($this->app, $base, '2025-01-01 00:00:00');
         Fixtures::invoice($this->app, $outside, null, '9.99');
         $data = $this->read($base, '2025-12', '2026-11');
-        $this->assertSame(['bookings_count' => 2, 'revenue_total' => '0.00'], $data['summary']);
+        $this->assertSame(['bookings_count' => 2, 'revenue_total' => '0.00', 'commission_revenue_total' => '0.00'], $data['summary']);
         $this->assertSame(['2025-12', '2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11'], array_column($data['monthly'], 'month'));
         $this->assertSame([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], array_column($data['monthly'], 'bookings_count'));
         $this->assertSame(1, $data['warnings']['paid_invoices_missing_paid_at_global_count']);
         $future = $this->read($base, '2026-12', '2026-12');
-        $this->assertSame(['bookings_count' => 0, 'revenue_total' => '0.00'], $future['summary']);
+        $this->assertSame(['bookings_count' => 0, 'revenue_total' => '0.00', 'commission_revenue_total' => '0.00'], $future['summary']);
         $this->assertSame(1, $future['warnings']['paid_invoices_missing_paid_at_global_count']);
     }
 }
