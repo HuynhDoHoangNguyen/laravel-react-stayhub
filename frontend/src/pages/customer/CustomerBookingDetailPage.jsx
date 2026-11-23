@@ -27,6 +27,7 @@ import {
 } from '@/services/bookingService';
 import { reviewService } from '@/services/reviewService';
 import { ReviewCreateModal } from '@/components/reviews/ReviewCreateModal';
+import { HostReportPanel } from '@/components/bookings/HostReportPanel';
 import { bookingDisplayError } from '@/utils/bookingDisplayError';
 
 function FieldItem({ icon: Icon, label, value }) {
@@ -485,6 +486,10 @@ export default function CustomerBookingDetailPage() {
       <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         {/* Left Column: Guest info, Services, Review Section */}
         <div className="space-y-6">
+          {!isMockData && (
+            <HostReportPanel key={`${booking.id}:${effectiveStatus}`} bookingId={booking.id}
+              bookingCode={booking.booking_code} propertyName={property.name || 'Cơ sở lưu trú'} />
+          )}
           {/* Review Section cho Booking đã COMPLETED */}
           {effectiveStatus === 'COMPLETED' && (
             reviewState.status === 'checking' ? (
