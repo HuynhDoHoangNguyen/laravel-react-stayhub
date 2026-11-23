@@ -13,6 +13,7 @@ use App\DTOs\Catalog\Responses\HostPropertyDetailResponse;
 use App\Mappers\Catalog\CatalogMapper;
 use App\Models\Property;
 use App\Models\PropertyImage;
+use App\Models\PropertyVerification;
 use App\Models\User;
 use App\Services\Catalog\HostPropertyQueryService;
 use App\Services\Catalog\HostPropertyService;
@@ -444,6 +445,48 @@ class HostPropertiesTest extends TestCase
     {
         return Property::create(['host_id' => $host->id, 'name' => 'Before', 'type' => 'HOTEL',
             'address' => 'Before address', 'status' => $status])->refresh();
+    }
+
+    public function test_address_change_invalidates_an_approved_verification_permanently(): void
+    {
+        $host = $this->actor();
+        $property = $this->ownedProperty($host);
+        $reviewer = User::factory()->admin()->create();
+        $entry = PropertyVerification::create([
+            'property_id' => $property->id, 'submitted_by' => $host->id, 'address_snapshot' => $property->address,
+            'status' => PropertyVerification::APPROVED, 'document_path' => 'private/fixture.pdf',
+            'document_mime' => 'application/pdf', 'document_size' => 10,
+            'submitted_at' => now(), 'reviewed_at' => now()->startOfSecond(), 'reviewed_by' => $reviewer->id,
+        ])->refresh();
+        $url = '/api/host/properties/'.$property->id;
+        $public = '/api/public/properties/'.$property->id;
+        $this->actingAs($this->actor())->putJson($url, $this->updatePayload())->assertNotFound();
+        $this->actingAs($host)->putJson($url, $this->updatePayload(['address' => '']))->assertUnprocessable();
+        $this->putJson($url, $this->updatePayload(['address' => ' Before address ']))->assertOk();
+        $this->getJson($public)->assertOk()->assertJsonPath('data.is_verified', true);
+
+        PropertyVerification::updating(static function (): void {
+            throw new RuntimeException('Injected verification write failure.');
+        });
+        try {
+            $this->putJson($url, $this->updatePayload())->assertInternalServerError();
+            $this->assertSame('Before address', $property->fresh()->address);
+            $this->assertSame(PropertyVerification::APPROVED, $entry->fresh()->status);
+        } finally {
+            PropertyVerification::flushEventListeners();
+        }
+
+        $this->putJson($url, $this->updatePayload())->assertOk();
+        $this->getJson($public)->assertOk()->assertJsonPath('data.is_verified', false);
+        $this->getJson($url.'/verification')->assertOk()->assertJsonPath('data.status', 'INVALIDATED');
+        $this->putJson($url, $this->updatePayload(['address' => 'Before address']))->assertOk();
+        $this->getJson($public)->assertOk()->assertJsonPath('data.is_verified', false);
+        $this->assertSame(PropertyStatus::ACTIVE, $property->fresh()->status);
+        $this->assertEquals($entry->reviewed_at, $entry->fresh()->reviewed_at);
+        $this->assertEquals($reviewer->id, $entry->fresh()->reviewed_by);
+        $this->assertSame('Before address', $entry->fresh()->address_snapshot);
+        $this->actingAs($reviewer)->getJson('/api/admin/properties/'.$property->id.'/verification')
+            ->assertOk()->assertJsonPath('data.status', 'INVALIDATED');
     }
 
     #[DataProvider('propertyStatuses')]

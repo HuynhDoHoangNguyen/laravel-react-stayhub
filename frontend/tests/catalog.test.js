@@ -40,6 +40,13 @@ test('zero and missing prices remain distinct and render VND without invented de
     assert.notEqual(formatCatalogPrice('500000.25'), formatCatalogPrice(null));
 });
 
+test('only a literal true public verification flag shows a verified property', () => {
+    assert.equal(adaptCatalogProperty({ ...dto, is_verified: true }).isVerified, true);
+    for (const value of [false, undefined, null, 1, 'true']) {
+        assert.equal(adaptCatalogProperty({ ...dto, is_verified: value }).isVerified, false);
+    }
+});
+
 test('list service preserves server metadata and sends only pagination fields', async () => {
     const { client, calls } = clientFixture(); const service = createCatalogService(createPublicPropertyApi(client));
     const result = await service.getProperties({ page: 2, per_page: 6, startDate: 'not-supported' });

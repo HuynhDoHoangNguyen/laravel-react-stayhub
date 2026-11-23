@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Property extends Model
 {
@@ -56,6 +57,11 @@ class Property extends Model
     public function host(): BelongsTo
     {
         return $this->belongsTo(User::class, 'host_id');
+    }
+
+    public function approvedVerification(): HasOne
+    {
+        return $this->hasOne(PropertyVerification::class)->where('status', PropertyVerification::APPROVED);
     }
 
     /**

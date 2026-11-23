@@ -6,6 +6,7 @@ export function adaptCatalogProperty(dto) {
         id: dto.id, name: dto.name, address: dto.address, description: dto.description,
         propertyType: dto.type, price: dto.starting_price ?? null,
         averageRating: dto.rating ?? null, reviewCount: dto.review_count ?? 0,
+        isVerified: dto.is_verified === true,
         photos: dto.images || (dto.primary_image ? [dto.primary_image] : []),
         checkInTime: dto.check_in_time, checkOutTime: dto.check_out_time,
         amenities: names(dto.amenities), amenityIds: (dto.amenities || []).map((item) => item.id),

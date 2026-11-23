@@ -179,6 +179,10 @@ final class CatalogMapper
 
     private function mapPropertyHeader(Property $property, ?string $primaryImage): PublicPropertyListItemResponse
     {
+        $verification = $property->relationLoaded('approvedVerification')
+            ? $property->getRelation('approvedVerification')
+            : null;
+
         return $this->objectMapper->map(
             $property,
             PublicPropertyListItemResponse::class,
@@ -190,6 +194,7 @@ final class CatalogMapper
                     : (string) BigDecimal::of((string) $property->starting_price)->toScale(2),
                 'rating' => $property->review_count > 0 ? round((float) $property->rating, 1) : null,
                 'review_count' => (int) $property->review_count,
+                'is_verified' => $verification !== null && $verification->address_snapshot === $property->address,
             ],
         );
     }

@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { MapPin, Star } from 'lucide-react';
 import { motion, useReducedMotion } from 'framer-motion';
 import CatalogImage from '../catalog/CatalogImage';
+import PropertyVerificationBadge from '../catalog/PropertyVerificationBadge';
 
 const currency = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 2 });
 
@@ -15,7 +16,10 @@ export function SearchPropertyCard({ property, view = 'grid' }) {
             <CatalogImage src={property.photos?.[0]} alt={property.name} />
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-3 p-5">
-            <p className="text-[11.5px] text-primary">{{ HOTEL: 'Khách sạn', HOMESTAY: 'Homestay' }[property.propertyType] || property.propertyType}</p>
+            <div className="flex flex-wrap items-center gap-2">
+                <p className="text-[11.5px] text-primary">{{ HOTEL: 'Khách sạn', HOMESTAY: 'Homestay' }[property.propertyType] || property.propertyType}</p>
+                <PropertyVerificationBadge verified={property.isVerified} />
+            </div>
             <h3 className="break-words text-[17px] font-medium text-ink">{property.name}</h3>
             <p className="flex items-start gap-1 text-[13px] text-muted-foreground"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden /><span className="break-words">{property.address || 'Chưa cập nhật địa chỉ'}</span></p>
             <p className="flex items-center gap-1 text-[12.5px] text-muted-foreground">{hasReviews ? <><Star className="h-3.5 w-3.5 shrink-0 fill-accent text-accent" aria-hidden />{Number(property.averageRating).toLocaleString('vi-VN')} / 5 · {property.reviewCount} đánh giá cơ sở</> : 'Cơ sở chưa có đánh giá'}</p>

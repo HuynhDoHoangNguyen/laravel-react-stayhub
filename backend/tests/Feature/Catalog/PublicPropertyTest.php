@@ -9,6 +9,7 @@ use App\DTOs\Catalog\Responses\PublicRoomResponse;
 use App\Mappers\Catalog\CatalogMapper;
 use App\Models\User;
 use App\Models\Property;
+use App\Models\PropertyVerification;
 use App\Models\PropertyImage;
 use App\Models\Room;
 use App\Models\RoomType;
@@ -98,6 +99,7 @@ class PublicPropertyTest extends TestCase
             'price_unit' => 'night',
             'rating' => null,
             'review_count' => 0,
+            'is_verified' => false,
         ]])->assertJsonPath('meta.current_page', 2)
             ->assertJsonPath('meta.total', 3)
             ->assertJsonPath('meta.links.2.active', true);
@@ -349,7 +351,7 @@ class PublicPropertyTest extends TestCase
         $response = $this->getJson('/api/public/properties/'.$property->id)->assertOk();
         $keys = array_keys($response->json('data')); sort($keys);
         $expected = ['id', 'name', 'type', 'address', 'description', 'check_in_time', 'check_out_time', 'primary_image',
-            'starting_price', 'currency', 'price_unit', 'rating', 'review_count', 'images', 'rooms', 'amenities']; sort($expected);
+            'starting_price', 'currency', 'price_unit', 'rating', 'review_count', 'is_verified', 'images', 'rooms', 'amenities']; sort($expected);
         $this->assertSame($expected, $keys);
         foreach (['PRIVATE HOST', 'PRIVATE HOME', 'private-host@example', '0999999999', 'host_id', 'customer_id', 'password', 'bookings', 'invoices'] as $private) {
             $this->assertStringNotContainsString($private, $response->getContent());
@@ -427,6 +429,7 @@ class PublicPropertyTest extends TestCase
             'price_unit' => 'night',
             'rating' => null,
             'review_count' => 0,
+            'is_verified' => false,
             'images' => ['https://example.com/property.jpg'],
             'rooms' => [
                 [
@@ -444,6 +447,35 @@ class PublicPropertyTest extends TestCase
             ],
             'amenities' => $amenities,
         ]]);
+    }
+
+    public function test_verification_matches_current_address_across_public_catalog_and_filtered_search(): void
+    {
+        $property = $this->property();
+        $this->room($property);
+        $entry = PropertyVerification::create([
+            'property_id' => $property->id, 'submitted_by' => $property->host_id,
+            'status' => PropertyVerification::APPROVED, 'address_snapshot' => $property->address,
+            'submitted_at' => now(), 'document_path' => 'private/fixture.pdf', 'document_mime' => 'application/pdf', 'document_size' => 10,
+        ]);
+        $routes = [
+            '/api/public/properties' => 'data.0',
+            '/api/public/properties/'.$property->id => 'data',
+            '/api/public/properties-search?keyword=Catalog&guest_count=2' => 'data.0',
+        ];
+        foreach ($routes as $url => $key) {
+            $this->getJson($url)->assertOk()->assertJsonPath($key.'.is_verified', true)
+                ->assertJsonMissingPath($key.'.document_path')->assertJsonMissingPath($key.'.address_snapshot');
+        }
+        $entry->update(['address_snapshot' => strtolower($property->address)]);
+        foreach ($routes as $url => $key) {
+            $this->getJson($url)->assertOk()->assertJsonPath($key.'.is_verified', false);
+        }
+        $entry->update(['address_snapshot' => $property->address]);
+        foreach ([PropertyVerification::SUBMITTED, PropertyVerification::REJECTED, PropertyVerification::INVALIDATED] as $status) {
+            $entry->update(['status' => $status]);
+            $this->getJson('/api/public/properties/'.$property->id)->assertOk()->assertJsonPath('data.is_verified', false);
+        }
     }
 
     public function test_detail_keeps_route_then_query_then_property_id_precedence(): void

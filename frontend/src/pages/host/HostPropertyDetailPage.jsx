@@ -5,6 +5,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { hostPropertyService } from '../../services/hostPropertyService';
 import HostPropertyStatusPanel from '../../components/catalog/HostPropertyStatusPanel';
 import HostPropertyImageManager from '../../components/catalog/HostPropertyImageManager';
+import HostPropertyVerificationPanel from '../../components/catalog/HostPropertyVerificationPanel';
 import HostRoomTypeList from '../../components/catalog/HostRoomTypeList';
 import HostRoomList from '../../components/catalog/HostRoomList';
 
@@ -88,7 +89,7 @@ function PropertyDetail({ id }) {
                 </div>
             </header>
             <nav aria-label="Các phần của cơ sở" className="flex flex-wrap gap-2 rounded-2xl border border-border bg-card p-2 shadow-sm">
-                {[['overview', 'Tổng quan'], ['images', 'Hình ảnh'], ['room-types', 'Loại phòng'], ['rooms', 'Danh sách phòng']].map(([anchor, label]) => <a key={anchor} href={'#property-' + anchor}
+                {[['overview', 'Tổng quan'], ['verification', 'Xác minh cơ sở'], ['images', 'Hình ảnh'], ['room-types', 'Loại phòng'], ['rooms', 'Danh sách phòng']].map(([anchor, label]) => <a key={anchor} href={'#property-' + anchor}
                     className="inline-flex min-h-10 items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-primary transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">{label}<ArrowUpRight size={14} aria-hidden="true" /></a>)}
             </nav>
             <div id="property-overview" className="grid min-w-0 scroll-mt-6 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -104,6 +105,7 @@ function PropertyDetail({ id }) {
                 <div className="min-w-0 lg:sticky lg:top-6"><HostPropertyStatusPanel property={property} onReload={() => retry()}
                     onChanged={(updated) => setState({ status: 'ready', property: updated, error: '' })} /></div>
             </div>
+            <HostPropertyVerificationPanel propertyId={property.id} address={property.address} />
             <div id="property-images" className="min-w-0 scroll-mt-6"><HostPropertyImageManager propertyId={property.id} onImagesChanged={() => retry(true)} /></div>
             <div id="property-room-types" className="min-w-0 scroll-mt-6 rounded-2xl bg-card shadow-sm"><HostRoomTypeList key={property.id} propertyId={property.id} /></div>
             <div id="property-rooms" className="min-w-0 scroll-mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6"><HostRoomList key={'rooms:' + property.id} propertyId={property.id} /></div>

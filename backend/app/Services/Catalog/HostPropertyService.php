@@ -10,6 +10,7 @@ use App\Enums\PropertyStatus;
 use App\Exceptions\AppException;
 use App\Exceptions\ErrorCode;
 use App\Mappers\Catalog\CatalogMapper;
+use App\Models\PropertyVerification;
 use App\Models\User;
 use App\Repositories\Catalog\CatalogRepository;
 use App\Validators\Catalog\CatalogValidator;
@@ -60,11 +61,17 @@ class HostPropertyService
             $property = $this->repository->lockHostProperty($actor->getKey(), $propertyId);
             if ($property === null) return null;
 
+            $previousAddress = $property->address;
             $property = $this->repository->updateHostProperty($property, [
                 'name' => $input->name, 'type' => $input->type, 'address' => $input->address,
                 'description' => $input->description, 'phone' => $input->phone,
                 'check_in_time' => $input->checkInTime, 'check_out_time' => $input->checkOutTime,
             ]);
+            if ($property->address !== $previousAddress) {
+                $verification = PropertyVerification::query()->where('property_id', $propertyId)
+                    ->where('status', PropertyVerification::APPROVED)->lockForUpdate()->first();
+                $verification?->update(['status' => PropertyVerification::INVALIDATED]);
+            }
             $result = $this->mapper->toHostPropertyDetail($property);
             DB::afterCommit(fn () => Log::info('Cập nhật cơ sở lưu trú thành công.', ['property_id' => $property->id]));
 

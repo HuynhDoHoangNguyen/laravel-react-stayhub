@@ -220,6 +220,7 @@ class RoomAvailabilityRepository
 
         $query = Property::query()
             ->where('status', PropertyStatus::ACTIVE->value)
+            ->with('approvedVerification:property_id,address_snapshot')
             ->with(['images' => fn ($images) => $images->select(['id', 'property_id', 'image_path', 'is_primary'])
                 ->orderByDesc('is_primary')->orderBy('id')])
             ->withMin(['rooms as starting_price' => $publicRoomsScope], 'price_per_night')
