@@ -138,6 +138,35 @@ class BookingInputIntegrityTest extends TestCase
         ])->assertStatus(404);
     }
 
+    public function test_room_search_excludes_inactive_amenities_from_filters_and_results(): void
+    {
+        $property = Property::factory()->create(['status' => PropertyStatus::ACTIVE]);
+        $type = RoomType::factory()->create(['property_id' => $property->id]);
+        $room = Room::factory()->create([
+            'property_id' => $property->id,
+            'room_type_id' => $type->id,
+            'status' => RoomStatus::ACTIVE,
+            'capacity' => 4,
+        ]);
+        $amenity = Amenity::factory()->create(['status' => false]);
+        $room->amenities()->attach($amenity);
+        $search = [
+            'check_in_date' => now()->addDays(5)->toDateString(),
+            'check_out_date' => now()->addDays(7)->toDateString(),
+            'guest_count' => 2,
+            'property_id' => $property->id,
+        ];
+        $path = '/api/public/rooms/search?';
+        $this->getJson($path.http_build_query($search + ['amenity_ids' => [$amenity->id]]))
+            ->assertUnprocessable()->assertJsonValidationErrors('amenity_ids.0');
+        $this->getJson($path.http_build_query($search))->assertOk()->assertJsonPath('data.0.id', $room->id)
+            ->assertJsonPath('data.0.amenities', []);
+
+        $amenity->update(['status' => true]);
+        $this->getJson($path.http_build_query($search + ['amenity_ids' => [$amenity->id]]))
+            ->assertOk()->assertJsonPath('data.0.amenities.0.id', $amenity->id);
+    }
+
     public function test_room_search_deduplicates_amenity_ids_in_and_filter(): void
     {
         // R09: Duplicate amenity_ids in search query must not exclude rooms having that amenity

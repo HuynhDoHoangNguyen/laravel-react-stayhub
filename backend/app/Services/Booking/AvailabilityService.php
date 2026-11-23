@@ -69,7 +69,7 @@ class AvailabilityService
         }
 
         // 4. Maintenance Overlap
-        if ($this->repository->hasBlockingMaintenanceOverlap($room->id, $in, $out)) {
+        if ($this->hasMaintenanceBlock($room, $in, $out)) {
             $reasons[] = 'MAINTENANCE_OVERLAP';
         }
 
@@ -82,6 +82,11 @@ class AvailabilityService
             'available' => empty($reasons),
             'reasons' => $reasons,
         ];
+    }
+
+    public function hasMaintenanceBlock(Room $room, string $checkIn, string $checkOut): bool
+    {
+        return $this->repository->hasBlockingMaintenanceOverlap($room->id, $checkIn, $checkOut);
     }
 
     /**

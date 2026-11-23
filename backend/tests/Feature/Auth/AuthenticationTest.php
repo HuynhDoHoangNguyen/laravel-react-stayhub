@@ -631,6 +631,7 @@ class AuthenticationTest extends TestCase
             ['PATCH', 'api/host/rooms/{room}/status'],
             ['PUT', 'api/host/rooms/{room}'],
             ['GET', 'api/host/rooms/{room}'],
+            ['GET', 'api/host/rooms/{room}/maintenances'],
             ['POST', 'api/host/properties/{property}/room-types'],
             ['PUT', 'api/host/room-types/{roomType}'],
             ['DELETE', 'api/host/room-types/{roomType}'],

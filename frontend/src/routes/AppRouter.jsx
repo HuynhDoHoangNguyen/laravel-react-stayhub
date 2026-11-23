@@ -44,11 +44,12 @@ import HostCommissionsPage from '../pages/host/HostCommissionsPage';
 import AdminDashboardPage from '../pages/admin/AdminDashboardPage';
 import AdminStatisticsPage from '../pages/admin/AdminStatisticsPage';
 import AdminBookingListPage from '../pages/admin/AdminBookingListPage';
-import AdminPropertyListPage from '../pages/admin/AdminPropertyListPage';
 import AdminHostReportsPage from '../pages/admin/AdminHostReportsPage';
 import AdminInvoiceListPage from '../pages/admin/AdminInvoiceListPage';
 import AdminCustomersPage from '../pages/admin/AdminCustomersPage';
 import AdminHostsPage from '../pages/admin/AdminHostsPage';
+import AdminPropertiesPage from '../pages/admin/AdminPropertiesPage';
+import AdminAmenitiesPage from '../pages/admin/AdminAmenitiesPage';
 import AdminCommissionsPage from '../pages/admin/AdminCommissionsPage';
 import AdminUsersPage from '../pages/admin/AdminUsersPage';
 import ProfilePage from '../components/profile/ProfilePage';
@@ -116,11 +117,12 @@ function AppRouter() {
                     <Route path="statistics" element={<AdminStatisticsPage />} />
                     <Route path="user-management" element={<AdminUsersPage />} />
                     <Route path="bookings" element={<AdminBookingListPage />} />
-                    <Route path="properties" element={<AdminPropertyListPage />} />
                     <Route path="host-reports" element={<AdminHostReportsPage />} />
                     <Route path="invoices" element={<AdminInvoiceListPage />} />
                     <Route path="users" element={<AdminCustomersPage />} />
                     <Route path="hosts" element={<AdminHostsPage />} />
+                    <Route path="properties" element={<AdminPropertiesPage />} />
+                    <Route path="amenities" element={<AdminAmenitiesPage />} />
                     <Route path="commissions" element={<AdminCommissionsPage />} />
                     <Route path="profile" element={<ProfilePage />} />
                 </Route>
