@@ -185,88 +185,61 @@ MySQL / XAMPP
 
 ## 6. Cách chạy dự án local
 
-### Backend
+Laravel, Vite và Docker Compose dùng chung `.env` tại repository root. Không tạo `backend/.env` hoặc `frontend/.env`.
 
-```bash
-cd backend
-composer install
+### Cấu hình ban đầu
+
+Từ root, chỉ sao chép khi chưa có cấu hình local:
+
+```powershell
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
-Tạo `.env`:
+Điền secrets local trong `.env`; không commit file này. `APP_KEY` phải giữ nguyên với môi trường đã có dữ liệu. Chỉ chạy `php artisan key:generate` từ backend khi thiết lập mới và `APP_KEY` còn trống.
 
-```bash
-copy .env.example .env
-```
+Mẫu mặc định dành cho PHP chạy trên máy host và MySQL Docker:
 
-Tạo application key:
-
-```bash
-php artisan key:generate
-```
-
-Cấu hình MySQL:
-
-```env
+```dotenv
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_DATABASE=stayhub
-DB_USERNAME=root
-DB_PASSWORD=
-```
-
-Chạy migration:
-
-```bash
-php artisan migrate
-```
-
-Chạy Laravel:
-
-```bash
-php artisan serve --host=localhost
-```
-
-Backend:
-
-```text
-http://localhost:8000
-```
-
----
-
-### Frontend
-
-Mở terminal khác:
-
-```bash
-cd frontend
-npm install
-```
-
-Tạo file:
-
-```text
-frontend/.env
-```
-
-Nội dung:
-
-```env
+DB_PORT=${MYSQL_PORT}
+DB_DATABASE=${MYSQL_DATABASE}
+DB_USERNAME=${MYSQL_USER}
+DB_PASSWORD=${MYSQL_PASSWORD}
 VITE_BACKEND_URL=http://localhost:8000
 ```
 
-Chạy:
+`MYSQL_PORT` mặc định là `3307`. Đặt `MYSQL_*` theo database thực tế trước khi chạy. Volume Docker đã tồn tại giữ nguyên tài khoản/mật khẩu ban đầu; sửa `.env` không đổi credentials trong database. Nếu dùng MySQL XAMPP, chỉnh `DB_*` theo kết nối XAMPP thay vì dùng mapping Docker.
 
-```bash
+Docker Compose chỉ sử dụng các biến được khai báo trong YAML; không chuyển toàn bộ secrets vào container. Không đặt secrets vào biến có tiền tố `VITE_` vì các biến này được công khai cho frontend.
+
+### Backend
+
+```powershell
+cd backend
+composer install
+php artisan serve --host=localhost
+```
+
+Backend: `http://localhost:8000`. Migration chỉ chạy khi chủ động thiết lập/cập nhật schema đúng môi trường; không reset hoặc seed lại dữ liệu đang cần giữ. Không dùng `composer setup` cho môi trường đã có dữ liệu vì script này có bước tạo key và migration.
+
+### Frontend
+
+Mở terminal khác từ root:
+
+```powershell
+cd frontend
+npm install
 npm run dev
 ```
 
-Frontend:
+Frontend: `http://localhost:5173`. Dùng nhất quán hostname `localhost` cho frontend/backend khi kiểm tra Sanctum session.
 
-```text
-http://localhost:5173
-```
+### Thay đổi cấu hình và QA
+
+Sau khi sửa root `.env`, khởi động lại Laravel và Vite. Phiên bản `artisan serve` hiện tại không tự theo dõi root `.env`. Nếu đã dùng configuration cache, cần chủ động xóa hoặc dựng lại cache đúng môi trường; cấu hình được cache không đọc lại `.env`.
+
+Biến môi trường của tiến trình được ưu tiên hơn root `.env`. Các runner QA hiện tại tiếp tục truyền cấu hình database/schema và session riêng, kể cả `DB_URL`/`DB_SOCKET` rỗng. Chạy QA qua runner được chỉ định; không chạy test MySQL vào database dev. Các cờ mock `VITE_ENABLE_*` vẫn cần được đặt rõ theo môi trường và chỉ được dùng theo cơ chế DEV hiện có.
 
 ---
 

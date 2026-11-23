@@ -9,7 +9,10 @@
         "php": "^8.2",
         "laravel/framework": "^12.0",
         "laravel/sanctum": "^4.0",
-        "laravel/tinker": "^2.10.1"
+        "laravel/tinker": "^2.10.1",
+        "symfony/object-mapper": "~7.4.0",
+        "symfony/property-access": "~7.4.0",
+        "symfony/validator": "~7.4.0"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
@@ -35,7 +38,7 @@
     "scripts": {
         "setup": [
             "composer install",
-            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
+            "@php -r \"file_exists('../.env') || copy('../.env.example', '../.env');\"",
             "@php artisan key:generate",
             "@php artisan migrate --force",
             "npm install",
@@ -57,7 +60,7 @@
             "@php artisan vendor:publish --tag=laravel-assets --ansi --force"
         ],
         "post-root-package-install": [
-            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\""
+            "@php -r \"file_exists('../.env') || copy('../.env.example', '../.env');\""
         ],
         "post-create-project-cmd": [
             "@php artisan key:generate --ansi",

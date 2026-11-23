@@ -1,0 +1,156 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * StayNest — Quiet luxury design system.
+ * Tokens sourced from DESIGN.md (converted hex → oklch for Tailwind v4).
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-mid: var(--primary-mid);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-pale: var(--accent-pale);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+
+  --font-display: "Cormorant Garamond", Georgia, serif;
+  --font-sans: "Inter", system-ui, sans-serif;
+}
+
+:root {
+  --radius: 1rem; /* 16px */
+
+  /* StayNest palette */
+  --background: oklch(0.984 0.008 80);        /* #fdfaf6 ivory */
+  --surface:    oklch(0.945 0.024 82);        /* #f4ede0 warm sand */
+  --foreground: oklch(0.18 0.02 145);         /* #111a13 ink */
+  --ink:        oklch(0.18 0.02 145);
+  --muted:      oklch(0.945 0.024 82);
+  --muted-foreground: oklch(0.5 0.02 150);    /* #5c6960 */
+
+  --card: oklch(1 0 0);
+  --card-foreground: var(--foreground);
+  --popover: oklch(1 0 0);
+  --popover-foreground: var(--foreground);
+
+  --primary:     oklch(0.28 0.04 152);        /* #1a2e20 forest */
+  --primary-foreground: oklch(0.984 0.008 80);
+  --primary-mid: oklch(0.38 0.06 150);        /* #2d4f38 */
+
+  --secondary: var(--surface);
+  --secondary-foreground: var(--primary);
+
+  --accent:      oklch(0.68 0.10 78);         /* #b08d57 gold */
+  --accent-foreground: oklch(0.18 0.02 145);
+  --accent-pale: oklch(0.93 0.05 88);         /* #f0e6d0 */
+
+  --destructive: oklch(0.55 0.20 27);
+  --destructive-foreground: oklch(0.984 0.008 80);
+
+  --border: oklch(0.9 0.02 82);
+  --input:  oklch(0.9 0.02 82);
+  --ring:   oklch(0.38 0.06 150);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-feature-settings: "ss01", "cv11";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: var(--font-display);
+    font-weight: 400;
+    letter-spacing: -0.01em;
+  }
+
+  .eyebrow {
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-muted-foreground);
+  }
+}
+
+@keyframes ken-burns {
+  0%   { transform: scale(1) translate3d(0, 0, 0); }
+  100% { transform: scale(1.06) translate3d(-1%, -1%, 0); }
+}
+
+@utility animate-ken-burns {
+  animation: ken-burns 28s ease-out both;
+}
+
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+@utility shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface) 0%,
+    color-mix(in oklab, var(--color-surface) 60%, white) 50%,
+    var(--color-surface) 100%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

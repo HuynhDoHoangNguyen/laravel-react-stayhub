@@ -1,0 +1,4 @@
+interface:
+  display_name: "Stayhub Verification"
+  short_description: "Help with Stayhub Verification tasks"
+  default_prompt: "Use $stayhub-verification for this StayHub task and report scope and results on chat."

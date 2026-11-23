@@ -1,6 +1,6 @@
 <?php
 
-use Illuminate\Http\Request;
+use App\Http\Controllers\Auth\AuthController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/test', function () {
@@ -10,8 +10,20 @@ Route::get('/test', function () {
     ]);
 });
 
-Route::get('/me', function (Request $request) {
-    return response()->json([
-        'user' => $request->user(),
-    ]);
-})->middleware('auth:sanctum');
+Route::get('/me', [AuthController::class, 'me'])
+    ->middleware(['auth:sanctum', 'account.active']);
+
+// TEMP-M2-WIRING
+require __DIR__ . '/api/booking.php';
+require __DIR__ . '/api/billing.php';
+require __DIR__ . '/api/reviews.php';
+require __DIR__ . '/api/host-reports.php';
+require __DIR__ . '/api/profile.php';
+require __DIR__ . '/api/catalog.php';
+require __DIR__ . '/api/agreements.php';
+require __DIR__ . '/api/commissions.php';
+require __DIR__ . '/api/dashboard.php';
+require __DIR__ . '/api/users.php';
+require __DIR__ . '/api/admin_users.php';
+require __DIR__ . '/api/admin-bookings.php';
+require __DIR__ . '/api/chatbot.php';

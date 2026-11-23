@@ -1,0 +1,7 @@
+# Local agent execution evidence; durable checklist and skills remain visible.
+/.agent-workspace/
+AGENTS.local.md
+# Local Docker Compose credentials; commit .env.example instead.
+/.env*
+!/.env.example
+/.local-env-backups/
