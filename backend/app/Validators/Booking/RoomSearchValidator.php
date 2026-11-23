@@ -155,13 +155,14 @@ class RoomSearchValidator
      * Validate raw input for public property search (before pagination).
      *
      * @param array<string, mixed> $input
-     * @return array{keyword: ?string, guest_count: ?int, page: int, per_page: int}
+     * @return array{keyword: ?string, guest_count: ?int, min_rating: ?string, page: int, per_page: int}
      */
     public function validateSearchProperties(array $input): array
     {
         $validated = $this->validation->make($input, [
             'keyword' => ['nullable', 'string', 'max:255'],
             'guest_count' => ['nullable', 'integer', 'min:1'],
+            'min_rating' => ['nullable', 'regex:/\A(?:[1-4](?:\.[0-9])?|5(?:\.0)?)\z/'],
             'page' => ['nullable', 'integer', 'min:1', 'max:2147483647'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:24'],
         ])->validate();
@@ -173,6 +174,7 @@ class RoomSearchValidator
             'guest_count' => isset($validated['guest_count']) && $validated['guest_count'] !== ''
                 ? (int) $validated['guest_count']
                 : null,
+            'min_rating' => isset($validated['min_rating']) ? (string) $validated['min_rating'] : null,
             'page' => isset($validated['page']) && $validated['page'] !== ''
                 ? (int) $validated['page']
                 : 1,

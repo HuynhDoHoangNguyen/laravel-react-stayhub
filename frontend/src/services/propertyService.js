@@ -120,15 +120,15 @@ export function createPropertyService(propertyApi, { dev = false, enableMocks = 
     getPropertyById: catalog.getPropertyById,
 
     /**
-     * Paginated public properties filtered by keyword and/or guest capacity on the backend BEFORE pagination.
+     * Properties filtered by keyword, guest capacity and review rating before pagination.
      */
-    async searchPaginatedProperties({ page = 1, per_page = 12, keyword = '', guest_count = null } = {}, options = {}) {
+    async searchPaginatedProperties({ page = 1, per_page = 12, keyword = '', guest_count = null, min_rating = '' } = {}, options = {}) {
       const trimmedKeyword = typeof keyword === 'string' ? keyword.trim() : '';
       const parsedGuests = guest_count != null && Number.isInteger(Number(guest_count)) && Number(guest_count) >= 1
         ? Number(guest_count)
         : null;
 
-      if (!trimmedKeyword && parsedGuests === null) {
+      if (!trimmedKeyword && parsedGuests === null && min_rating === '') {
         return catalog.getProperties({ page, per_page }, options);
       }
 
@@ -145,6 +145,9 @@ export function createPropertyService(propertyApi, { dev = false, enableMocks = 
           filtered = filtered.filter((p) =>
             !Array.isArray(p.rooms) || p.rooms.some((r) => Number(r.capacity ?? 0) >= parsedGuests)
           );
+        }
+        if (min_rating !== '') {
+          filtered = filtered.filter(property => property.averageRating != null && property.averageRating >= Number(min_rating));
         }
         const total = filtered.length;
         const lastPage = Math.max(1, Math.ceil(total / per_page));
@@ -166,6 +169,7 @@ export function createPropertyService(propertyApi, { dev = false, enableMocks = 
         const query = { page, per_page };
         if (trimmedKeyword) query.keyword = trimmedKeyword;
         if (parsedGuests !== null) query.guest_count = parsedGuests;
+        if (min_rating !== '') query.min_rating = min_rating;
         const response = await api.get('/api/public/properties-search', {
           timeout: 10000,
           ...options,

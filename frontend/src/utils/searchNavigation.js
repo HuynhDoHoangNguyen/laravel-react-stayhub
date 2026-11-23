@@ -1,17 +1,31 @@
 import { catalogParams } from '../services/catalog.js';
 
-const keys = new Set(['tab', 'min_price', 'max_price', 'guest_count', 'min_rating', 'sort', 'page', 'per_page', 'room_type_ids[]', 'amenity_ids[]',
-    'startDate', 'endDate', 'check_in_date', 'check_out_date', 'adults', 'children', 'roomsCount', 'city', 'keyword', 'q', 'room_type_id', 'room_type_ids', 'amenity_ids']);
+const roomFilters = ['min_price', 'max_price', 'min_rating', 'sort', 'room_type_id', 'room_type_ids', 'room_type_ids[]',
+    'amenity_ids', 'amenity_ids[]'];
+const stayKeys = new Set(['checkIn', 'checkOut', 'startDate', 'endDate', 'check_in_date', 'check_out_date',
+    'adults', 'children', 'guest_count']);
+const keys = new Set(['tab', 'page', 'per_page', 'roomsCount', 'city', 'keyword', 'q', 'property_min_rating', ...roomFilters, ...stayKeys]);
 
 export function readSearchNavigation(search = '') {
     const url = new URLSearchParams(search);
     const tabs = url.getAll('tab');
-    const tab = tabs[0] ?? 'rooms';
+    const tab = tabs[0] ?? (roomFilters.some(key => url.has(key)) ? 'rooms' : 'properties');
     const error = tabs.length > 1 || !['rooms', 'properties'].includes(tab) ? 'Tab tìm kiếm không hợp lệ.' : null;
+    const propertyRating = url.get('property_min_rating') ?? '';
     url.delete('tab');
+    url.delete('property_min_rating');
     const pagination = new URLSearchParams();
     for (const key of ['page', 'per_page']) for (const value of url.getAll(key)) pagination.append(key, value);
-    return { tab, error, roomSearch: url.toString(), propertyParams: catalogParams(pagination.toString()) };
+    return { tab, error, roomSearch: url.toString(), propertyParams: catalogParams(pagination.toString()), propertyRating };
+}
+
+export function changePropertyFilters(search, { keyword = '', minRating = '' } = {}) {
+    const url = new URLSearchParams(search);
+    for (const key of ['city', 'keyword', 'q', 'property_min_rating', 'page']) url.delete(key);
+    if (keyword.trim()) url.set('city', keyword.trim());
+    if (minRating) url.set('property_min_rating', minRating);
+    url.set('tab', 'properties');
+    return url.toString();
 }
 
 export function changeSearchTab(search, tab) {
@@ -20,9 +34,16 @@ export function changeSearchTab(search, tab) {
     // Each data source owns its page-size limit and default.
     url.delete('page');
     url.delete('per_page');
-    if (tab === 'rooms') url.delete('tab');
-    else url.set('tab', 'properties');
+    url.set('tab', tab);
     return url.toString();
+}
+
+export function searchStayQuery(search = '') {
+    const query = new URLSearchParams(search);
+    for (const key of new Set(query.keys())) {
+        if (!stayKeys.has(key)) query.delete(key);
+    }
+    return query.size ? '?' + query.toString() : '';
 }
 
 export function legacyPropertiesTarget(search = '') {

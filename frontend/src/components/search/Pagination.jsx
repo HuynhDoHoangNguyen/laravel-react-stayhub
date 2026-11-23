@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-export function Pagination({ currentPage, totalPages, onPageChange }) {
-    if (totalPages <= 1) return null;
+export function Pagination({ currentPage, totalPages, onPageChange, showSinglePage = false }) {
+    if (totalPages < 1 || (totalPages === 1 && !showSinglePage)) return null;
 
     // Keep the number of controls bounded even when the server reports millions of pages.
     const selected = new Set([1, totalPages]);

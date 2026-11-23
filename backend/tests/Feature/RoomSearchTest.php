@@ -8,6 +8,7 @@ use App\Models\Amenity;
 use App\Models\Booking;
 use App\Models\Maintenance;
 use App\Models\Property;
+use App\Models\Review;
 use App\Models\Room;
 use App\Models\RoomType;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -240,6 +241,53 @@ class RoomSearchTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('meta.total', 1)
             ->assertJsonPath('data.0.id', $dalatRoom->id);
+    }
+
+    public function test_properties_search_filters_by_review_rating_and_location_before_pagination(): void
+    {
+        $matches = [];
+        foreach ([
+            ['Đà Lạt', [4]],
+            ['Đà Lạt', []],
+            ['Đà Nẵng', [5]],
+            ['Đà Lạt', [4, 5]],
+            ['Đà Lạt', [5]],
+        ] as [$city, $ratings]) {
+            $property = Property::factory()->create(['address' => $city]);
+            $room = Room::factory()->create([
+                'property_id' => $property->id,
+                'room_type_id' => RoomType::factory()->create(['property_id' => $property->id])->id,
+            ]);
+            foreach ($ratings as $rating) {
+                $booking = Booking::factory()->forRoom($room)->completed()->create();
+                Review::query()->create([
+                    'property_id' => $property->id,
+                    'booking_id' => $booking->id,
+                    'customer_id' => $booking->customer_id,
+                    'rating' => $rating,
+                    'comment' => 'Đánh giá cơ sở lưu trú.',
+                ]);
+            }
+            if ($city === 'Đà Lạt' && in_array(5, $ratings, true)) {
+                $matches[] = $property->id;
+            }
+        }
+
+        $endpoint = '/api/public/properties-search?';
+        $this->getJson($endpoint.'min_rating=4.5')->assertOk()->assertJsonPath('meta.total', 3);
+        $this->getJson($endpoint.http_build_query(['keyword' => 'Đà Lạt']))
+            ->assertOk()->assertJsonPath('meta.total', 4);
+        $filters = ['keyword' => 'Đà Lạt', 'min_rating' => '4.5', 'per_page' => 1];
+        foreach ($matches as $index => $propertyId) {
+            $this->getJson($endpoint.http_build_query($filters + ['page' => $index + 1]))
+                ->assertOk()
+                ->assertJsonPath('meta.total', 2)
+                ->assertJsonPath('meta.last_page', 2)
+                ->assertJsonPath('meta.current_page', $index + 1)
+                ->assertJsonPath('data.0.id', $propertyId);
+        }
+        $this->getJson($endpoint.'min_rating=5.1')
+            ->assertUnprocessable()->assertJsonValidationErrors('min_rating');
     }
 
     public function test_properties_search_filters_by_keyword_and_guest_count_before_pagination(): void

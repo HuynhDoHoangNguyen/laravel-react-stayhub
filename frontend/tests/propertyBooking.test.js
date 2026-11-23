@@ -80,7 +80,7 @@ test('availability request lifecycle aborts old requests and rejects late succes
     loader.cancel();
 });
 
-test('booking panel renders missing and invalid guidance and no premature checkout link while checking', async () => {
+test('booking panel links to checkout without dates and preserves guidance for invalid or pending dates', async () => {
     const { createServer } = await import('vite');
     const server = await createServer({ root: fileURLToPath(new URL('..', import.meta.url)), logLevel: 'error',
         server: { middlewareMode: true, hmr: false, watch: null } });
@@ -89,9 +89,13 @@ test('booking panel renders missing and invalid guidance and no premature checko
         const render = context => renderToStaticMarkup(createElement(MemoryRouter, null,
             createElement(RoomBookingPanel, { room: { id: 12, name: 'Phòng Deluxe', price_per_night: '850000.25', capacity: 3,
                 room_type: { id: 3, name: 'Deluxe' }, property: { id: 5 } }, context })));
-        const missing = render(read(''));
-        assert.ok(missing.includes('Vui lòng chọn ngày'));
-        assert.ok(!missing.includes('/customer/checkout'));
+        const missing = render(read('adults=2&children=1'));
+        assert.ok(missing.includes('Chọn ngày nhận, trả phòng và số khách tại bước đặt phòng.'));
+        assert.ok(missing.includes('href="/customer/checkout?propertyId=5&amp;roomId=12&amp;adults=2&amp;children=1"'));
+        assert.ok(!missing.includes('Chọn lại ngày và số khách'));
+        const partial = render(read('checkIn=2027-01-01'));
+        assert.ok(partial.includes('Chọn lại ngày và số khách'));
+        assert.ok(!partial.includes('/customer/checkout'));
         const invalid = render(read(dates + '&adults=abc'));
         assert.ok(invalid.includes('role="alert"'));
         assert.ok(!invalid.includes('/customer/checkout'));

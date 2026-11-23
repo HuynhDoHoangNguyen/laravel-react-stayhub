@@ -1,9 +1,30 @@
 import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import axios from 'axios';
-import { readSearchNavigation, changeSearchTab, legacyPropertiesTarget, searchBackLink } from '../src/utils/searchNavigation.js';
+import { readSearchNavigation, changeSearchTab, changePropertyFilters, legacyPropertiesTarget, searchBackLink, searchStayQuery } from '../src/utils/searchNavigation.js';
+import { readPropertyBooking } from '../src/utils/propertyBooking.js';
 import { createPublicPropertyApi } from '../src/api/publicPropertyApi.js';
 import { createCatalogLoader } from '../src/services/catalog.js';
+
+test('property filters reset the page, preserve stay and room criteria, and stay out of room requests', () => {
+    const search = changePropertyFilters('q=Hue&page=2&per_page=1&adults=2&min_rating=3', {
+        keyword: ' Đà Nẵng ', minRating: '4.5',
+    });
+    const url = new URLSearchParams(search);
+    assert.equal(url.get('city'), 'Đà Nẵng');
+    assert.equal(url.has('q'), false);
+    assert.equal(url.has('page'), false);
+    assert.equal(url.get('adults'), '2');
+    assert.equal(searchBackLink({ searchPage: '?' + search }), '/search?' + search);
+    const rooms = readSearchNavigation(changeSearchTab(search, 'rooms'));
+    assert.equal(rooms.propertyRating, '4.5');
+    assert.equal(new URLSearchParams(rooms.roomSearch).has('property_min_rating'), false);
+    assert.equal(new URLSearchParams(rooms.roomSearch).get('min_rating'), '3');
+    const reset = new URLSearchParams(changePropertyFilters(search));
+    assert.equal(reset.has('city'), false);
+    assert.equal(reset.has('property_min_rating'), false);
+    assert.equal(reset.get('min_rating'), '3');
+});
 
 let adapter;
 const client = axios.create({ adapter: config => adapter(config) });
@@ -11,7 +32,10 @@ mock.module(new URL('../src/api/axios.js', import.meta.url).href, { defaultExpor
 const { propertyService } = await import('../src/services/propertyService.js');
 test.after(() => mock.restoreAll());
 
-test('default room URLs stay intact and UI tab is removed before room parsing', () => {
+test('general searches default to properties and legacy room filters retain their tab', () => {
+    for (const search of ['', 'city=Hue', 'adults=2&children=1', 'startDate=2026-12-01&endDate=2026-12-03&guest_count=3']) {
+        assert.equal(readSearchNavigation(search).tab, 'properties');
+    }
     const query = 'min_price=0.00&amenity_ids[]=7&amenity_ids[]=8&page=2';
     const result = readSearchNavigation(query);
     assert.equal(result.tab, 'rooms');
@@ -19,6 +43,20 @@ test('default room URLs stay intact and UI tab is removed before room parsing', 
     assert.equal(new URLSearchParams(result.roomSearch).get('min_price'), '0.00');
     assert.deepEqual(new URLSearchParams(result.roomSearch).getAll('amenity_ids[]'), ['7', '8']);
     assert.equal(readSearchNavigation('tab=rooms&' + query).roomSearch, result.roomSearch);
+    assert.equal(readSearchNavigation('tab=properties&' + query).tab, 'properties');
+    assert.equal(new URLSearchParams(changeSearchTab('', 'rooms')).get('tab'), 'rooms');
+});
+
+test('property details receive only stay context and can return to the complete search URL', () => {
+    const dated = '?tab=properties&city=Hue&checkIn=2026-12-01&checkOut=2026-12-03&adults=2&children=1&min_price=90000&page=3';
+    const today = new Date(2026, 10, 23);
+    assert.equal(searchStayQuery(dated), '?checkIn=2026-12-01&checkOut=2026-12-03&adults=2&children=1');
+    assert.deepEqual(readPropertyBooking(searchStayQuery(dated), today), {
+        status: 'valid', checkIn: '2026-12-01', checkOut: '2026-12-03', adults: 2, children: 1, errors: [],
+    });
+    assert.equal(searchBackLink({ searchPage: dated }), '/search' + dated);
+    assert.equal(searchStayQuery('?keyword=Hue&guest_count=3'), '?guest_count=3');
+    assert.equal(searchStayQuery('?tab=properties&page=2'), '');
 });
 
 test('invalid and duplicate tabs are errors rather than silently selecting another data source', () => {
@@ -213,6 +251,7 @@ test('searchPaginatedProperties delegates to /api/public/properties-search with 
         per_page: 1,
         keyword: ' Đà Lạt ',
         guest_count: 4,
+        min_rating: '4.5',
     });
 
     assert.equal(calls.length, 1);
@@ -222,6 +261,7 @@ test('searchPaginatedProperties delegates to /api/public/properties-search with 
         per_page: 1,
         keyword: 'Đà Lạt',
         guest_count: 4,
+        min_rating: '4.5',
     });
     assert.equal(result.data.length, 1);
     assert.equal(result.data[0].id, 15);

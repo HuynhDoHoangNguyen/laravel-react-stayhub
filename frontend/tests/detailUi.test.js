@@ -22,14 +22,15 @@ const context = { status: 'valid', checkIn: '2027-01-01', checkOut: '2027-01-03'
 const booking = { propertyId: 7, context, search: '?startDate=2027-01-01&endDate=2027-01-03&adults=2',
     availability: { loading: false, error: null, value: { data: { id: 7, rooms } } } };
 
-test('all room actions and availability text belong to the corresponding card article and footer', async () => {
+test('availability stays with the room information and actions stay in the corresponding card footer', async () => {
     const html = await render('RoomsList', { rooms, booking, selectedRoomId: 1, onSelect() {} });
     const cards = [...html.matchAll(/<article\b[\s\S]*?<\/article>/g)].map(match => match[0]);
     assert.equal(cards.length, 2);
     for (const [index, card] of cards.entries()) {
         const footer = card.match(/<footer\b[\s\S]*?<\/footer>/)?.[0];
         assert.ok(footer, 'actions are inside a card footer');
-        for (const text of ['Còn phòng theo ngày', 'Xem chi tiết phòng', 'Đặt phòng', index === 0 ? 'Đã chọn phòng này' : 'Chọn phòng']) assert.ok(footer.includes(text), text);
+        assert.ok(card.slice(0, card.indexOf('<footer')).includes('Còn phòng theo ngày'));
+        for (const text of ['Xem chi tiết phòng', 'Đặt phòng', index === 0 ? 'Đã chọn phòng này' : 'Chọn phòng']) assert.ok(footer.includes(text), text);
         assert.ok(footer.includes('/rooms/' + (index + 1) + '?startDate='));
         assert.ok(footer.includes('roomId=' + (index + 1)));
         assert.equal((footer.match(/<a /g) ?? []).length, 2);
@@ -57,11 +58,35 @@ test('unavailable or unconfirmed cards keep detail links inside without enabling
 });
 
 test('RoomCard remains usable without a footer and escapes room text', async () => {
-    const html = await render('RoomCard', { room: { ...rooms[0], name: '<script>alert(1)</script>' } });
+    const html = await render('RoomCard', { room: { ...rooms[0], name: '<script>alert(1)</script>', description: 'Mô tả đầy đủ' } });
     assert.ok(!html.includes('<footer'));
     assert.ok(html.includes('&lt;script&gt;'));
     assert.ok(!html.includes('<script>'));
+    assert.ok(html.includes('Mô tả đầy đủ'));
+    assert.ok(html.includes('Wifi'));
     assert.ok(html.includes('550.000,25') || html.includes('550.000'));
+});
+
+test('property room list renders every compact room, with actions linked to that room', async () => {
+    const propertyRooms = Array.from({ length: 7 }, (_, index) => ({
+        ...rooms[0], id: index + 1, name: 'Phòng ' + (index + 1) + ' hướng vườn có ban công và khu vực sinh hoạt riêng', description: 'Mô tả đầy đủ',
+    }));
+    const html = await render('RoomsList', {
+        rooms: propertyRooms,
+        booking: { ...booking, availability: { loading: false, error: null, value: { data: { id: 7, rooms: propertyRooms } } } },
+    });
+    const cards = [...html.matchAll(/<article\b[\s\S]*?<\/article>/g)].map(match => match[0]);
+    assert.equal(cards.length, 7);
+    for (const [index, card] of cards.entries()) {
+        const id = index + 1;
+        assert.ok(card.includes(propertyRooms[index].name));
+        assert.ok(card.includes('/rooms/' + id + '?startDate='));
+        assert.ok(card.includes('roomId=' + id + '&amp;checkIn=2027-01-01'));
+        assert.ok(card.includes('Chưa có ảnh'));
+        assert.ok(!card.includes('Mô tả đầy đủ'));
+        assert.ok(!card.includes('Wifi'));
+    }
+    assert.match(await render('RoomsList', { rooms: [] }), /Chưa có phòng để hiển thị/);
 });
 
 test('detail actions preserve button semantics including disabled and pressed states', async () => {
@@ -125,7 +150,7 @@ test('merged property breadcrumb restores UC7 room/property URLs while retaining
     }
 });
 
-test('RoomsList renders side-by-side detail and booking links when visiting property detail without dates', async () => {
+test('RoomsList renders detail before booking in the action group when visiting property detail without dates', async () => {
     const missingContext = { status: 'missing', checkIn: '', checkOut: '', adults: 2, children: 0, errors: [] };
     const datelessBooking = {
         propertyId: 7,
@@ -139,5 +164,7 @@ test('RoomsList renders side-by-side detail and booking links when visiting prop
     assert.ok(footer);
     assert.ok(footer.includes('Xem chi tiết phòng'));
     assert.ok(footer.includes('Đặt phòng'));
+    assert.deepEqual([...footer.matchAll(/<a\b[^>]*>([^<]+)<\/a>/g)].map(([, label]) => label), ['Xem', 'Đặt']);
+    assert.ok(footer.indexOf('Xem chi tiết phòng') < footer.indexOf('Đặt phòng'));
     assert.ok(footer.includes('/customer/checkout?propertyId=7&amp;roomId=1&amp;adults=2&amp;children=0'));
 });

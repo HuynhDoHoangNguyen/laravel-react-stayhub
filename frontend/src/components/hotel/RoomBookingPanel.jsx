@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { roomService } from '../../services/roomService.js';
 import { createRoomSearchLoader } from '../../services/roomSearchService.js';
 import { normalizeApiError } from '../../api/apiError.js';
-import { checkoutTarget, bookingSearchTarget } from '../../utils/propertyBooking.js';
+import { checkoutTarget, bookingSearchTarget, directRoomCheckoutTarget } from '../../utils/propertyBooking.js';
 import { DetailAction } from './DetailAction.jsx';
 import { CalendarDays, Users, BedDouble, ArrowRight, RefreshCw, SlidersHorizontal } from 'lucide-react';
 
@@ -31,6 +31,7 @@ function AvailabilityResult({ room, context }) {
 }
 
 export function RoomBookingPanel({ room, context }) {
+    const checkoutHref = context.status === 'missing' ? directRoomCheckoutTarget(room.property.id, room.id, context) : null;
     return <aside aria-label="Đặt phòng" className="min-w-0 space-y-5 overflow-hidden rounded-3xl border border-primary/10 bg-card p-5 shadow-[0_18px_50px_-25px_rgba(26,46,32,0.35)] sm:p-6">
         <header className="space-y-2 border-b border-border/70 pb-5">
             <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Lưu trú của bạn</h2>
@@ -57,11 +58,14 @@ export function RoomBookingPanel({ room, context }) {
                 </div>
             </dl>
             <AvailabilityResult key={room.id + ':' + JSON.stringify(context)} room={room} context={context} />
-        </> : <div role={context.status === 'invalid' ? 'alert' : undefined} className="space-y-2 text-sm">
+        </> : checkoutHref ? <div className="space-y-2 text-sm">
+            <p>Chọn ngày nhận, trả phòng và số khách tại bước đặt phòng.</p>
+            <DetailAction asChild className="w-full"><Link to={checkoutHref}>Đặt phòng<ArrowRight aria-hidden /></Link></DetailAction>
+        </div> : <div role={context.status === 'invalid' ? 'alert' : undefined} className="space-y-2 text-sm">
             {context.errors.map((error, index) => <p key={index}>{error}</p>)}
             <p>Vui lòng chọn ngày nhận, trả phòng và số khách để kiểm tra phòng trống.</p>
         </div>}
-        <DetailAction asChild tone="secondary" className="w-full"><Link to={bookingSearchTarget(context)}><SlidersHorizontal aria-hidden />Chọn lại ngày và số khách</Link></DetailAction>
+        {!checkoutHref && <DetailAction asChild tone="secondary" className="w-full"><Link to={bookingSearchTarget(context)}><SlidersHorizontal aria-hidden />Chọn lại ngày và số khách</Link></DetailAction>}
         <p className="border-t border-border/60 pt-4 text-xs leading-relaxed text-muted-foreground">Giá và phòng trống được xác nhận lại tại bước đặt phòng.</p>
     </aside>;
 }

@@ -199,9 +199,9 @@ class RoomAvailabilityRepository
     }
 
     /**
-     * Search active public properties filtered by keyword and/or room guest capacity BEFORE pagination.
+     * Search active public properties by keyword, room capacity and review rating before pagination.
      *
-     * @param array{keyword: ?string, guest_count: ?int, page: int, per_page: int} $filters
+     * @param array{keyword: ?string, guest_count: ?int, min_rating: ?string, page: int, per_page: int} $filters
      */
     public function searchPublicProperties(array $filters): LengthAwarePaginator
     {
@@ -236,6 +236,11 @@ class RoomAvailabilityRepository
 
         if ($guestCount !== null && $guestCount >= 1) {
             $query->whereHas('rooms', $publicRoomsScope);
+        }
+
+        if (isset($filters['min_rating'])) {
+            $query->whereIn('properties.id', Review::query()->select('property_id')->groupBy('property_id')
+                ->havingRaw('AVG(reviews.rating) >= CAST(? AS DECIMAL(3,1))', [$filters['min_rating']]));
         }
 
         return $query->orderBy('properties.id')

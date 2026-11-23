@@ -41,15 +41,19 @@ function PropertyStay({ property, source, location }) {
     const availability = usePropertyAvailability(property.id, context, source);
     return (
         <div className="space-y-10">
-            <div data-detail-region="gallery" className="min-w-0">
-                <PropertyGallery photos={property.photos} name={property.name} />
+            <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+                <div data-detail-region="gallery" className="min-w-0">
+                    <PropertyGallery photos={property.photos} name={property.name} />
+                </div>
+                <RoomsList rooms={property.rooms}
+                    booking={{ propertyId: property.id, source, context, availability, search: location.search, state: location.state }} />
             </div>
             <div data-detail-region="content" className="min-w-0 space-y-10">
                 <section><h2 className="font-display text-2xl text-primary">Giới thiệu</h2><p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{property.description || 'Chưa có mô tả cơ sở.'}</p></section>
                 <PropertyAmenities amenities={property.amenities} />
-                <RoomsList rooms={property.rooms}
-                    booking={{ propertyId: property.id, source, context, availability, search: location.search, state: location.state }} />
-                <ReviewsSection propertyId={property.id} propertySource={source} />
+                <div className="min-w-0 overflow-x-clip">
+                    <ReviewsSection propertyId={property.id} propertySource={source} />
+                </div>
             </div>
         </div>
     );

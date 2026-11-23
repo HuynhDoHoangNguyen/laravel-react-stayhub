@@ -42,9 +42,9 @@ class SearchService
     }
 
     /**
-     * Search public properties filtered by keyword and/or guest capacity before pagination.
+     * Search public properties by keyword, guest capacity and review rating before pagination.
      *
-     * @param array{keyword: ?string, guest_count: ?int, page: int, per_page: int} $filters
+     * @param array{keyword: ?string, guest_count: ?int, min_rating: ?string, page: int, per_page: int} $filters
      */
     public function searchProperties(array $filters): LengthAwarePaginator
     {

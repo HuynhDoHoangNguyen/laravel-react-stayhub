@@ -96,22 +96,40 @@ async function render(state, search = '', currentRoomId = 2) {
 
 test('related card links preserve dates, guests and filters and update old room selection for each target', async () => {
     const result = mapRelatedPropertyRooms(normalized(3), 7, 2);
-    const query = '?startDate=2027-01-01&endDate=2027-01-03&adults=2&children=1&roomId=2&min_price=0.00';
+    const year = new Date().getFullYear() + 1;
+    const query = `?startDate=${year}-01-01&endDate=${year}-01-03&adults=2&children=1&roomId=2&min_price=0.00`;
     const html = await render({ status: 'ready', result }, query);
     const links = [...html.matchAll(/href="([^"]+)"/g)].map(match => new URL(match[1].replaceAll('&amp;', '&'), 'https://example.test'));
-    assert.deepEqual(links.map(link => link.pathname), ['/rooms/1', '/rooms/3', '/properties/7']);
-    assert.deepEqual(links.map(link => link.searchParams.get('roomId')), ['1', '3', '2']);
-    for (const link of links) for (const [key, value] of new URLSearchParams(query)) {
+    const detailLinks = links.filter(link => link.pathname !== '/customer/checkout');
+    assert.deepEqual(detailLinks.map(link => link.pathname), ['/rooms/1', '/rooms/3', '/properties/7']);
+    assert.deepEqual(detailLinks.map(link => link.searchParams.get('roomId')), ['1', '3', '2']);
+    for (const link of detailLinks) for (const [key, value] of new URLSearchParams(query)) {
         if (key !== 'roomId') assert.equal(link.searchParams.get(key), value);
+    }
+    const cards = [...html.matchAll(/<article\b[\s\S]*?<\/article>/g)].map(match => match[0]);
+    assert.equal(cards.length, 2);
+    for (const [index, id] of ['1', '3'].entries()) {
+        assert.ok(cards[index].includes('href="/rooms/' + id + '?'));
+        assert.deepEqual([...cards[index].matchAll(/<a\b[^>]*>([^<]+)<\/a>/g)].map(([, label]) => label), ['Đặt ngay', 'Xem chi tiết']);
+        const checkout = links.find(link => link.pathname === '/customer/checkout' && link.searchParams.get('roomId') === id);
+        assert.ok(checkout);
+        assert.deepEqual(Object.fromEntries(checkout.searchParams), {
+            propertyId: '7', roomId: id, checkIn: `${year}-01-01`, checkOut: `${year}-01-03`, adults: '2', children: '1',
+        });
+        assert.ok(cards[index].includes(checkout.search.replaceAll('&', '&amp;')));
     }
     assert.ok(html.includes('Chưa có ảnh'));
     assert.ok(html.includes('Chưa có giá tham khảo'));
     assert.match(html, /0\s*₫/u);
-    assert.ok(!html.includes('/customer/checkout'));
-    assert.equal((html.match(/<article/g) ?? []).length, 2);
     assert.ok(html.includes('Xem tất cả phòng tại Cơ sở thật'));
     const noQuery = await render({ status: 'ready', result });
     assert.ok(noQuery.includes('href="/rooms/1"'));
+    assert.ok(noQuery.includes('href="/customer/checkout?propertyId=7&amp;roomId=1&amp;adults=2&amp;children=0"'));
+    for (const badQuery of ['?checkIn=invalid', `?checkIn=${year}-01-01`]) {
+        const invalid = await render({ status: 'ready', result }, badQuery);
+        assert.ok(invalid.includes('/rooms/1?'));
+        assert.ok(!invalid.includes('/customer/checkout'));
+    }
 });
 
 test('empty, loading and error remain local to suggestions; mock content is labeled', async () => {

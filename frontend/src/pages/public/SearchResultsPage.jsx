@@ -9,7 +9,7 @@ import { EmptyState } from '../../components/search/EmptyState';
 import { Pagination } from '../../components/search/Pagination';
 import { BenefitsStrip } from '../../components/search/BenefitsStrip';
 import { PropertyResultsPanel } from '../../components/search/PropertyResultsPanel';
-import { readSearchNavigation, changeSearchTab } from '../../utils/searchNavigation';
+import { readSearchNavigation, changeSearchTab, changePropertyFilters } from '../../utils/searchNavigation';
 import { normalizeApiError } from '../../api/apiError';
 import { roomSearchService, readRoomSearch, updateRoomSearch, createRoomSearchLoader } from '../../services/roomSearchService';
 import {
@@ -111,7 +111,7 @@ function RoomResults({ search, navigate, view, onViewChange }) {
                 message={meta.total > 0 ? 'Hãy quay lại trang đầu của danh sách.' : 'Hãy thử nới rộng khoảng giá hoặc giảm bớt tiện nghi yêu cầu.'}
                 onRetry={meta.total > 0 ? () => change({ page: 1 }) : reset}
                 actionLabel={meta.total > 0 ? 'Về trang đầu' : 'Xóa bộ lọc'} />}
-            {meta && <Pagination currentPage={meta.current_page} totalPages={meta.last_page} onPageChange={page => change({ page })} />}
+            {meta && <Pagination currentPage={meta.current_page} totalPages={meta.last_page} onPageChange={page => change({ page })} showSinglePage />}
         </section>
         <AssistantPanel params={params} errors={errors} onApply={change} availability={available} />
     </div>;
@@ -140,6 +140,12 @@ export default function SearchResultsPage() {
         ? parseAvailabilitySearchParams(navigation.roomSearch).guests
         : null;
     const switchTab = tab => setSearchParams(changeSearchTab(search, tab));
+    const navigateRooms = query => {
+        const next = new URLSearchParams(query);
+        if (navigation.propertyRating) next.set('property_min_rating', navigation.propertyRating);
+        next.set('tab', 'rooms');
+        setSearchParams(next);
+    };
     return <div className="min-h-screen bg-background">
         <SearchSummaryBar city={searchParams.get('city') ?? searchParams.get('keyword') ?? searchParams.get('q') ?? ''} startDate={searchParams.get('startDate') ?? searchParams.get('check_in_date') ?? ''}
             endDate={searchParams.get('endDate') ?? searchParams.get('check_out_date') ?? ''} roomsCount={searchParams.get('roomsCount') ?? 1}
@@ -147,7 +153,7 @@ export default function SearchResultsPage() {
         <div className="mx-auto max-w-[1440px] px-6 pb-16 pt-8 md:px-10">
             <h1 className="sr-only">Khám phá phòng và cơ sở lưu trú</h1>
             <nav aria-label="Loại kết quả khám phá" className="mb-8 flex flex-wrap gap-3">
-                {[['rooms', 'Phòng'], ['properties', 'Cơ sở lưu trú']].map(([tab, label]) => <button key={tab} type="button" aria-current={navigation.tab === tab ? 'page' : undefined}
+                {[['properties', 'Cơ sở lưu trú'], ['rooms', 'Phòng']].map(([tab, label]) => <button key={tab} type="button" aria-current={navigation.tab === tab ? 'page' : undefined}
                     onClick={() => switchTab(tab)} className={['rounded-full border px-5 py-2.5 text-sm font-medium', navigation.tab === tab ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-ink'].join(' ')}>{label}</button>)}
             </nav>
             {navigation.error ? <section role="alert"><EmptyState title="Tab tìm kiếm không hợp lệ" message={navigation.error} onRetry={() => switchTab('rooms')} actionLabel="Về tab Phòng" /></section>
@@ -156,23 +162,26 @@ export default function SearchResultsPage() {
                 <p className="mt-3 text-sm text-muted-foreground">Vui lòng chọn cả ngày nhận phòng và ngày trả phòng để tìm kiếm phòng trống theo khoảng thời gian.</p>
                 <button type="button" className="mt-5 rounded-full bg-primary px-5 py-3 font-semibold text-primary-foreground"
                     onClick={() => {
-                        const next = new URLSearchParams(navigation.roomSearch);
+                        const next = new URLSearchParams(search);
                         next.delete('startDate'); next.delete('endDate');
                         next.delete('checkIn'); next.delete('checkOut');
                         next.delete('check_in_date'); next.delete('check_out_date');
+                        next.set('tab', navigation.tab);
                         setSearchParams(next);
-                    }}>Bỏ chọn ngày để xem danh mục phòng</button>
+                    }}>Bỏ chọn ngày để xem kết quả</button>
             </section>
                 : unsupported.length ? <section role="alert" className="rounded-3xl bg-card p-8 ring-1 ring-black/[0.04]">
                 <h2 className="font-display text-xl">Tìm kiếm theo ngày hoặc địa điểm chưa được hỗ trợ</h2>
                 <p className="mt-3 text-sm text-muted-foreground">Địa chỉ hiện tại có bộ lọc chưa được hỗ trợ ({unsupported.join(', ')}). Chưa có kết quả xác nhận khả dụng cho yêu cầu này.</p>
                 <button type="button" className="mt-5 rounded-full bg-primary px-5 py-3 font-semibold text-primary-foreground"
-                    onClick={() => setSearchParams(updateRoomSearch(navigation.roomSearch, {}, { clearUnsupported: true }))}>Chuyển sang lọc phòng cơ bản</button>
+                    onClick={() => navigateRooms(updateRoomSearch(navigation.roomSearch, {}, { clearUnsupported: true }))}>Chuyển sang lọc phòng cơ bản</button>
             </section> : navigation.tab === 'properties' ? navigation.propertyParams
-                ? <PropertyResultsPanel key={search} params={navigation.propertyParams} keyword={propertyKeyword} guestCount={propertyGuestCount} onPageChange={page => { const next = new URLSearchParams(search); next.set('page', String(page)); setSearchParams(next); }}
-                    onShowRooms={() => switchTab('rooms')} view={view} onViewChange={setView} />
+                ? <PropertyResultsPanel key={search} params={navigation.propertyParams} keyword={propertyKeyword} guestCount={propertyGuestCount}
+                    minRating={navigation.propertyRating} onFilterChange={filters => setSearchParams(changePropertyFilters(search, filters))}
+                    onPageChange={page => { const next = new URLSearchParams(search); next.set('page', String(page)); setSearchParams(next); }}
+                    view={view} onViewChange={setView} />
                 : <section role="alert"><EmptyState title="Tham số danh sách cơ sở không hợp lệ" message="Trang phải là số nguyên dương; số cơ sở mỗi trang từ 1 đến 24." /></section>
-                : <RoomResults key={navigation.roomSearch} search={navigation.roomSearch} navigate={setSearchParams} view={view} onViewChange={setView} />}
+                : <RoomResults key={navigation.roomSearch} search={navigation.roomSearch} navigate={navigateRooms} view={view} onViewChange={setView} />}
         </div>
         <BenefitsStrip />
     </div>;

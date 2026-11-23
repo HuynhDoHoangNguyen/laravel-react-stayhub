@@ -3,6 +3,7 @@ import { MapPin, Star } from 'lucide-react';
 import { motion, useReducedMotion } from 'framer-motion';
 import CatalogImage from '../catalog/CatalogImage';
 import PropertyVerificationBadge from '../catalog/PropertyVerificationBadge';
+import { searchStayQuery } from '../../utils/searchNavigation';
 
 const currency = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 2 });
 
@@ -26,8 +27,8 @@ export function SearchPropertyCard({ property, view = 'grid' }) {
             <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-border/40 pt-4">
                 <div className="min-w-0"><p className="break-words text-[16px] font-semibold">{property.price === null ? 'Chưa có giá tham khảo' : currency.format(property.price)}</p>
                     <p className="text-[11.5px] text-muted-foreground">{property.price === null ? 'Chưa có phòng để hiển thị giá' : 'Giá từ / đêm · tham khảo'}</p></div>
-                <Link to={'/properties/' + property.id} state={{ searchPage: location.search }}
-                    className="shrink-0 rounded-full bg-primary px-4 py-2 text-[12.5px] font-medium text-primary-foreground">Xem chi tiết</Link>
+                <Link to={'/properties/' + property.id + searchStayQuery(location.search)} state={{ searchPage: location.search }}
+                    className="shrink-0 rounded-full bg-primary px-4 py-2 text-[12.5px] font-medium text-primary-foreground">Xem phòng</Link>
             </div>
         </div>
     </motion.article>;
