@@ -8,6 +8,7 @@ import HostRoomEditForm from '../../components/catalog/HostRoomEditForm';
 import HostRoomStatusForm from '../../components/catalog/HostRoomStatusForm';
 import HostRoomImageManager from '../../components/catalog/HostRoomImageManager';
 import HostRoomAmenityPanel from '../../components/catalog/HostRoomAmenityPanel';
+import HostRoomMaintenancePanel from '../../components/catalog/HostRoomMaintenancePanel';
 
 const roomStatuses = {
     ACTIVE: { label: 'Đang hoạt động', color: 'border-emerald-200 bg-emerald-50 text-emerald-800' },
@@ -169,6 +170,7 @@ function RoomDetail({ roomId }) {
             </section>
             <HostRoomImageManager roomId={room.id} />
             <HostRoomAmenityPanel roomId={room.id} amenities={room.amenities} ready={state.status === 'ready'} />
+            <HostRoomMaintenancePanel roomId={room.id} />
         </div>}
     </div>;
 }

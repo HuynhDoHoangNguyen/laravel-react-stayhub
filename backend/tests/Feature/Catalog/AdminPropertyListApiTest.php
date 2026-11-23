@@ -37,12 +37,12 @@ final class AdminPropertyListApiTest extends TestCase
     public function test_rejects_invalid_query_fields(): void
     {
         $this->actingAs(User::factory()->admin()->create());
-        $query = http_build_query(['search' => str_repeat('ệ', 256), 'status' => 'pending', 'page' => '01', 'per_page' => '51']);
+        $query = http_build_query(['q' => str_repeat('ệ', 101), 'status' => 'pending', 'page' => '01', 'per_page' => '51']);
         $this->getJson(self::PATH.'?'.$query)->assertUnprocessable()
-            ->assertJsonValidationErrors(['search', 'status', 'page', 'per_page']);
+            ->assertJsonValidationErrors(['q', 'status', 'page', 'per_page']);
 
-        $this->getJson(self::PATH.'?search[]=x&status[]=ACTIVE&page=2147483648&per_page[]=10')
-            ->assertUnprocessable()->assertJsonValidationErrors(['search', 'status', 'page', 'per_page']);
+        $this->getJson(self::PATH.'?q[]=x&status[]=ACTIVE&page=2147483648&per_page[]=10')
+            ->assertUnprocessable()->assertJsonValidationErrors(['q', 'status', 'page', 'per_page']);
         $this->getJson(self::PATH.'?page=&per_page=')->assertUnprocessable()->assertJsonValidationErrors(['page', 'per_page']);
     }
 
@@ -55,23 +55,28 @@ final class AdminPropertyListApiTest extends TestCase
             'status' => $status, 'type' => PropertyType::HOTEL, 'created_at' => '2026-11-20 00:00:00',
         ]));
         $newest = Property::factory()->create(['created_at' => '2026-11-21 00:00:00']);
+        Property::factory()->count(15)->create(['created_at' => '2026-11-19 12:00:00']);
         // An older, higher ID must stay below rows with a more recent creation time.
         $oldest = Property::factory()->create(['created_at' => '2026-11-19 00:00:00']);
 
-        $first = $this->getJson(self::PATH.'?per_page=2')->assertOk()->assertJsonCount(2, 'data')
-            ->assertJsonPath('meta.current_page', 1)->assertJsonPath('meta.last_page', 3)->assertJsonPath('meta.total', 6)
+        $first = $this->getJson(self::PATH.'?per_page=10')->assertOk()->assertJsonCount(10, 'data')
+            ->assertJsonPath('meta.current_page', 1)->assertJsonPath('meta.last_page', 3)->assertJsonPath('meta.total', 21)
             ->assertJsonPath('data.0.id', $newest->id);
         $this->assertSame(['data', 'links', 'meta'], array_keys($first->json()));
         $this->assertSame([
-            'id' => $properties[3]->id, 'name' => 'Cơ sở PENDING', 'address' => '12 Bạch Đằng',
-            'type' => 'HOTEL', 'status' => 'PENDING', 'host_name' => 'Chủ cơ sở demo',
+            'id' => $properties[3]->id, 'name' => 'Cơ sở PENDING', 'type' => 'HOTEL',
+            'address' => '12 Bạch Đằng', 'status' => 'PENDING', 'rooms_count' => 0,
+            'created_at' => $properties[3]->created_at->toISOString(),
+            'host' => ['id' => $host->id, 'name' => 'Chủ cơ sở demo', 'email' => $host->email],
         ], $first->json('data.1'));
+        $first->assertJsonPath('data.2.status', 'BLOCKED')->assertJsonPath('data.3.status', 'INACTIVE')
+            ->assertJsonPath('data.4.status', 'ACTIVE');
 
-        $this->getJson($first->json('links.next'))->assertOk()->assertJsonPath('meta.current_page', 2)
-            ->assertJsonPath('data.0.status', 'BLOCKED')->assertJsonPath('data.1.status', 'INACTIVE');
-        $this->getJson(self::PATH.'?per_page=2&page=3')->assertOk()
-            ->assertJsonPath('data.0.status', 'ACTIVE')->assertJsonPath('data.1.id', $oldest->id);
-        $this->getJson(self::PATH.'?per_page=2&page=4')->assertOk()->assertJsonPath('data', [])
+        $second = $this->getJson($first->json('links.next'))->assertOk()->assertJsonPath('meta.current_page', 2)
+            ->assertJsonCount(10, 'data');
+        $this->getJson($second->json('links.next'))->assertOk()->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $oldest->id);
+        $this->getJson(self::PATH.'?per_page=10&page=4')->assertOk()->assertJsonPath('data', [])
             ->assertJsonPath('meta.from', null)->assertJsonPath('meta.to', null);
     }
 
@@ -82,15 +87,15 @@ final class AdminPropertyListApiTest extends TestCase
         $pending = Property::factory()->create(['name' => 'Nhà Vườn', 'address' => '12 Bạch Đằng !%_', 'status' => PropertyStatus::PENDING]);
         Property::factory()->create(['name' => 'Sông Hàn khác', 'address' => '14 Bạch Đằng', 'status' => PropertyStatus::ACTIVE]);
 
-        $this->getJson(self::PATH.'?'.http_build_query(['search' => ' Sông Hàn ']))
+        $this->getJson(self::PATH.'?'.http_build_query(['q' => ' Sông Hàn ']))
             ->assertOk()->assertJsonPath('meta.total', 2)->assertJsonPath('meta.per_page', 10);
-        $byAddress = $this->getJson(self::PATH.'?'.http_build_query(['search' => 'Bạch Đằng', 'status' => 'PENDING', 'per_page' => 1]))
+        $byAddress = $this->getJson(self::PATH.'?'.http_build_query(['q' => 'Bạch Đằng', 'status' => 'PENDING', 'per_page' => 10]))
             ->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.id', $pending->id);
         parse_str((string) parse_url($byAddress->json('links.first'), PHP_URL_QUERY), $link);
-        $this->assertEquals(['search' => 'Bạch Đằng', 'status' => 'PENDING', 'per_page' => '1', 'page' => '1'], $link);
-        $this->getJson(self::PATH.'?'.http_build_query(['search' => '!%_', 'status' => 'ACTIVE']))
+        $this->assertEquals(['q' => 'Bạch Đằng', 'status' => 'PENDING', 'per_page' => '10', 'page' => '1'], $link);
+        $this->getJson(self::PATH.'?'.http_build_query(['q' => '!%_', 'status' => 'ACTIVE']))
             ->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.id', $active->id);
-        $this->getJson(self::PATH.'?'.http_build_query(['search' => 'Sông Hàn', 'status' => 'PENDING']))
+        $this->getJson(self::PATH.'?'.http_build_query(['q' => 'Sông Hàn', 'status' => 'PENDING']))
             ->assertOk()->assertJsonPath('meta.total', 0)->assertJsonPath('data', []);
     }
 }

@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { Link, useLocation, Outlet } from "react-router-dom";
-import { Flag, ShieldCheck } from "lucide-react";
+import { Flag, ListChecks, ShieldCheck } from "lucide-react";
 import logoMark from "@/assets/logo-mark.png";
 import { Toaster } from "@/components/ui/sonner";
 import { useAuth } from "@/hooks/useAuth";
@@ -34,6 +34,7 @@ const ADMIN_NAV = [
   { to: "/admin/statistics", label: "Thống kê hệ thống", icon: ConsoleIcon },
   { to: "/admin/user-management", label: "Tài khoản", icon: UsersIcon },
   { to: "/admin/properties", label: "Cơ sở lưu trú", icon: HotelIcon },
+  { to: "/admin/amenities", label: "Tiện nghi", icon: ListChecks },
   { to: "/admin/host-reports", label: "Báo cáo Host", icon: Flag },
   { to: "/admin/bookings", label: "Đơn đặt phòng", icon: BookingsIcon },
   { to: "/admin/invoices", label: "Hóa đơn hệ thống", icon: InvoiceIcon },

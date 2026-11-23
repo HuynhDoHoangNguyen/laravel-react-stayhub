@@ -80,7 +80,7 @@ test('availability request lifecycle aborts old requests and rejects late succes
     loader.cancel();
 });
 
-test('booking panel links to checkout without dates and preserves guidance for invalid or pending dates', async () => {
+test('room booking panel links directly to checkout with usable dates and guest counts', async () => {
     const { createServer } = await import('vite');
     const server = await createServer({ root: fileURLToPath(new URL('..', import.meta.url)), logLevel: 'error',
         server: { middlewareMode: true, hmr: false, watch: null } });
@@ -89,22 +89,27 @@ test('booking panel links to checkout without dates and preserves guidance for i
         const render = context => renderToStaticMarkup(createElement(MemoryRouter, null,
             createElement(RoomBookingPanel, { room: { id: 12, name: 'Phòng Deluxe', price_per_night: '850000.25', capacity: 3,
                 room_type: { id: 3, name: 'Deluxe' }, property: { id: 5 } }, context })));
+        const href = html => {
+            const links = [...html.matchAll(/href="([^"]+)"/g)];
+            assert.equal(links.length, 1);
+            assert.ok(html.includes('Đặt phòng</') || html.includes('Đặt phòng<svg'));
+            return links[0][1].replaceAll('&amp;', '&');
+        };
+        const checkout = '/customer/checkout?propertyId=5&roomId=12';
+        assert.equal(href(render(read(''))), checkout + '&adults=2&children=0');
         const missing = render(read('adults=2&children=1'));
         assert.ok(missing.includes('Chọn ngày nhận, trả phòng và số khách tại bước đặt phòng.'));
-        assert.ok(missing.includes('href="/customer/checkout?propertyId=5&amp;roomId=12&amp;adults=2&amp;children=1"'));
-        assert.ok(!missing.includes('Chọn lại ngày và số khách'));
-        const partial = render(read('checkIn=2027-01-01'));
-        assert.ok(partial.includes('Chọn lại ngày và số khách'));
-        assert.ok(!partial.includes('/customer/checkout'));
+        assert.equal(href(missing), checkout + '&adults=2&children=1');
+        assert.equal(href(render(read('checkIn=2027-01-01&adults=1&children=1'))), checkout + '&adults=1&children=1');
         const invalid = render(read(dates + '&adults=abc'));
         assert.ok(invalid.includes('role="alert"'));
-        assert.ok(!invalid.includes('/customer/checkout'));
+        assert.equal(href(invalid), checkout + '&adults=2&children=0');
         const pending = render(read(dates + '&adults=2&children=1'));
         assert.ok(pending.includes('Đang kiểm tra phòng trống'));
         assert.ok(pending.includes('2 người lớn'));
         for (const text of ['Phòng Deluxe', 'Deluxe', '850.000,25', 'Sức chứa tối đa: 3', 'Nhận phòng', 'Trả phòng']) assert.ok(pending.includes(text), text);
         assert.ok(pending.includes('<aside'));
-        assert.ok(!pending.includes('/customer/checkout'));
+        assert.equal(href(pending), checkout + '&' + dates + '&adults=2&children=1');
     } finally { await server.close(); }
 });
 

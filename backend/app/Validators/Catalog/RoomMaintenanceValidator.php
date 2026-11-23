@@ -56,7 +56,7 @@ final class RoomMaintenanceValidator
         return false;
     }
 
-    private function isValidDate(mixed $value): bool
+    public function isValidDate(mixed $value): bool
     {
         return is_string($value)
             && preg_match('/\A[1-9][0-9]{3}-[0-9]{2}-[0-9]{2}\z/', $value) === 1

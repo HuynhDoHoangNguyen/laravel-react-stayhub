@@ -4,7 +4,10 @@ const verificationPath = (id) => `/api/admin/properties/${requireApiId(id, 'Mã 
 
 export function createAdminPropertyApi(client) {
   return {
-    async list(params, { signal } = {}) {
+    async getProperty(propertyId, { signal } = {}) {
+      return (await client.get(`/api/admin/properties/${encodeURIComponent(propertyId)}`, { signal })).data;
+    },
+    async getProperties(params, { signal } = {}) {
       return (await client.get('/api/admin/properties', { params, signal })).data;
     },
     async verification(id, { signal } = {}) {

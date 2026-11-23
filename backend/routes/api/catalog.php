@@ -3,12 +3,14 @@
 use App\Http\Controllers\Catalog\AdminPropertyController;
 use App\Http\Controllers\Catalog\AdminPropertyVerificationController;
 use App\Http\Controllers\Catalog\PublicPropertyController;
+use App\Http\Controllers\Catalog\AdminAmenityController;
 use App\Http\Controllers\Catalog\PublicRoomController;
 use App\Http\Controllers\Catalog\HostPropertyController;
 use App\Http\Controllers\Catalog\HostPropertyImageController;
 use App\Http\Controllers\Catalog\HostPropertyVerificationController;
 use App\Http\Controllers\Catalog\HostRoomTypeController;
 use App\Http\Controllers\Catalog\HostRoomController;
+use App\Http\Controllers\Catalog\HostRoomMaintenanceController;
 use App\Http\Controllers\Catalog\HostRoomAmenityController;
 use App\Http\Middleware\EnsureHostIsApproved;
 use Illuminate\Support\Facades\Route;
@@ -34,6 +36,19 @@ Route::get('/public/properties/{property}', [PublicPropertyController::class, 's
 Route::get('/admin/properties', [AdminPropertyController::class, 'index'])
     ->middleware(['auth:sanctum', 'account.active', 'role:ADMIN'])
     ->name('admin.properties.index');
+
+Route::get('/admin/properties/{property}', [AdminPropertyController::class, 'show'])
+    ->middleware(['auth:sanctum', 'account.active', 'role:ADMIN'])
+    ->name('admin.properties.show');
+
+Route::prefix('admin/amenities')->name('admin.amenities.')
+    ->middleware(['auth:sanctum', 'account.active', 'role:ADMIN'])
+    ->controller(AdminAmenityController::class)->group(function (): void {
+        Route::get('/', 'index')->name('index');
+        Route::get('/{amenity}', 'show')->name('show');
+        Route::post('/', 'store')->name('store');
+        Route::put('/{amenity}', 'update')->name('update');
+    });
 
 Route::middleware(['auth:sanctum', 'account.active', 'role:ADMIN'])->group(function (): void {
     Route::get('/admin/properties/{property}/verification', [AdminPropertyVerificationController::class, 'show'])
@@ -99,6 +114,17 @@ Route::delete('/host/rooms/{room}/amenities/{amenity}', [HostRoomAmenityControll
     ->middleware(['auth:sanctum', 'account.active', EnsureHostIsApproved::class]);
 
 Route::get('/host/rooms/{room}', [HostRoomController::class, 'show'])
+    ->middleware(['auth:sanctum', 'account.active', EnsureHostIsApproved::class]);
+
+Route::get('/host/rooms/{room}/maintenances', [HostRoomMaintenanceController::class, 'index'])
+    ->middleware(['auth:sanctum', 'account.active', EnsureHostIsApproved::class]);
+Route::post('/host/rooms/{room}/maintenances', [HostRoomMaintenanceController::class, 'store'])
+    ->middleware(['auth:sanctum', 'account.active', EnsureHostIsApproved::class]);
+Route::put('/host/maintenances/{maintenance}', [HostRoomMaintenanceController::class, 'update'])
+    ->middleware(['auth:sanctum', 'account.active', EnsureHostIsApproved::class]);
+Route::delete('/host/maintenances/{maintenance}', [HostRoomMaintenanceController::class, 'destroy'])
+    ->middleware(['auth:sanctum', 'account.active', EnsureHostIsApproved::class]);
+Route::patch('/host/maintenances/{maintenance}/status', [HostRoomMaintenanceController::class, 'changeStatus'])
     ->middleware(['auth:sanctum', 'account.active', EnsureHostIsApproved::class]);
 
 Route::post('/host/properties/{property}/room-types', [HostRoomTypeController::class, 'store'])

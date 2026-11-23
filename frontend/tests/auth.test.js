@@ -9,6 +9,9 @@ test('role destinations keep registered paths and preserve search/hash', () => {
     assert.equal(getAuthDestination('HOST', '/host/bookings/12/create-invoice'), '/host/bookings/12/create-invoice');
     assert.equal(getAuthDestination('HOST', '/host/invoices/create'), '/host/invoices/create');
     assert.equal(getAuthDestination('ADMIN', '/admin'), '/admin');
+    assert.equal(getAuthDestination('ADMIN', '/admin/properties?type=HOTEL#results'), '/admin/properties?type=HOTEL#results');
+    assert.equal(getAuthDestination('ADMIN', '/admin/amenities'), '/admin/amenities');
+    assert.equal(getAuthDestination('ADMIN', '/admin/host-reports'), '/admin/host-reports');
     assert.equal(getAuthDestination('CUSTOMER', '/properties/12?startDate=2026-12-01'), '/properties/12?startDate=2026-12-01');
 });
 
@@ -23,6 +26,8 @@ test('external, malformed and encoded redirect attempts fall back to the role da
 test('returnTo never grants a different role or a route that is not implemented', () => {
     assert.equal(getAuthDestination('CUSTOMER', '/host/invoices'), '/customer');
     assert.equal(getAuthDestination('HOST', '/admin'), '/host');
+    assert.equal(getAuthDestination('HOST', '/admin/properties'), '/host');
+    assert.equal(getAuthDestination('CUSTOMER', '/admin/host-reports'), '/customer');
     assert.equal(getAuthDestination('ADMIN', '/customer'), '/admin');
     assert.equal(getAuthDestination('HOST', '/host/properties?view=list#top'), '/host/properties?view=list#top');
     assert.equal(getAuthDestination('CUSTOMER', '/host/properties'), '/customer');

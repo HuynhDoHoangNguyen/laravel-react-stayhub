@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Repositories\Catalog;
 
 use App\DTOs\Catalog\Requests\AdminPropertyQueryRequest;
@@ -11,25 +9,40 @@ use Illuminate\Database\Eloquent\Builder;
 
 final class AdminPropertyRepository
 {
-    public function paginate(AdminPropertyQueryRequest $filters): LengthAwarePaginator
+    public function findProperty(int $propertyId): ?Property
+    {
+        return Property::query()->select(['id', 'host_id', 'name', 'type', 'address', 'status',
+            'description', 'phone', 'check_in_time', 'check_out_time', 'created_at', 'updated_at'])
+            ->with('host:id,name,email')->withCount(['rooms', 'roomTypes'])->find($propertyId);
+    }
+
+    public function paginate(AdminPropertyQueryRequest $input): LengthAwarePaginator
     {
         $query = Property::query()
-            ->select(['id', 'host_id', 'name', 'address', 'type', 'status'])
-            ->with('host:id,name');
-
-        if ($filters->status !== null) {
-            $query->where('status', $filters->status->value);
+            ->select(['id', 'host_id', 'name', 'type', 'address', 'status', 'created_at'])
+            ->with('host:id,name,email')->withCount('rooms');
+        if ($input->status !== null) {
+            $query->where('status', $input->status->value);
         }
-        if ($filters->search !== null) {
-            $needle = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $filters->search).'%';
-            $query->where(function (Builder $group) use ($needle): void {
-                $group->whereRaw("name LIKE ? ESCAPE '!'", [$needle])
-                    ->orWhereRaw("address LIKE ? ESCAPE '!'", [$needle]);
+        if ($input->type !== null) {
+            $query->where('type', $input->type->value);
+        }
+        if ($input->hostId !== null) {
+            $query->where('host_id', $input->hostId);
+        }
+        if ($input->search !== '') {
+            $pattern = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $input->search).'%';
+            $query->where(static function (Builder $search) use ($pattern): void {
+                $search->whereRaw("properties.name LIKE ? ESCAPE '!'", [$pattern])
+                    ->orWhereRaw("properties.address LIKE ? ESCAPE '!'", [$pattern])
+                    ->orWhereHas('host', static function (Builder $host) use ($pattern): void {
+                        $host->whereRaw("users.name LIKE ? ESCAPE '!'", [$pattern])
+                            ->orWhereRaw("users.email LIKE ? ESCAPE '!'", [$pattern]);
+                    });
             });
         }
 
         return $query->orderByDesc('created_at')->orderByDesc('id')
-            ->paginate($filters->perPage, ['*'], 'page', $filters->page)
-            ->appends($filters->toQuery());
+            ->paginate($input->perPage, ['*'], 'page', $input->page);
     }
 }

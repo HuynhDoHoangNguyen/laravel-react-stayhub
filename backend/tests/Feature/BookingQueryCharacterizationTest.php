@@ -144,6 +144,7 @@ class BookingQueryCharacterizationTest extends TestCase
         $cancelData = $this->normalizeDynamicFields($cancelRes->json());
 
         // 8. Host checkIn
+        $this->travelTo(now(config('app.timezone'))->setDate(2026, 12, 10)->setTime(12, 0));
         $checkInRes = $this->actingAs($host)->postJson("/api/host/bookings/{$bookingId}/check-in");
         $checkInData = $this->normalizeDynamicFields($checkInRes->json());
 
@@ -292,6 +293,7 @@ class BookingQueryCharacterizationTest extends TestCase
         $this->assertArrayNotHasKey('services_total', $cancelData, 'Customer cancel must NOT have services_total');
 
         // 8. Host checkIn
+        $this->travelTo($pendingBooking->check_in_date->copy()->setTime(12, 0));
         $checkInRes = $this->actingAs($host)->postJson("/api/host/bookings/{$pendingBookingId}/check-in");
         $checkInRes->assertStatus(200);
         $checkInData = $checkInRes->json('data');
