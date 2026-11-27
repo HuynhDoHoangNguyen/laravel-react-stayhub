@@ -59,6 +59,33 @@ test('keeps retry metadata and retries the exact UUID and initial session', asyn
     assert.deepEqual(requests, [payload, payload]);
 });
 
+test('projects only assistant destination cards on both successful sends and replays', async () => {
+    const property = { property_id: 71, property_name: 'Chỗ nghỉ QA', starting_price: '650000.00', url: 'https://example.test' };
+    const city = { city: 'Đà Lạt', reason: 'Đi dạo quanh hồ.', properties: [property] };
+    let destinations = [city];
+    const service = createChatbotService({
+        async get() {},
+        async post() {
+            return { data: { data: {
+                ...data,
+                user_message: { ...data.user_message, destinations: [city] },
+                assistant_message: { ...data.assistant_message, destinations },
+            } } };
+        },
+    });
+    const first = await service.send(payload);
+    assert.deepEqual(first.user_message, data.user_message);
+    assert.deepEqual(first.assistant_message.destinations, [{
+        city: 'Đà Lạt', reason: 'Đi dạo quanh hồ.',
+        properties: [{ propertyId: 71, propertyName: 'Chỗ nghỉ QA', startingPrice: '650000.00' }],
+    }]);
+    assert.deepEqual(await service.send(payload), first);
+    destinations = [];
+    assert.deepEqual((await service.send(payload)).assistant_message.destinations, []);
+    destinations = [{ ...city, properties: [{ ...property, starting_price: 650000 }] }];
+    await assert.rejects(service.send(payload), { status: 0, retryable: true });
+});
+
 test('rejects malformed successes as recoverable without accepting a different UUID or sender', async () => {
     for (const response of [
         { ...data, request_id: 'wrong' },

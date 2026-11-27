@@ -21,11 +21,36 @@ test('public chat sends only UUID and question with CSRF and projects public cat
     });
     assert.deepEqual(await service.send({ request_id, message: '  Tìm phòng cho 2 người  ', session_id: 5 }, { signal }), {
         reply: 'Phòng phù hợp', action: null, rooms: [{ roomId: 7, propertyId: 3, roomName: 'Phòng đôi', propertyName: 'Khách sạn thử' }],
+        destinations: [],
     });
     assert.deepEqual(calls, [
         ['/sanctum/csrf-cookie', { signal, timeout: 10000 }],
         ['/api/public/chat/messages', { request_id, message: 'Tìm phòng cho 2 người' }, { signal, timeout: 18000 }],
     ]);
+});
+
+test('public chat projects only approved travel card fields and accepts empty suggestions', async () => {
+    const property = { property_id: 3, property_name: 'Chỗ nghỉ', starting_price: '850000.00', url: 'https://example.test' };
+    const city = { city: 'Đà Lạt', reason: 'Đi dạo quanh hồ', properties: [property] };
+    let data = { message: 'Gợi ý cho chuyến đi', action: null, rooms: [], destinations: [city] };
+    const service = createGuestChatbotService({ async get() {}, async post() { return { data: { data } }; } });
+    const send = () => service.send({ request_id, message: 'Tháng 11 nên đi đâu?' });
+
+    assert.deepEqual((await send()).destinations, [{
+        city: 'Đà Lạt', reason: 'Đi dạo quanh hồ',
+        properties: [{ propertyId: 3, propertyName: 'Chỗ nghỉ', startingPrice: '850000.00' }],
+    }]);
+    data = { ...data, action: 'search', destinations: [] };
+    assert.deepEqual(await send(), { reply: 'Gợi ý cho chuyến đi', action: 'search', rooms: [], destinations: [] });
+
+    for (const destinations of [
+        null, [null], [{ ...city, properties: [] }],
+        [{ ...city, properties: [{ ...property, property_id: '../login' }] }],
+        [{ ...city, properties: [{ ...property, starting_price: '850000.00\n' }] }],
+    ]) {
+        data = { ...data, destinations };
+        await assert.rejects(send());
+    }
 });
 
 test('public chat accepts allowlisted actions and denies untrusted destinations and IDs', async () => {

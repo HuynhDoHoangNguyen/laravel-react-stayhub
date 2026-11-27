@@ -46,7 +46,12 @@ final class ChatTurnRepository
             'created_at' => $message->created_at->toISOString(),
         ];
 
-        return ['user_message' => $project($user), 'assistant_message' => $project($assistant)];
+        $answer = $project($assistant);
+        if ($assistant->destinations !== null) {
+            $answer['destinations'] = $assistant->destinations;
+        }
+
+        return ['user_message' => $project($user), 'assistant_message' => $answer];
     }
 
     public function createSession(int $actorId): ChatSession
@@ -55,10 +60,14 @@ final class ChatTurnRepository
     }
 
     /** @return array{session_id: int, user_message_id: int, assistant_message_id: int} */
-    public function writeMessages(ChatSession $session, string $question, string $answer): array
+    public function writeMessages(ChatSession $session, string $question, string $answer, ?array $destinations = null): array
     {
         $user = $session->messages()->create(['sender' => 'USER', 'message' => $question]);
-        $assistant = $session->messages()->create(['sender' => 'ASSISTANT', 'message' => $answer]);
+        $attributes = ['sender' => 'ASSISTANT', 'message' => $answer];
+        if ($destinations !== null) {
+            $attributes['destinations'] = $destinations;
+        }
+        $assistant = $session->messages()->create($attributes);
 
         return [
             'session_id' => $session->id,

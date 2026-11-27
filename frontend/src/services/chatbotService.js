@@ -49,6 +49,9 @@ function projectTurn(envelope, requestId) {
     if (user.id === assistant.id) {
         throw new Error('Phản hồi từ trợ lý không hợp lệ.');
     }
+    if (Object.hasOwn(data.assistant_message, 'destinations')) {
+        assistant.destinations = projectDestinations(data.assistant_message.destinations);
+    }
 
     return {
         session_id: data.session_id,
@@ -101,13 +104,36 @@ export const chatbotService = createChatbotService(axios);
 
 export const publicChatEnabled = import.meta.env?.VITE_ENABLE_GUEST_CHAT === 'true';
 
+function projectDestinations(destinations) {
+    if (!Array.isArray(destinations) || destinations.length > 3) {
+        throw new Error('Phản hồi từ trợ lý không hợp lệ.');
+    }
+
+    return destinations.map((destination) => {
+        const { city, reason, properties } = destination ?? {};
+        if (typeof city !== 'string' || !city.trim() || typeof reason !== 'string' || !reason.trim()
+            || !Array.isArray(properties) || properties.length === 0 || properties.length > 2) {
+            throw new Error('Phản hồi từ trợ lý không hợp lệ.');
+        }
+
+        return { city, reason, properties: properties.map((property) => {
+            if (!isPositiveId(property?.property_id) || typeof property.property_name !== 'string' || !property.property_name.trim()
+                || typeof property.starting_price !== 'string' || !/^(?:0|[1-9][0-9]*)\.[0-9]{2}(?![\s\S])/.test(property.starting_price)) {
+                throw new Error('Phản hồi từ trợ lý không hợp lệ.');
+            }
+
+            return { propertyId: property.property_id, propertyName: property.property_name, startingPrice: property.starting_price };
+        }) };
+    });
+}
+
 export function createGuestChatbotService(client) {
     const api = createChatbotApi(client);
     return {
         async send({ request_id, message }, { signal } = {}) {
             try {
                 const response = await api.sendPublic({ request_id, message: message.trim() }, { signal });
-                const { message: reply, rooms, action } = response?.data ?? {};
+                const { message: reply, rooms, action, destinations = [] } = response?.data ?? {};
                 if (typeof reply !== 'string' || !reply.trim() || !Array.isArray(rooms) || rooms.length > 3
                     || ![null, 'bookings', 'invoices', 'search'].includes(action)
                     || rooms.some((room) => !isPositiveId(room?.room_id) || !isPositiveId(room?.property_id)
@@ -115,7 +141,7 @@ export function createGuestChatbotService(client) {
                     throw new Error('Phản hồi từ trợ lý không hợp lệ.');
                 }
 
-                return { reply, action, rooms: rooms.map((room) => ({
+                return { reply, action, destinations: projectDestinations(destinations), rooms: rooms.map((room) => ({
                     roomId: room.room_id, roomName: room.room_name,
                     propertyId: room.property_id, propertyName: room.property_name,
                 })) };

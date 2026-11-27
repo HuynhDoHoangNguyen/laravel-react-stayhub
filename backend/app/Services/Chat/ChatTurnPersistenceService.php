@@ -105,12 +105,13 @@ final class ChatTurnPersistenceService
         ?int $sessionId,
         string $question,
         string $answer,
+        ?array $destinations = null,
     ): array {
         $requestId = $this->normalizeRequestId($requestId);
         $question = trim($question);
         $fingerprint = $this->fingerprint($actorId, $requestId, $sessionId, $question);
 
-        return DB::transaction(function () use ($actorId, $requestId, $token, $sessionId, $question, $answer, $fingerprint): array {
+        return DB::transaction(function () use ($actorId, $requestId, $token, $sessionId, $question, $answer, $destinations, $fingerprint): array {
             if (! $this->repository->lockActor($actorId)) {
                 return ['status' => 'not_found'];
             }
@@ -132,7 +133,7 @@ final class ChatTurnPersistenceService
             }
 
             $session ??= $this->repository->createSession($actorId);
-            $result = $this->repository->writeMessages($session, $question, $answer);
+            $result = $this->repository->writeMessages($session, $question, $answer, $destinations);
             $turn->fill([
                 'status' => ChatTurn::SUCCEEDED,
                 'processing_token' => null,

@@ -4,7 +4,9 @@ namespace App\Services\Chat;
 
 use App\Exceptions\Chat\ChatProviderException;
 use App\Repositories\Chat\ChatTurnRepository;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 final class SendChatMessageService
 {
@@ -18,6 +20,7 @@ final class SendChatMessageService
         private readonly PublicServiceChatService $services,
         private readonly PublicRoomAvailabilityChatService $availability,
         private readonly NaturalAvailabilityChatService $naturalAvailability,
+        private readonly TravelRecommendationService $travel,
     ) {}
 
     public function send(int $actorId, string $requestId, ?int $sessionId, #[\SensitiveParameter] string $question): array
@@ -100,6 +103,15 @@ final class SendChatMessageService
             return $this->complete($actorId, $requestId, $turn['token'], $sessionId, $question, $natural['clarification']);
         }
 
+        if ($natural === null) {
+            $text = Str::lower(Str::ascii($question, 'vi'));
+            $text = preg_replace('/\s+/', ' ', $text);
+            $criteria = $this->travel->recognize($text);
+            if ($criteria !== null) {
+                return $this->saveTravelReply($actorId, $requestId, $sessionId, $question, $text, $criteria);
+            }
+        }
+
         if (config('chatbot.enabled') !== true || config('chatbot.allow_external_questions') !== true) {
             if ($natural !== null) {
                 throw ValidationException::withMessages(['message' => NaturalAvailabilityChatService::LOCAL_GUIDE]);
@@ -145,6 +157,42 @@ final class SendChatMessageService
         }
     }
 
+    /** @param array{guests: int, theme: 'couple'|'november'|'reason'} $criteria */
+    private function saveTravelReply(
+        int $actorId,
+        string $requestId,
+        ?int $sessionId,
+        #[\SensitiveParameter] string $question,
+        #[\SensitiveParameter] string $text,
+        array $criteria,
+    ): array {
+        if (preg_match('/\b(hoa don|thanh toan|cong no|don dat|booking cua|dat phong cua|ma (booking|dat phong|dat cho)|phong cua toi|phong toi dat|lich dat phong|da dat)\b/', $text)) {
+            throw ValidationException::withMessages([
+                'message' => 'Bạn có thể xem thông tin cá nhân trong mục Đơn đặt phòng hoặc Hóa đơn của tôi. Hãy gửi riêng câu hỏi về chuyến đi nhé.',
+            ]);
+        }
+        if (preg_match('/@|https?:\/\/|\b(?:\d[ .+\-()]*){7,}|\b(mat khau|otp|token|cccd|so the|email|so dien thoai|dia chi cua toi|ma bao mat)\b/', $text)) {
+            throw ValidationException::withMessages([
+                'message' => 'Bạn hãy bỏ thông tin cá nhân hoặc mã bảo mật rồi hỏi lại nhé.',
+            ]);
+        }
+
+        $turn = $this->persistence->claim($actorId, $requestId, $sessionId, $question);
+        if ($turn['status'] !== 'claimed') {
+            return $this->project($actorId, $requestId, $turn);
+        }
+
+        try {
+            $reply = $this->travel->recommend($criteria);
+
+            return $this->complete($actorId, $requestId, $turn['token'], $sessionId, $question, $reply['message'], $reply['destinations']);
+        } catch (Throwable $error) {
+            $this->persistence->fail($actorId, $requestId, $turn['token']);
+
+            throw $error;
+        }
+    }
+
     private function complete(
         int $actorId,
         string $requestId,
@@ -152,8 +200,9 @@ final class SendChatMessageService
         ?int $sessionId,
         #[\SensitiveParameter] string $question,
         #[\SensitiveParameter] string $answer,
+        ?array $destinations = null,
     ): array {
-        $result = $this->persistence->complete($actorId, $requestId, $token, $sessionId, $question, $answer);
+        $result = $this->persistence->complete($actorId, $requestId, $token, $sessionId, $question, $answer, $destinations);
 
         return $result['status'] === 'stale'
             ? $this->readRecovery($actorId, $requestId, $sessionId, $question)

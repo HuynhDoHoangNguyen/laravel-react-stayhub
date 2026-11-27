@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import ChatWidgetFrame, { ChatMessage, ChatRoomCards, ChatTranscript } from './ChatWidgetFrame.jsx';
+import ChatWidgetFrame, { ChatDestinationCards, ChatMessage, ChatRoomCards, ChatTranscript } from './ChatWidgetFrame.jsx';
 import { guestChatbotService } from '../../services/chatbotService.js';
 
 const destinations = {
@@ -73,11 +73,17 @@ export function GuestChatConversation({ authenticated = false }) {
     return (
         <>
             <ChatTranscript revision={turns.length}>
-                {turns.length === 0 && <ChatMessage sender="assistant">Bạn cần tư vấn gì? Nếu muốn tìm chỗ nghỉ, bạn có thể cho mình biết số khách và ngân sách mỗi đêm.</ChatMessage>}
-                {turns.map(({ id, question, reply, action, rooms }) => (
+                {turns.length === 0 && <ChatMessage sender="assistant">Bạn có thể hỏi “Tháng 11 nên đi đâu?” hoặc “Tuần trăng mật nên đi đâu cho lãng mạn?”</ChatMessage>}
+                {turns.map(({ id, question, reply, action, rooms, destinations }) => (
                     <div className="space-y-3" key={id}>
                         <ChatMessage sender="user">{question}</ChatMessage>
-                        <ChatMessage sender="assistant" after={<><ChatRoomCards rooms={rooms} /><ChatAction action={action} authenticated={authenticated} /></>}>
+                        <ChatMessage sender="assistant" after={
+                            <>
+                                <ChatDestinationCards destinations={destinations} />
+                                <ChatRoomCards rooms={rooms} />
+                                <ChatAction action={action} authenticated={authenticated} />
+                            </>
+                        }>
                             {reply}
                         </ChatMessage>
                     </div>

@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import ChatWidgetFrame, { ChatMessage, ChatTranscript } from './ChatWidgetFrame.jsx';
+import { Link } from 'react-router-dom';
+import ChatWidgetFrame, { ChatDestinationCards, ChatMessage, ChatTranscript } from './ChatWidgetFrame.jsx';
 import { GuestChatConversation } from './GuestChatWidget.jsx';
 import { chatbotService, publicChatEnabled } from '../../services/chatbotService.js';
 
@@ -118,7 +119,11 @@ export default function CustomerChatWidget() {
                     {turns.map(({ request_id, user_message, assistant_message }) => (
                     <div key={request_id} className="space-y-3">
                         <ChatMessage sender="user">{user_message.message}</ChatMessage>
-                        <ChatMessage sender="assistant">{assistant_message.message}</ChatMessage>
+                        <ChatMessage sender="assistant" after={assistant_message.destinations && (
+                            assistant_message.destinations.length > 0
+                                ? <ChatDestinationCards destinations={assistant_message.destinations} />
+                                : <Link className="stayhub-chat-action" to="/search">Tìm chỗ nghỉ</Link>
+                        )}>{assistant_message.message}</ChatMessage>
                     </div>
                     ))}
                 </ChatTranscript>
@@ -132,6 +137,8 @@ export default function CustomerChatWidget() {
             )}
             <label htmlFor={inputId} className="text-sm font-medium">Câu hỏi</label>
             <p id={inputId + '-hint'} className="text-xs text-muted-foreground">
+                Bạn có thể hỏi “Tháng 11 nên đi đâu?” hoặc “Tuần trăng mật nên đi đâu cho lãng mạn?”.
+                <br />
                 Ví dụ: Catalog: Tìm phòng cho 4 người dưới 1 triệu tại &quot;Sunrise&quot;. Để chọn bằng mã, dùng tại #71.
                 <br />
                 Tiện ích: Có hồ bơi không tại #71?

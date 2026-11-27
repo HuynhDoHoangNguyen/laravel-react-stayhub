@@ -13,6 +13,7 @@ final class SendGuestChatMessageService
         private readonly ChatProviderSlots $slots,
         private readonly PublicCatalogChatService $catalog,
         private readonly PublicFaqQueryService $faq,
+        private readonly TravelRecommendationService $travel,
     ) {}
 
     public function send(#[\SensitiveParameter] string $session, #[\SensitiveParameter] string $ip, string $requestId, #[\SensitiveParameter] string $question): array
@@ -65,6 +66,11 @@ final class SendGuestChatMessageService
         $catalogReply = $this->catalog->reply($question, $text);
         if ($catalogReply !== null) {
             return ['status' => 'answered', 'data' => $catalogReply];
+        }
+
+        $travelReply = $this->travel->reply($text);
+        if ($travelReply !== null) {
+            return ['status' => 'answered', 'data' => $travelReply];
         }
 
         $topics = [

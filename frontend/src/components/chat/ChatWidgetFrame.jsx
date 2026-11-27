@@ -3,6 +3,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { Building2, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import receptionist from '../../assets/stayhub-receptionist.webp';
+import { formatVnd } from '../../utils/formatVnd.js';
 import './chatWidget.css';
 
 export function ChatMessage({ sender, children, after }) {
@@ -30,6 +31,25 @@ export function ChatRoomCards({ rooms }) {
                 <Link to={`/properties/${propertyId}`}>Xem khách sạn</Link>
                 <Link to={`/rooms/${roomId}`}>Xem phòng</Link>
             </div>
+        </div>
+    ));
+}
+
+export function ChatDestinationCards({ destinations }) {
+    return destinations.map(({ city, reason, properties }) => (
+        <div className="stayhub-chat-card" key={city}>
+            <div className="stayhub-chat-card-heading">
+                <Building2 size={16} aria-hidden="true" />
+                <div><strong>{city}</strong><span>{reason}</span></div>
+            </div>
+            <ul className="space-y-2 pt-2">
+                {properties.map(({ propertyId, propertyName, startingPrice }) => (
+                    <li className="text-sm" key={propertyId}>
+                        <Link className="stayhub-chat-action break-words" to={`/properties/${propertyId}`}>{propertyName}</Link>
+                        <div className="text-xs text-muted-foreground">Từ {formatVnd(startingPrice)}/đêm</div>
+                    </li>
+                ))}
+            </ul>
         </div>
     ));
 }

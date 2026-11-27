@@ -23,7 +23,13 @@ class ChatMessage extends Model
         'chat_session_id',
         'sender',
         'message',
+        'destinations',
     ];
+
+    protected function casts(): array
+    {
+        return ['destinations' => 'array'];
+    }
 
     /**
      * Get the chat session that owns the message.

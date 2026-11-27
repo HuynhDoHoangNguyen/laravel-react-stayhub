@@ -144,6 +144,78 @@ final class GuestChatMessageHttpMySqlTest extends Tv3AcceptanceMySqlTestCase
         Http::assertNothingSent();
     }
 
+    public function test_travel_chat_recommends_catalog_properties_to_guests_and_customers_without_ai(): void
+    {
+        config()->set(['chatbot.enabled' => false, 'chatbot.guest.allow_provider' => false]);
+        $host = User::factory()->host()->create();
+        $this->catalogProperty($host, 71, 'Chỗ nghỉ ven hồ', address: '12 Trần Hưng Đạo, TP. Đà Lạt, Lâm Đồng');
+        $this->catalogProperty($host, 72, 'Chỗ nghỉ ven sông', address: '12 Bạch Đằng, Hải Châu, Đà Nẵng');
+        $this->catalogRoom(81, 71, '420000.50');
+        $this->catalogRoom(82, 72, '750000.00');
+
+        $questions = [
+            'Tháng 11 nên đi đâu?' => 'tháng 11',
+            'Ngày đẹp trời nên đi đâu?' => 'chuyến đi của bạn',
+            'Toi vs nguoi yeu nen di dau lang manx cho tuan trang mat?' => 'chuyến đi của hai bạn',
+        ];
+
+        foreach ([null, User::factory()->create()] as $customer) {
+            if ($customer !== null) {
+                $this->actingAs($customer, 'web');
+                app('session')->driver()->migrate();
+            }
+            foreach ($questions as $question => $intro) {
+                $this->send($question)->assertOk()->assertJsonPath('data.message', fn (string $message) => str_contains($message, $intro))
+                    ->assertJsonPath('data.destinations.*.city', ['Đà Lạt', 'Đà Nẵng'])
+                    ->assertJsonPath('data.destinations.0.properties', [
+                        ['property_id' => 71, 'property_name' => 'Chỗ nghỉ ven hồ', 'starting_price' => '420000.50'],
+                    ])
+                    ->assertJsonPath('data.destinations.1.properties.0.property_id', 72)
+                    ->assertJsonPath('data.rooms', [])
+                    ->assertJsonPath('data.action', null);
+            }
+        }
+
+        $this->assertCatalogDoesNotCallOrStoreChat();
+    }
+
+    public function test_travel_chat_checks_city_room_status_capacity_and_card_limit(): void
+    {
+        $host = User::factory()->host()->create();
+        $this->catalogProperty($host, 71, 'Chỗ nghỉ ven hồ', address: 'Đà Lạt, Lâm Đồng');
+        $this->catalogProperty($host, 72, 'Chỗ nghỉ ẩn', 'INACTIVE', 'Đà Lạt, Lâm Đồng');
+        $this->catalogProperty($host, 73, 'Đà Lạt Boutique', address: 'TP. Hồ Chí Minh');
+        $this->catalogProperty($host, 74, 'Chỗ nghỉ phòng đơn', address: 'Đà Nẵng');
+        $this->catalogProperty($host, 75, 'Chỗ nghỉ ngừng mở phòng', address: 'Nha Trang');
+        $this->catalogProperty($host, 76, 'Chỗ nghỉ thứ hai', address: 'Đà Lạt, Lâm Đồng');
+        $this->catalogProperty($host, 77, 'Chỗ nghỉ thứ ba', address: 'Đà Lạt, Lâm Đồng');
+        $this->catalogRoom(81, 71, '590000.00', ['capacity' => 2]);
+        $this->catalogRoom(82, 72, '450000.00');
+        $this->catalogRoom(83, 73, '450000.00');
+        $this->catalogRoom(84, 74, '450000.00', ['capacity' => 1]);
+        $this->catalogRoom(85, 75, '450000.00', ['status' => 'INACTIVE']);
+        $this->catalogRoom(86, 71, '350000.00', ['capacity' => 1]);
+        $this->catalogRoom(87, 76, '650000.00');
+        $this->catalogRoom(88, 77, '750000.00');
+
+        $this->send('Tuần trăng mật đi đâu cho lãng mạn?')->assertOk()
+            ->assertJsonPath('data.destinations.*.city', ['Đà Lạt'])
+            ->assertJsonPath('data.destinations.0.properties.*.property_id', [71, 76])
+            ->assertJsonPath('data.destinations.0.properties.*.starting_price', ['590000.00', '650000.00']);
+        $this->assertCatalogDoesNotCallOrStoreChat();
+    }
+
+    public function test_travel_chat_suggests_search_when_catalog_is_empty_and_keeps_personal_guard(): void
+    {
+        $this->send('Tháng 11 nên đi đâu?')->assertOk()
+            ->assertJsonPath('data.destinations', [])
+            ->assertJsonPath('data.action', 'search');
+        $this->send('Tháng 11 nên đi đâu và hóa đơn nào tôi chưa thanh toán?')->assertOk()
+            ->assertJsonPath('data.action', 'invoices')
+            ->assertJsonMissingPath('data.destinations');
+        $this->assertCatalogDoesNotCallOrStoreChat();
+    }
+
     public function test_guest_chat_lists_only_public_rooms_with_real_property_ids(): void
     {
         $host = User::factory()->create();
@@ -643,10 +715,10 @@ final class GuestChatMessageHttpMySqlTest extends Tv3AcceptanceMySqlTestCase
         $this->assertSame([], $this->prompts);
     }
 
-    private function catalogProperty(User $host, int $id, string $name, string $status = 'ACTIVE'): void
+    private function catalogProperty(User $host, int $id, string $name, string $status = 'ACTIVE', ?string $address = null): void
     {
         DB::table('properties')->insert(['id' => $id, 'host_id' => $host->id, 'name' => $name,
-            'status' => $status, 'type' => 'HOTEL', 'address' => 'Địa chỉ QA '.$id]);
+            'status' => $status, 'type' => 'HOTEL', 'address' => $address ?? 'Địa chỉ QA '.$id]);
         DB::table('room_types')->insert(['id' => $id, 'property_id' => $id, 'name' => 'Phòng đôi']);
     }
 

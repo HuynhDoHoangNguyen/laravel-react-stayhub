@@ -24,6 +24,7 @@ final class ChatMessageHttpMySqlTest extends Tv3AcceptanceMySqlTestCase
     private const URL = '/api/customer/chat/messages';
     private const ORIGIN = 'http://localhost:5173';
     private const QUESTION = 'Tôi nên kiểm tra gì trước chuyến đi?';
+    private const TRAVEL_QUESTION = 'Tháng 11 nên đi đâu?';
     private const ANSWER = 'Bạn nên xem giờ nhận phòng và chính sách hủy.';
     private const FAQ_QUESTION = 'Làm thế nào để đặt phòng?';
     private const FAQ_ANSWER = 'Chọn cơ sở, phòng và ngày lưu trú, sau đó đăng nhập để gửi yêu cầu đặt phòng.';
@@ -165,6 +166,110 @@ final class ChatMessageHttpMySqlTest extends Tv3AcceptanceMySqlTestCase
         $this->send($next, $actor)->assertCreated()->assertJsonPath('data.session_id', $first['session_id']);
         $this->assertSame(4, ChatMessage::query()->where('chat_session_id', $first['session_id'])->count());
         $this->assertSame([self::QUESTION, self::QUESTION], $this->questions);
+    }
+
+    public function test_customer_chat_saves_travel_cards_on_assistant_messages_without_ai(): void
+    {
+        config()->set(['chatbot.enabled' => false, 'chatbot.allow_external_questions' => false]);
+        $actor = User::factory()->customer()->create();
+        $host = $this->catalogHost();
+        $property = $this->catalogProperty($host, 'Chỗ nghỉ ven hồ', address: '12 Trần Hưng Đạo, Đà Lạt, Lâm Đồng');
+        $this->catalogRoom($property, 'Phòng đôi', '650000.00', capacity: 2);
+        $private = $this->catalogProperty($host, 'Chỗ nghỉ chưa công bố', 'INACTIVE', 'Đà Lạt, Lâm Đồng');
+        $this->catalogRoom($private, 'Phòng ẩn', '200000.00');
+
+        $session = null;
+        foreach ([
+            self::TRAVEL_QUESTION => 'tháng 11',
+            'Ngày đẹp trời nên đi đâu?' => 'chuyến đi của bạn',
+            'Tôi vs người yêu nên đi đâu lạng mạnx cho tuần trang mật?' => 'chuyến đi của hai bạn',
+        ] as $question => $intro) {
+            $data = $this->send([...$this->input($session), 'message' => $question], $actor)->assertCreated()
+                ->assertJsonPath('data.assistant_message.message', fn (string $message) => str_contains($message, $intro))
+                ->assertJsonPath('data.assistant_message.destinations.*.city', ['Đà Lạt'])
+                ->assertJsonPath('data.assistant_message.destinations.0.properties', [[
+                    'property_id' => $property['id'], 'property_name' => 'Chỗ nghỉ ven hồ', 'starting_price' => '650000.00',
+                ]])
+                ->assertJsonMissingPath('data.user_message.destinations')
+                ->json('data');
+            $session ??= $data['session_id'];
+            $this->assertSame($session, $data['session_id']);
+            $this->assertEquals($data['assistant_message']['destinations'], ChatMessage::query()->findOrFail($data['assistant_message']['id'])->destinations);
+            $this->assertNull(ChatMessage::query()->findOrFail($data['user_message']['id'])->destinations);
+        }
+        $this->assertSame(6, ChatMessage::query()->where('chat_session_id', $session)->count());
+        $this->assertSame([], $this->questions);
+    }
+
+    public function test_customer_chat_replays_saved_travel_cards_and_new_turns_read_current_prices(): void
+    {
+        config()->set(['chatbot.enabled' => false, 'chatbot.allow_external_questions' => false]);
+        $actor = User::factory()->customer()->create();
+        $other = User::factory()->customer()->create();
+        $property = $this->catalogProperty($this->catalogHost(), 'Chỗ nghỉ ven hồ', address: 'Đà Lạt');
+        $room = $this->catalogRoom($property, 'Phòng đôi', '650000.00');
+        $input = [...$this->input(), 'message' => self::TRAVEL_QUESTION];
+        $saved = $this->send($input, $actor)->assertCreated()
+            ->assertJsonPath('data.assistant_message.destinations.0.properties.0.starting_price', '650000.00')->json();
+        $session = $saved['data']['session_id'];
+        DB::table('rooms')->where('id', $room)->update(['price_per_night' => '750000.00']);
+
+        DB::enableQueryLog();
+        try {
+            $this->send($input, $actor)->assertOk()->assertExactJson($saved);
+            $catalogQueries = array_filter(DB::getQueryLog(), static fn (array $query): bool =>
+                preg_match('/\x60(?:properties|rooms)\x60/', $query['query']) === 1);
+            $this->assertSame([], $catalogQueries);
+        } finally {
+            DB::disableQueryLog();
+            DB::flushQueryLog();
+        }
+        $this->assertSame(2, ChatMessage::query()->where('chat_session_id', $session)->count());
+        $this->send([...$input, 'message' => 'Ngày đẹp trời nên đi đâu?'], $actor)
+            ->assertConflict()->assertJsonPath('code', 'CHAT_REQUEST_CONFLICT');
+        $this->send([...$this->input($session), 'message' => self::TRAVEL_QUESTION], $other)
+            ->assertNotFound()->assertJsonPath('code', 'CHAT_SESSION_NOT_FOUND');
+        $this->send([...$this->input($session), 'message' => self::TRAVEL_QUESTION], $actor)
+            ->assertCreated()->assertJsonPath('data.assistant_message.destinations.0.properties.0.starting_price', '750000.00');
+        $this->assertSame([], $this->questions);
+    }
+
+    public function test_customer_chat_travel_rolls_back_a_partial_write_and_can_retry_empty_result(): void
+    {
+        $actor = User::factory()->customer()->create();
+        $input = [...$this->input(), 'message' => self::TRAVEL_QUESTION];
+        $injectFailure = true;
+        ChatMessage::creating(static function (ChatMessage $message) use (&$injectFailure): void {
+            if ($injectFailure && $message->sender === 'ASSISTANT' && $message->destinations === []) {
+                throw new \RuntimeException('Synthetic assistant write failure.');
+            }
+        });
+        $before = $this->chatCounts();
+        $this->send($input, $actor)->assertInternalServerError();
+        $this->assertSame([$before[0] + 1, $before[1], $before[2]], $this->chatCounts());
+        $this->assertSame(ChatTurn::FAILED, $this->turn($input)->status);
+
+        $injectFailure = false;
+        $result = $this->send($input, $actor)->assertCreated()
+            ->assertJsonPath('data.assistant_message.destinations', [])->json();
+        $this->send($input, $actor)->assertOk()->assertExactJson($result);
+        $this->assertSame(2, $this->turn($input)->attempts);
+        $this->assertSame([], $this->questions);
+    }
+
+    public function test_customer_chat_rejects_private_travel_input_without_saving_or_calling_provider(): void
+    {
+        $actor = User::factory()->customer()->create();
+        $before = $this->chatCounts();
+        foreach ([
+            'Tháng 11 nên đi đâu và hóa đơn nào tôi chưa thanh toán?',
+            'Tháng 11 nên đi đâu? Liên hệ qua qa@example.test.',
+        ] as $question) {
+            $this->send([...$this->input(), 'message' => $question], $actor)
+                ->assertUnprocessable()->assertJsonValidationErrors('message');
+        }
+        $this->assertSame($before, $this->chatCounts());
+        $this->assertSame([], $this->questions);
     }
 
     public function test_customer_chat_persists_public_faq_without_ai_or_provider_capacity(): void
